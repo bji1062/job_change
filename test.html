@@ -24,23 +24,55 @@ h1{font-size:1.3rem;font-weight:800;margin-bottom:.5rem}
 button.run{padding:10px 28px;background:#f0f1f4;color:#09090b;border:none;border-radius:8px;font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:1.5rem;transition:all .15s}
 button.run:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(255,255,255,.08)}
 button.run:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.progress-bar{width:100%;height:6px;background:#1c1f28;border-radius:3px;margin-bottom:8px;overflow:hidden}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#4b8df8,#34c77b);border-radius:3px;transition:width .3s ease}
+.status-line{font-size:.78rem;color:#a0a6b8;margin-bottom:12px;min-height:1.2em}
+.status-line .elapsed{color:#636b82;margin-left:8px}
+.status-line .err{color:#ef5050}
+.log-section{margin-top:1.5rem;background:#0f1117;border:1px solid #2a2e3a;border-radius:10px;overflow:hidden}
+.log-title{font-size:.72rem;font-weight:700;color:#636b82;padding:8px 12px;background:#16181f;border-bottom:1px solid #2a2e3a;letter-spacing:.05em;text-transform:uppercase}
+.log-body{max-height:200px;overflow-y:auto;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:.7rem;line-height:1.7}
+.log-body .log-entry{display:flex;gap:8px}
+.log-body .log-ts{color:#636b82;flex-shrink:0}
+.log-body .log-pass{color:#34c77b}
+.log-body .log-fail{color:#ef5050}
+.log-body .log-info{color:#a0a6b8}
+.test-row .timer{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:#636b82;min-width:45px;text-align:right}
 iframe{display:none}
 </style>
 </head>
 <body>
 <h1>직장 선택 OS — 자동 시나리오 테스트</h1>
 <div class="sub">브라우저에서 사용자 흐름을 자동으로 시뮬레이션합니다. iframe 안에서 index.html을 로드하고 DOM을 직접 조작합니다.</div>
+<div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+<div class="status-line" id="statusLine">준비 완료 — 테스트 실행 버튼을 눌러주세요</div>
 <button class="run" id="runBtn" onclick="runAll()">테스트 실행</button>
 <div class="test-list" id="testList"></div>
 <div class="summary" id="summary" style="display:none"></div>
+<div class="log-section" id="logSection" style="display:none"><div class="log-title">실행 로그</div><div class="log-body" id="logBody"></div></div>
 <iframe id="app" src="index.html"></iframe>
 
 <script>
 const tests=[];
-let win,doc;
+let win,doc,logs=[];
+let globalStart=0;
 
 // ── Test registration ──
-function test(name,fn){tests.push({name,fn,status:'pending',detail:''})}
+function test(name,fn){tests.push({name,fn,status:'pending',detail:'',ms:0})}
+
+// ── Logging ──
+function log(type,msg){
+  const elapsed=globalStart?((performance.now()-globalStart)/1000).toFixed(1)+'s':'0.0s';
+  logs.push({type,msg,elapsed});
+  const body=document.getElementById('logBody');
+  const section=document.getElementById('logSection');
+  section.style.display='block';
+  const cls=type==='pass'?'log-pass':type==='fail'?'log-fail':'log-info';
+  body.innerHTML+=`<div class="log-entry"><span class="log-ts">[${elapsed}]</span><span class="${cls}">${msg}</span></div>`;
+  body.scrollTop=body.scrollHeight;
+}
+function updateStatus(msg){document.getElementById('statusLine').innerHTML=msg}
+function updateProgress(current,total){document.getElementById('progressFill').style.width=`${Math.round(current/total*100)}%`}
 
 // ── Helpers ──
 function wait(ms){return new Promise(r=>setTimeout(r,ms))}
@@ -277,15 +309,24 @@ function renderList(){
   el.innerHTML=tests.map((t,i)=>{
     const icon=t.status==='pass'?'✅':t.status==='fail'?'❌':t.status==='running'?'🔄':'⬜';
     const cls=t.status==='pending'?'':t.status;
-    return `<div class="test-row ${cls}"><span class="icon">${icon}</span><span class="name">${i+1}. ${t.name}</span><span class="detail">${t.detail}</span></div>`;
+    const timer=t.ms>0?`${t.ms}ms`:(t.status==='running'?'...':'');
+    return `<div class="test-row ${cls}"><span class="icon">${icon}</span><span class="name">${i+1}. ${t.name}</span><span class="detail">${t.detail}</span><span class="timer">${timer}</span></div>`;
   }).join('');
 }
 
 async function runAll(){
   const btn=document.getElementById('runBtn');
   btn.disabled=true;btn.textContent='실행 중...';
-  const start=performance.now();
+  globalStart=performance.now();
   let pass=0,fail=0;
+  logs=[];
+  document.getElementById('logBody').innerHTML='';
+  document.getElementById('summary').style.display='none';
+  tests.forEach(t=>{t.status='pending';t.detail='';t.ms=0});
+  updateProgress(0,tests.length);
+
+  log('info','테스트 시작 — iframe 로딩 대기 중...');
+  updateStatus('iframe 로딩 중...');
 
   // Wait for iframe to load
   const iframe=document.getElementById('app');
@@ -295,34 +336,70 @@ async function runAll(){
   });
   reset();
 
+  // Timeout watchdog (30s total)
+  const TIMEOUT=30000;
+  let aborted=false;
+  const watchdog=setTimeout(()=>{aborted=true},TIMEOUT);
+
+  log('info',`iframe 로드 완료 — ${tests.length}개 테스트 시작`);
   renderList();
 
   for(let i=0;i<tests.length;i++){
+    if(aborted){
+      tests.slice(i).forEach(t=>{t.status='fail';t.detail='Timeout: 전체 30초 초과'});
+      log('fail',`전체 타임아웃 (${TIMEOUT/1000}초) 초과 — 나머지 테스트 건너뜀`);
+      fail+=tests.length-i;
+      renderList();break;
+    }
     const t=tests[i];
     t.status='running';t.detail='';
+    const elapsed=((performance.now()-globalStart)/1000).toFixed(1);
+    updateStatus(`[${i+1}/${tests.length}] <strong>${t.name}</strong> 실행 중... <span class="elapsed">${elapsed}s</span>`);
+    updateProgress(i,tests.length);
     renderList();
 
     // Reload iframe for clean state each test
     if(i>0){
       iframe.src='index.html';
-      await new Promise(r=>{iframe.onload=r});
+      await new Promise(r=>{
+        const timer=setTimeout(()=>{r()},5000); // 5s per-load timeout
+        iframe.onload=()=>{clearTimeout(timer);r()};
+      });
       reset();
       await wait(50);
     }
 
+    const tStart=performance.now();
     try{
-      const result=await t.fn();
+      // Per-test timeout (5s)
+      const result=await Promise.race([
+        Promise.resolve().then(()=>t.fn()),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('이 테스트 5초 타임아웃')),5000))
+      ]);
+      t.ms=Math.round(performance.now()-tStart);
       t.status='pass';t.detail=result||'OK';pass++;
+      log('pass',`#${i+1} ${t.name} — ${t.ms}ms — ${t.detail}`);
     }catch(e){
+      t.ms=Math.round(performance.now()-tStart);
       t.status='fail';t.detail=e.message;fail++;
+      log('fail',`#${i+1} ${t.name} — ${t.ms}ms — ${e.message}`);
     }
     renderList();
   }
 
-  const elapsed=((performance.now()-start)/1000).toFixed(1);
+  clearTimeout(watchdog);
+  const totalElapsed=((performance.now()-globalStart)/1000).toFixed(1);
+  updateProgress(tests.length,tests.length);
+
+  const statusMsg=fail===0
+    ?`✅ 전체 통과 (${tests.length}개, ${totalElapsed}초)`
+    :`완료 — <span class="err">${fail}개 실패</span> / ${pass}개 통과 (${totalElapsed}초)`;
+  updateStatus(statusMsg);
+  log('info',`완료: ${pass} 통과, ${fail} 실패, ${totalElapsed}초`);
+
   const sumEl=document.getElementById('summary');
   sumEl.style.display='flex';
-  sumEl.innerHTML=`<span>총 ${tests.length}개</span><span class="pass-c">✅ ${pass} 통과</span><span class="fail-c">${fail>0?`❌ ${fail} 실패`:''}</span><span class="time-c">${elapsed}초</span>`;
+  sumEl.innerHTML=`<span>총 ${tests.length}개</span><span class="pass-c">✅ ${pass} 통과</span>${fail>0?`<span class="fail-c">❌ ${fail} 실패</span>`:''}<span class="time-c">${totalElapsed}초</span>`;
   btn.disabled=false;btn.textContent='다시 실행';
 }
 
