@@ -88,26 +88,6 @@ function compare(){
     else if(fewer!=='동일'&&fewer!=='미입력')choose=`${fewer}이 근무시간과 시간 자율성 모두 유리합니다`;
     vdHtml=vdCard(pri.icon,pri.label,'적게 일하기',p1W,p1D,'시간 자율성',p2W,p2D,choose);
   }
-  else if(curPri==='stability'){
-    const stab={large:85,public:90,mid:70,foreign:60,startup:35,freelance:20};
-    const sA_=stab[typeAVal]||50,sB_=stab[typeBVal]||50;
-    const stabWin=sA_>sB_?nA:sB_>sA_?nB:'동일';
-    const totalA=effA.mid+otPayA,totalB=effB.mid+otPayB,totalDiff=totalB-totalA;
-    const moneyWin=totalDiff>0?nB:totalDiff<0?nA:'동일';
-    const p1W=stabWin==='동일'?'동일':`<span class="${stabWin===nA?'n-a':'n-b'}">${stabWin}</span> 유리`;
-    const p1D=`안정성 <strong>${sA_}/100 vs ${sB_}/100</strong>${typeBVal==='startup'?'<br>스타트업 구조조정/피봇 리스크':''}`;
-    const p2W=moneyWin==='동일'?'동일':`<span class="${moneyWin===nA?'n-a':'n-b'}">${moneyWin}</span> 유리`;
-    const p2D=`총 보상 차이 <strong>${totalDiff>0?'+':''}${fW(totalDiff)}</strong><br>"안정성을 포기할 만큼의<br>보상 차이인가?"`;
-    let choose='';
-    if(stabWin!=='동일'&&moneyWin!=='동일'&&stabWin!==moneyWin)choose=`<strong>"안정"</strong>이 중요하면 ${stabWin}, <strong>"보상"</strong>이면 ${moneyWin}`;
-    vdHtml=vdCard(pri.icon,pri.label,'안정성',p1W,p1D,'보상과 맞교환',p2W,p2D,choose);
-  }
-  else if(curPri==='growth'){
-    const eA=getBenByCat('a','edu'),eB=getBenByCat('b','edu');
-    const eduWin=eA===eB?'동일':eB>eA?nB:nA;
-    const p1W=eduWin==='동일'?'동일':`<span class="${eduWin===nA?'n-a':'n-b'}">${eduWin}</span> 유리`;
-    vdHtml=vdCard(pri.icon,pri.label,'투자 금액',p1W,`교육·성장 지원<br><strong>연 ${eA.toLocaleString()}만 vs ${eB.toLocaleString()}만</strong>`,'성장 환경','면접에서 확인',`프로젝트 규모, 동료 수준,<br>의사결정 참여 범위가<br><strong>교육비보다 더 큰 영향</strong>`,`교육비는 정량 비교 가능하지만, <strong>진짜 성장은 환경</strong>에서 옵니다`);
-  }
   else if(curPri==='benefits'){
     const benWin=bA.ben===bB.ben?'동일':bA.ben>bB.ben?nA:nB;
     const totalA=effA.mid+otPayA,totalB=effB.mid+otPayB,td=totalB-totalA;
@@ -221,8 +201,6 @@ function compare(){
   }
 
   if(curPri==='benefits'){const listA=benS.a||[],listB=benS.b||[];if(listA.length||listB.length){const allKeys=new Set();listA.forEach(b=>allKeys.add(b.key));listB.forEach(b=>allKeys.add(b.key));let rows='';allKeys.forEach(k=>{const a=listA.find(b=>b.key===k),b_=listB.find(b=>b.key===k);const vA=a?.checked?a.val:0,vB=b_?.checked?b_.val:0;const nm=a?.name||b_?.name||k;const df=vB-vA;rows+=`<tr><td class="td-name">${nm}</td><td class="td-a">${vA?vA.toLocaleString()+'만':'—'}</td><td class="td-b">${vB?vB.toLocaleString()+'만':'—'}</td><td class="td-diff ${df>0?'pos':df<0?'neg':'eq'}">${df!==0?(df>0?'+':'')+df.toLocaleString()+'만':'—'}</td></tr>`});const totA=listA.reduce((s,b)=>s+(b.checked?b.val:0),0),totB=listB.reduce((s,b)=>s+(b.checked?b.val:0),0),totD=totB-totA;html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 항목별 비교</div><div class="cmp-body"><table class="ben-compare"><thead><tr><th>항목</th><th>${nA}</th><th>${nB}</th><th>차이</th></tr></thead><tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="font-weight:700;color:var(--t1)">합계</td><td class="td-a" style="font-weight:700">${totA.toLocaleString()}만</td><td class="td-b" style="font-weight:700">${totB.toLocaleString()}만</td><td class="td-diff ${totD>0?'pos':totD<0?'neg':'eq'}" style="font-weight:700">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</td></tr></tbody></table></div></div>`}}
-  if(curPri==='stability'){const stab={large:85,public:90,mid:70,foreign:60,startup:35,freelance:20};const sA_=stab[typeAVal]||50,sB_=stab[typeBVal]||50,sw=sA_>sB_?'a':sB_>sA_?'b':'eq';html+=`<div class="cmp"><div class="cmp-head">🛡️ 고용 안정성</div><div class="cmp-body"><div class="vs-row"><div class="vs-card a-s${sw==='a'?' win':''}"><div class="vs-side">${nA}</div><div class="vs-big">${TYPE_LABELS[typeAVal]}</div><div class="vs-detail">안정성 <strong>${sA_}/100</strong></div></div><div class="vs-card b-s${sw==='b'?' win':''}"><div class="vs-side">${nB}</div><div class="vs-big">${TYPE_LABELS[typeBVal]}</div><div class="vs-detail">안정성 <strong>${sB_}/100</strong></div></div></div></div></div>`}
-  if(curPri==='growth'){const eA=getBenByCat('a','edu'),eB=getBenByCat('b','edu'),ew=eB>eA?'b':eA>eB?'a':'eq';html+=`<div class="cmp"><div class="cmp-head">🚀 성장 기회</div><div class="cmp-body"><div class="vs-row"><div class="vs-card a-s${ew==='a'?' win':''}"><div class="vs-side">${nA}</div><div class="vs-big">연 ${eA.toLocaleString()}만</div></div><div class="vs-card b-s${ew==='b'?' win':''}"><div class="vs-side">${nB}</div><div class="vs-big">연 ${eB.toLocaleString()}만</div></div></div><div class="callout info"><span class="callout-icon">💡</span><span>교육비 외에 <strong>프로젝트 규모, 동료 수준</strong>이 성장에 더 큰 영향을 미칩니다.</span></div></div></div>`}
   if(curPri==='brand'){html+=`<div class="cmp"><div class="cmp-head">🏢 브랜드 가치</div><div class="cmp-body"><div class="callout info"><span class="callout-icon">💡</span><span>회사 브랜드는 <strong>"다음 이직"의 연봉 협상력</strong>으로 전환됩니다. 3년 후 이력서에 더 빛날 이름을 선택하세요.</span></div></div></div>`}
 
   // Qualitative benefits
@@ -271,16 +249,6 @@ function compare(){
     else if(fewer!=='동일'&&fewer!=='미입력'){const diff_=Math.abs(hA_-hB_),annD=diff_*52;blText=`<span class="${fewer===nA?'hl-a':'hl-b'}">${fewer}</span>이 주당 <strong>${diff_}시간</strong> 덜 일합니다 (연 ${annD}시간 ≈ ${Math.round(annD/8)}근무일).`}
     else{blText='야근 빈도를 선택하면 더 정확한 비교가 가능합니다. 재택/유연근무 조건으로 비교하세요.'}
   }
-  else if(curPri==='stability'){
-    const stab={large:85,public:90,mid:70,foreign:60,startup:35,freelance:20};
-    const sA_=stab[typeAVal]||50,sB_=stab[typeBVal]||50;
-    const stabWin=sA_>sB_?nA:sB_>sA_?nB:'동일';
-    const totA=effA.mid+otPayA,totB=effB.mid+otPayB,td=totB-totA;
-    const moneyWin=td>0?nB:td<0?nA:'동일';
-    if(stabWin!=='동일'&&moneyWin!=='동일'&&stabWin!==moneyWin){blText=`안정성은 <span class="${stabWin===nA?'hl-a':'hl-b'}">${stabWin}</span>, 보상은 <span class="${moneyWin===nA?'hl-a':'hl-b'}">${moneyWin}</span>이 유리합니다. 안정성을 포기할 만큼의 보상 차이(${fW(Math.abs(td))})인지 판단하세요.`}
-    else{blText=`고용 안정성 기준 <span class="${stabWin===nA?'hl-a':'hl-b'}">${stabWin}</span>이 유리합니다.`}
-  }
-  else if(curPri==='growth')blText=`교육비는 정량 비교가 가능하지만, <strong>프로젝트 규모, 동료 수준, 의사결정 참여 범위</strong>가 실질 성장에 더 큰 영향을 미칩니다. 면접에서 확인하세요.`;
   else if(curPri==='benefits'){if(bA.ben===bB.ben)blText='복리후생 합산이 동일합니다. 개별 항목의 질적 차이를 비교해보세요.';else{const bw=bA.ben>bB.ben?nA:nB;const td=Math.abs((effA.mid+otPayA)-(effB.mid+otPayB));blText=td<1200?`총 보상 차이가 크지 않아(${fW(td)}), 복지가 풍부한 <span class="${bA.ben>bB.ben?'hl-a':'hl-b'}">${bw}</span>이 일상 만족도에서 유리합니다.`:`복지는 <span class="${bA.ben>bB.ben?'hl-a':'hl-b'}">${bw}</span>이 연 ${fW(Math.abs(bA.ben-bB.ben))} 더 풍부합니다.`}}
   else if(curPri==='brand')blText=`브랜드 가치는 "지금의 자부심"과 "3년 후 이력서" 두 가지로 나뉩니다. 당신에게 더 중요한 건 어느 쪽인가요?`;
   html+=`<div class="bottom-line"><div class="bl-label">결론</div><div class="bl-text">${blText.replace(/\. /g,'.<br>')}</div></div>`;
@@ -296,8 +264,6 @@ function compare(){
       if(!hA_||!hB_){html+=`<div class="sac-cost-box"><div class="sac-cost-label">근무방식 미입력</div><div class="sac-cost-val">—</div><div class="sac-cost-detail">야근 빈도를 선택하면 포기 비용을 계산합니다</div></div>`}
       else{const diff_=Math.abs(hA_-hB_),annD=diff_*52,annDays=Math.round(annD/8);const more_=hA_>hB_?nA:nB;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${more_}은 매주 더 일합니다</div><div class="sac-cost-val">주 +${diff_}시간</div><div class="sac-cost-detail">연간 ${annD.toLocaleString()}시간 = 약 ${annDays}근무일</div></div><div class="sac-question">이만큼의 추가 근무를 감수할 수 있나요?</div>`}
     }
-    else if(curSacrifice==='stability'){const stab={large:85,public:90,mid:70,foreign:60,startup:35,freelance:20};const sA_=stab[typeAVal]||50,sB_=stab[typeBVal]||50;const less_=sA_<sB_?nA:nB,lessScore=Math.min(sA_,sB_),moreScore=Math.max(sA_,sB_);html+=`<div class="sac-cost-box"><div class="sac-cost-label">${less_}의 안정성이 더 낮습니다</div><div class="sac-cost-val">${lessScore}/100 vs ${moreScore}/100</div><div class="sac-cost-detail">${typeBVal==='startup'?'스타트업은 구조조정/피봇 리스크가 있습니다':'기업 유형에 따른 안정성 차이'}</div></div><div class="sac-question">이 리스크를 감수할 수 있나요?</div>`}
-    else if(curSacrifice==='growth'){const eA=getBenByCat('a','edu'),eB=getBenByCat('b','edu');const diff_=Math.abs(eA-eB),better_=eB>eA?nB:nA;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${better_}의 교육·성장 지원이 더 많습니다</div><div class="sac-cost-val">연 ${fW(diff_)}</div><div class="sac-cost-detail">교육비·자기개발비·장비 지원 합산</div></div><div class="sac-question">성장 환경의 차이를 감수할 수 있나요?</div>`}
     else if(curSacrifice==='benefits'){const diff_=Math.abs(bA.ben-bB.ben),better_=bA.ben>bB.ben?nA:nB;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${better_}의 복지가 더 풍부합니다</div><div class="sac-cost-val">연 ${fW(diff_)}</div><div class="sac-cost-detail">복리후생 항목 합산 차이</div></div><div class="sac-question">이 복지 차이를 포기할 수 있나요?</div>`}
     else if(curSacrifice==='brand'){html+=`<div class="sac-cost-box"><div class="sac-cost-label">회사 브랜드는 "다음 이직"에서 연봉 협상력</div><div class="sac-cost-val" style="font-size:1.1rem">3년 후 이력서 가치</div><div class="sac-cost-detail">정량화 어렵지만, 브랜드 차이가 다음 연봉 1,000만+ 차이를 만들 수 있음</div></div><div class="sac-question">이력서 가치를 포기할 수 있나요?</div>`}
     html+=`</div></div>`;
@@ -313,8 +279,6 @@ function compare(){
       let val='',winCls='rest-tie';
       if(k==='salary'){const d=totalB-totalA;val=d===0?'동일':d>0?`${nB} +${fW(d)}`:`${nA} +${fW(Math.abs(d))}`;winCls=d!==0?'rest-win':'rest-tie'}
       else if(k==='wlb'){const hA_=OT_HRS[wA.ot]||0,hB_=OT_HRS[wB.ot]||0;if(hA_&&hB_){val=hA_===hB_?`동일 (주 ${hA_}h)`:hA_<hB_?`${nA} 유리 (주 ${hA_}h vs ${hB_}h)`:`${nB} 유리 (주 ${hB_}h vs ${hA_}h)`;winCls=hA_!==hB_?'rest-win':'rest-tie'}else{val=`통근 ${comA}분 vs ${comB}분`}}
-      else if(k==='stability'){const stab={large:85,public:90,mid:70,foreign:60,startup:35,freelance:20};const sA_=stab[typeAVal]||50,sB_=stab[typeBVal]||50;val=sA_===sB_?'동일':sA_>sB_?`${nA} 유리 (${sA_} vs ${sB_})`:`${nB} 유리 (${sB_} vs ${sA_})`;winCls=sA_!==sB_?'rest-win':'rest-tie'}
-      else if(k==='growth'){const eA=getBenByCat('a','edu'),eB=getBenByCat('b','edu');val=eA===eB?'동일':eB>eA?`${nB} +${fW(eB-eA)}`:`${nA} +${fW(eA-eB)}`;winCls=eA!==eB?'rest-win':'rest-tie'}
       else if(k==='benefits'){val=bA.ben===bB.ben?'동일':bA.ben>bB.ben?`${nA} +${fW(bA.ben-bB.ben)}`:`${nB} +${fW(bB.ben-bA.ben)}`;winCls=bA.ben!==bB.ben?'rest-win':'rest-tie'}
       else if(k==='brand'){val='정량 비교 어려움';winCls='rest-tie'}
       html+=`<div class="rest-item"><span class="rest-icon">${pri.icon}</span><span class="rest-label">${pri.label}</span><span class="rest-val ${winCls}">${val}</span></div>`;

@@ -145,11 +145,11 @@ const Q_DESC = {
 };
 
 const PROFILES=[
-  {id:"explorer",type:"탐험가형",vec:{compensation:-.3,security:-.6,growth:.9,autonomy:.8,impact:0,flexibility:.4},desc:"돈과 안정성을 기꺼이 포기하더라도 배움과 자유를 택합니다.",mapPri:"growth",
+  {id:"explorer",type:"탐험가형",vec:{compensation:-.3,security:-.6,growth:.9,autonomy:.8,impact:0,flexibility:.4},desc:"돈과 안정성을 기꺼이 포기하더라도 배움과 자유를 택합니다.",mapPri:"wlb",
     jobFit:{tech:{fit:'스타트업 초기 멤버, 프리랜서 개발자',caution:'안정성을 경시하면 생애 주기 변화에서 급격한 스트레스를 받을 수 있습니다.'},planning:{fit:'신규 서비스 0→1 기획, 스타트업 첫 PM',caution:'탐험을 위한 이직이 잦으면 런칭→성장까지의 결과물을 증명하기 어렵습니다.'},marketing:{fit:'그로스 마케팅 초기 셋업, 스타트업 마케팅 1호',caution:'너무 자주 이동하면 캠페인 성과를 끝까지 증명하기 어렵습니다.'},sales:{fit:'신규 시장 개척 영업, 스타트업 첫 세일즈',caution:'고객 관계는 시간이 걸립니다. 너무 빨리 떠나면 네트워크가 쌓이지 않습니다.'},design:{fit:'브랜딩 에이전시, 프리랜서 디자이너',caution:'포트폴리오 다양성은 좋지만, 깊이 있는 프로젝트 하나가 더 강력합니다.'},corporate:{fit:'스타트업 경영지원 1호, 신규 법인 셋업',caution:'경영지원은 신뢰와 안정이 핵심입니다. 잦은 이동은 신뢰를 쌓기 어렵게 만듭니다.'}}},
-  {id:"architect",type:"건축가형",vec:{compensation:0,security:-.1,growth:.8,autonomy:.2,impact:.8,flexibility:0},desc:"전문적 깊이와 조직적 영향력을 동시에 추구합니다.",mapPri:"growth",
+  {id:"architect",type:"건축가형",vec:{compensation:0,security:-.1,growth:.8,autonomy:.2,impact:.8,flexibility:0},desc:"전문적 깊이와 조직적 영향력을 동시에 추구합니다.",mapPri:"brand",
     jobFit:{tech:{fit:'기술 리드, CTO, 플랫폼 아키텍트',caution:'기술과 경영 두 축을 동시에 추구하면 중간에 빠질 위험이 있습니다.'},planning:{fit:'CPO, 프로덕트 전략가, 서비스 아키텍트',caution:'기획 깊이와 조직 영향력 사이에서 시기별로 비중을 조절해야 합니다.'},marketing:{fit:'CMO, 브랜드 전략가, 마케팅 디렉터',caution:'전략과 실행을 동시에 잡으려면 위임 능력이 핵심입니다.'},sales:{fit:'영업 디렉터, 전략 파트너십, 사업개발 리더',caution:'영업 현장과 전략 사이에서 균형을 잃으면 둘 다 약해집니다.'},design:{fit:'CDO, 디자인 시스템 리드, UX 디렉터',caution:'디자인 실무에서 멀어지면 팀의 신뢰를 잃을 수 있습니다.'},corporate:{fit:'CFO, CHRO, 경영전략 임원',caution:'실무 감각을 잃으면 현장과 괴리된 의사결정을 하게 됩니다.'}}},
-  {id:"fortress",type:"요새형",vec:{compensation:.7,security:.9,growth:-.3,autonomy:-.3,impact:0,flexibility:-.5},desc:"예측 가능한 보상과 안정성을 최우선으로 합니다.",mapPri:"stability",
+  {id:"fortress",type:"요새형",vec:{compensation:.7,security:.9,growth:-.3,autonomy:-.3,impact:0,flexibility:-.5},desc:"예측 가능한 보상과 안정성을 최우선으로 합니다.",mapPri:"benefits",
     jobFit:{tech:{fit:'대기업 전문가 트랙, 공공기관 IT, 금융권 개발',caution:'안정성에 과도하게 최적화하면 기술 트렌드 변화에 적응력이 약해집니다.'},planning:{fit:'대기업 서비스기획, 공공 SI 기획, 금융권 PM',caution:'안정적 환경에서 혁신적 기획 역량이 정체될 수 있습니다.'},marketing:{fit:'대기업 브랜드 마케팅, 공기업 홍보',caution:'안정적이지만 퍼포먼스 마케팅 역량이 약해질 수 있습니다.'},sales:{fit:'대기업 기존 고객 관리, 공공 입찰 영업',caution:'신규 개척 역량이 약해지면 시장 변화에 취약해집니다.'},design:{fit:'대기업 인하우스, 공공기관 디자인',caution:'외부 트렌드와 단절되면 디자인 감각이 정체됩니다.'},corporate:{fit:'대기업 재무/인사, 공기업 경영지원',caution:'한 회사에 오래 있으면 외부 시장가치를 모르게 됩니다.'}}},
   {id:"conqueror",type:"정복자형",vec:{compensation:.9,security:-.2,growth:.1,autonomy:0,impact:.8,flexibility:-.2},desc:"높은 보상과 강한 영향력을 함께 추구합니다.",mapPri:"salary",
     jobFit:{tech:{fit:'빅테크 시니어, 핀테크 리드, 높은 RSU 제공 기업',caution:'보상에 집중하면 기술적 깊이가 약해질 수 있습니다.'},planning:{fit:'빅테크 PM, 전략 컨설팅, VC/PE 투자심사역',caution:'보상과 타이틀에 집착하면 실질적 기획 역량이 정체됩니다.'},marketing:{fit:'퍼포먼스 에이전시 임원, 빅테크 마케팅 리드',caution:'매출 기여만 추구하면 브랜드 역량이 약해집니다.'},sales:{fit:'엔터프라이즈 세일즈, 투자 세일즈, 고연봉 영업직',caution:'단기 실적 추구가 장기 고객 관계를 해칠 수 있습니다.'},design:{fit:'빅테크 디자인 리드, 에이전시 CD',caution:'보상 중심 이동은 포트폴리오의 일관성을 해칩니다.'},corporate:{fit:'경영 컨설팅, 투자은행, CFO 트랙',caution:'보상과 직급에만 집중하면 실무 역량이 약해집니다.'}}},
@@ -159,20 +159,17 @@ const PROFILES=[
     jobFit:{tech:{fit:'대기업 R&D, 사내 기술 리더, 내부 이동 활용',caution:'외부 시장 가치를 점검하지 않으면 사내에서만 통하는 전문가가 됩니다.'},planning:{fit:'대기업 기획실, 안정적 서비스의 지속적 개선',caution:'새로운 시장/서비스 경험 없이는 기획 역량에 한계가 옵니다.'},marketing:{fit:'대기업 브랜드팀, 안정적 마케팅 조직',caution:'같은 브랜드만 오래 하면 새 도전에 대한 감각이 둔해집니다.'},sales:{fit:'대기업 핵심 고객 관리, 장기 파트너십 영업',caution:'신규 개척 없이 관리만 하면 영업 근육이 약해집니다.'},design:{fit:'대기업 디자인센터, 디자인 시스템 장기 운영',caution:'같은 가이드라인 안에서만 작업하면 창의성이 정체됩니다.'},corporate:{fit:'대기업 재무/인사 전문가, 장기 근속',caution:'한 회사에 최적화되면 이직 시 적응이 어렵습니다.'}}},
   {id:"sovereign",type:"주권자형",vec:{compensation:.2,security:-.3,growth:.1,autonomy:.9,impact:.5,flexibility:.3},desc:"자기 방식대로 일하면서 의미 있는 결정을 내리고 싶어합니다.",mapPri:"wlb",
     jobFit:{tech:{fit:'창업, 소규모 팀 리더, 독립 컨설턴트',caution:'모든 것을 직접 통제하려는 성향이 위임 실패와 번아웃으로 이어질 수 있습니다.'},planning:{fit:'1인 PM, 사내 벤처, 독립 프로덕트 컨설팅',caution:'혼자 결정하는 습관이 팀 협업을 어렵게 만들 수 있습니다.'},marketing:{fit:'1인 마케팅 에이전시, 사내 벤처 마케팅 리드',caution:'혼자서 다 하려다 전문성 깊이가 얕아질 수 있습니다.'},sales:{fit:'독립 세일즈 에이전트, 소규모 팀 영업 리더',caution:'영업은 조직 지원이 중요합니다. 혼자 다 하면 스케일이 안 됩니다.'},design:{fit:'1인 디자인 스튜디오, 사내 벤처 디자인 리드',caution:'클라이언트 관리와 디자인을 동시에 하면 둘 다 약해질 수 있습니다.'},corporate:{fit:'소규모 법인 CFO, 스타트업 COO',caution:'경영지원을 혼자 맡으면 전문 분야의 깊이가 얕아집니다.'}}},
-  {id:"strategist",type:"전략가형",vec:{compensation:.5,security:.2,growth:.3,autonomy:0,impact:.6,flexibility:.5},desc:"어떤 한 축에 올인하지 않고 최적의 포지션을 계산합니다.",mapPri:"growth",
+  {id:"strategist",type:"전략가형",vec:{compensation:.5,security:.2,growth:.3,autonomy:0,impact:.6,flexibility:.5},desc:"어떤 한 축에 올인하지 않고 최적의 포지션을 계산합니다.",mapPri:"salary",
     jobFit:{tech:{fit:'PM, 전략 기획, 매니지먼트 트랙',caution:'균형 추구가 어느 것도 강하지 않은 상태로 이어질 수 있습니다.'},planning:{fit:'전략 기획, 사업개발, PM → 경영 트랙',caution:'다방면에 관심이 분산되면 전문성이 약해집니다.'},marketing:{fit:'마케팅 전략가, 브랜드+퍼포먼스 양쪽 경험',caution:'다 잘하려다 아무것도 깊지 않을 수 있습니다.'},sales:{fit:'전략 영업, 사업개발, 파트너십 매니저',caution:'너무 전략적으로만 접근하면 현장 감각을 잃습니다.'},design:{fit:'UX 전략가, 디자인+기획 겸직',caution:'디자인과 전략 사이에서 정체성이 모호해질 수 있습니다.'},corporate:{fit:'전략기획실, 경영진 보좌, MBA 트랙',caution:'전략만 하고 실행을 안 하면 신뢰를 잃습니다.'}}},
 ];
 
 const PRIORITIES=[
   {key:'salary',icon:'💰',label:'금전적 보상'},{key:'wlb',icon:'⚖️',label:'워라밸'},
-  {key:'stability',icon:'🛡️',label:'고용 안정성'},{key:'growth',icon:'🚀',label:'성장 기회'},
   {key:'brand',icon:'🏢',label:'회사 브랜드'},{key:'benefits',icon:'🎁',label:'복지'},
 ];
 const PRI_PREVIEW={
   salary:{title:'금전적 보상',checks:['연봉 + 복지 + 야근수당 합산 <strong>총 보상</strong> 비교','명목 연봉과 실질 보상의 <strong>격차 분석</strong>','포괄/비포괄 임금 유형에 따른 보상 차이 계산'],tip:'연봉이 높아도 복지가 빈약하면 실질 보상이 역전될 수 있고, 야근수당은 임금 유형에 따라 크게 달라집니다.'},
   wlb:{title:'워라밸',checks:['<strong>주당 근무시간</strong> 비교 — 워라밸의 핵심','원격근무 · 유연출퇴근 · 통근 시간 종합 분석','자율 휴가 / 리프레시 휴가 비교'],tip:'근무시간이 가장 중요하고, 재택/유연근무는 보조 기준입니다.'},
-  stability:{title:'고용 안정성',checks:['기업 유형별 <strong>안정성 지수</strong> 비교','주거·금융 혜택 (사내대출 등) 분석','스타트업 <strong>리스크 경고</strong> 제공'],tip:'기업 유형을 정확히 선택하면 안정성 비교가 더 정밀해집니다.'},
-  growth:{title:'성장 기회',checks:['교육비·자기개발비·장비 지원 <strong>금액 비교</strong>','직무 전문성 심화 경로 분석','정량 분석 외 <strong>프로젝트 규모, 동료 수준</strong> 가이드'],tip:'교육비 외에도 프로젝트 규모와 동료 수준이 성장에 더 큰 영향을 미칩니다.'},
   brand:{title:'회사 브랜드',checks:['"다음 이직"에서의 <strong>연봉 협상력</strong> 분석','대기업 ↔ 스타트업 <strong>이동 방향성</strong> 검토','이력서 가치 관점의 정성적 비교'],tip:'브랜드 가치는 금전 환산이 어렵지만, 3년 후 이직 시 연봉 협상력으로 전환됩니다.'},
   benefits:{title:'복지',checks:['복리후생 <strong>항목별 금액 비교</strong> 테이블','연봉+복지 합산 실질 보상 분석','합산 차이 1,200만 이하 시 <strong>복지 만족도 우선 판단</strong>'],tip:'복지포인트, 사내대출 등은 사용 조건이 회사마다 다릅니다.'},
 };

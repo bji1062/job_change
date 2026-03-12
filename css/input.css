@@ -46,7 +46,7 @@
 .pb .xb{margin-left:auto;background:none;border:none;color:var(--purple);cursor:pointer;font-size:.85rem;opacity:.7;flex-shrink:0}
 .ben-note-preset{margin-top:.65rem;padding:8px 10px;background:rgba(139,108,246,.04);border:1px solid rgba(139,108,246,.1);border-radius:6px;font-size:.72rem;color:var(--t3);line-height:1.5}
 .ben-note-preset strong{color:var(--purple);font-weight:600}
-.ba{display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem}.ba.show{display:block}
+.ba{margin-top:0;padding-top:0}
 .ba-title{font-size:.7rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
 .bg{margin-bottom:.85rem}
 .bg-label{font-size:.68rem;font-weight:600;color:var(--t4);margin-bottom:.35rem}
@@ -71,7 +71,7 @@
 .pri::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--purple),var(--blue))}
 .pri-l{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--purple);margin-bottom:.35rem}
 .pri-d{font-size:.78rem;color:var(--t3);margin-bottom:1rem}
-.pri-g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pri-g{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 @media(max-width:480px){.pri-g{grid-template-columns:repeat(2,1fr)}}
 .pri-c{padding:10px 8px;text-align:center;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;font-family:inherit;color:var(--t3)}
 .pri-c:hover{border-color:var(--bh);color:var(--t2)}
@@ -88,6 +88,9 @@
 .pri-sac-d{font-size:.78rem;color:var(--t3);margin-bottom:1rem}
 .pri-sac-g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 @media(max-width:480px){.pri-sac-g{grid-template-columns:repeat(2,1fr)}}
+/* Rate section inside priority card */
+.pri-rate-section{margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)}
+.pri-rate-l{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);margin-bottom:.5rem}
 .pri-c.sac-on{background:var(--red-d);border-color:var(--red);color:var(--red)}
 .pri-c.disabled{opacity:.25;pointer-events:none}
 .pri-sac-preview{max-height:0;overflow:hidden;opacity:0;transition:max-height .4s cubic-bezier(.22,1,.36,1),opacity .3s ease,margin .3s ease;margin-top:0}
@@ -126,7 +129,7 @@
 .cta .sub{display:block;font-size:.7rem;font-weight:400;opacity:.5;margin-top:1px}
 
 /* ━━ 근무방식 섹션 ━━ */
-.ws{display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem}.ws.show{display:block}
+.ws{margin-top:0;padding-top:0}
 .ws-title{font-size:.72rem;font-weight:700;color:var(--t2);margin-bottom:.75rem;display:flex;align-items:center;gap:6px}
 .ws-title .new-tag{font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:3px;background:var(--green-d);color:var(--green)}
 .ws-preset{display:none;align-items:center;gap:8px;padding:8px 12px;margin-bottom:.75rem;background:var(--purple-d);border:1px solid rgba(139,108,246,.2);border-radius:7px;font-size:.75rem;color:var(--purple);line-height:1.4}
