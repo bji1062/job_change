@@ -97,8 +97,11 @@
 .pri-sac-preview.open{max-height:200px;opacity:1;margin-top:.75rem}
 .pri-sac-pv{background:var(--bg-1);border:1px solid rgba(239,80,80,.15);border-radius:var(--r);padding:.85rem 1rem;position:relative;overflow:hidden}
 .pri-sac-pv::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)}
-.pri-sel-summary{display:flex;gap:.75rem;margin-top:1rem;padding:.75rem;background:var(--bg-1);border:1px solid var(--border);border-radius:8px}
-.pri-sel-item{flex:1;text-align:center;font-size:.75rem}
+.pri-sel-summary{display:flex;gap:.75rem;margin-top:1rem;align-items:stretch}
+.pri-sel-item{flex:1;text-align:center;font-size:.75rem;padding:.75rem;background:var(--bg-1);border-radius:8px}
+.pri-sel-item.sel-pri{border:1px solid rgba(139,108,246,.3)}
+.pri-sel-item.sel-sac{border:1px solid rgba(239,80,80,.3)}
+.pri-sel-divider{width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:4px 0}
 .pri-sel-item .sel-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem}
 .pri-sel-item .sel-val{font-weight:700;font-size:.85rem}
 .pri-sel-item.sel-pri .sel-label{color:var(--purple)}.pri-sel-item.sel-pri .sel-val{color:var(--purple)}
