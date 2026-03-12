@@ -24,7 +24,6 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .wrap{max-width:1080px;margin:0 auto;padding:2rem 1.25rem 4rem;width:100%}
 .cards-row{display:flex;gap:1rem;align-items:flex-start}
 .cards-row>.cc{flex:1;min-width:0;margin-bottom:0}
-.diff,.cta,.report{max-width:640px;margin-left:auto;margin-right:auto}
-@media(max-width:768px){.cards-row{flex-direction:column}.cards-row>.cc{margin-bottom:1rem}.diff,.cta,.report{max-width:100%}}
+@media(max-width:768px){.cards-row{flex-direction:column}.cards-row>.cc{margin-bottom:1rem}}
 .back{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;color:var(--t3);background:none;border:none;cursor:pointer;font-family:inherit;margin-bottom:1.25rem;transition:color .15s}
 .back:hover{color:var(--t2)}
