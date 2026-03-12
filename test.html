@@ -76,9 +76,15 @@ function updateProgress(current,total){document.getElementById('progressFill').s
 
 // ── Helpers ──
 function wait(ms){return new Promise(r=>setTimeout(r,ms))}
-function reset(){
+async function reset(){
   win=document.getElementById('app').contentWindow;
   doc=win.document;
+  // Wait until app JS globals are initialized
+  for(let i=0;i<50;i++){
+    if(win.wsState&&win.benS&&win.matched&&typeof win.go==='function')return;
+    await wait(100);
+  }
+  throw new Error('App failed to initialize within 5s');
 }
 function assert(cond,msg){if(!cond)throw new Error(msg||'Assertion failed')}
 function assertEl(id,msg){const el=doc.getElementById(id);assert(el,msg||`Element #${id} not found`);return el}
@@ -334,7 +340,7 @@ async function runAll(){
     if(iframe.contentDocument?.readyState==='complete')resolve();
     else iframe.onload=resolve;
   });
-  reset();
+  await reset();
 
   // Timeout watchdog (30s total)
   const TIMEOUT=30000;
@@ -365,8 +371,7 @@ async function runAll(){
         const timer=setTimeout(()=>{r()},5000); // 5s per-load timeout
         iframe.onload=()=>{clearTimeout(timer);r()};
       });
-      reset();
-      await wait(50);
+      await reset();
     }
 
     const tStart=performance.now();
