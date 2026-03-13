@@ -21,7 +21,7 @@
 .rate-chip{flex:1;padding:10px 4px;text-align:center;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600;color:var(--t3)}
 .rate-chip:hover{border-color:var(--bh);color:var(--t2)}
 .rate-chip.on{background:var(--amber-d);border-color:var(--amber);color:var(--amber)}
-.rate-result{margin-top:8px;padding:10px 14px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-size:.82rem;min-height:44px;display:flex;align-items:center}
+.rate-result{padding:10px 12px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-size:.88rem;display:flex;align-items:center}
 .rate-result-placeholder{color:var(--t4);font-size:.78rem}
 .rate-result-calc{display:flex;align-items:baseline;gap:10px;width:100%}
 .rate-result-range{font-family:'JetBrains Mono',monospace;font-size:.88rem;font-weight:600;color:var(--amber);white-space:nowrap}
