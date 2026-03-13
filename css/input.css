@@ -23,9 +23,9 @@
 .rate-chip.on{background:var(--amber-d);border-color:var(--amber);color:var(--amber)}
 .rate-result{margin-top:8px;padding:10px 14px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-size:.82rem;min-height:44px;display:flex;align-items:center}
 .rate-result-placeholder{color:var(--t4);font-size:.78rem}
-.rate-result-calc{display:flex;flex-direction:column;gap:2px;width:100%}
-.rate-result-range{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--amber)}
-.rate-result-detail{font-size:.72rem;color:var(--t4)}
+.rate-result-calc{display:flex;align-items:baseline;gap:10px;width:100%}
+.rate-result-range{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--amber);white-space:nowrap}
+.rate-result-detail{font-size:.72rem;color:var(--t4);white-space:nowrap}
 .fs{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23636b82' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
 .fs option{background:var(--bg-2);color:var(--t1)}
 .sw{position:relative}
