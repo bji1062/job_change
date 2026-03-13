@@ -55,11 +55,12 @@
 .callout.gold{border-color:rgba(232,185,49,.25);background:rgba(232,185,49,.03)}
 .callout-icon{font-size:1rem;flex-shrink:0;margin-top:1px}
 .callout strong{color:var(--t1);font-weight:600}
-.ben-compare{width:100%;border-collapse:collapse;margin-top:.5rem}
-.ben-compare th{font-size:.65rem;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;padding:6px 0;text-align:left;border-bottom:1px solid var(--border)}
-.ben-compare th:nth-child(2),.ben-compare th:nth-child(3){text-align:right;width:80px}
-.ben-compare td{font-size:.78rem;padding:6px 0;border-bottom:1px solid rgba(42,46,58,.3)}
-.ben-compare td:nth-child(2),.ben-compare td:nth-child(3){text-align:right;font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:600}
+.ben-compare{width:100%;border-collapse:collapse;margin-top:.5rem;table-layout:fixed}
+.ben-compare th{font-size:.65rem;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.ben-compare th:nth-child(1){width:auto}
+.ben-compare th:nth-child(2),.ben-compare th:nth-child(3),.ben-compare th:nth-child(4){text-align:right;width:100px}
+.ben-compare td{font-size:.78rem;padding:6px 8px;border-bottom:1px solid rgba(42,46,58,.3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ben-compare td:nth-child(2),.ben-compare td:nth-child(3),.ben-compare td:nth-child(4){text-align:right;font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:600}
 .ben-compare .td-a{color:var(--blue)}.ben-compare .td-b{color:var(--amber)}
 .ben-compare .td-name{color:var(--t2)}
 .td-diff{font-size:.65rem;font-weight:600}
