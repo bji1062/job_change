@@ -13,7 +13,7 @@
 .fl{font-size:.75rem;font-weight:600;color:var(--t3);margin-bottom:4px;display:flex;align-items:center;gap:4px}
 .fl .u{font-size:.65rem;color:var(--t4)}
 .fl .new-tag{font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:3px;background:var(--green-d);color:var(--green);margin-left:4px}
-.fi,.fs{width:100%;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--t1);font-family:'Pretendard',sans-serif;font-size:.88rem;transition:border-color .15s}
+.fi,.fs{width:100%;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:0 12px;height:42px;box-sizing:border-box;color:var(--t1);font-family:'Pretendard',sans-serif;font-size:.88rem;transition:border-color .15s}
 .fi:focus,.fs:focus{outline:none;border-color:var(--blue)}
 .fi::placeholder{color:var(--t4);font-family:'Pretendard',sans-serif;font-size:.82rem}
 .fs:invalid{color:var(--t4)}
@@ -21,7 +21,7 @@
 .rate-chip{flex:1;padding:10px 4px;text-align:center;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600;color:var(--t3)}
 .rate-chip:hover{border-color:var(--bh);color:var(--t2)}
 .rate-chip.on{background:var(--amber-d);border-color:var(--amber);color:var(--amber)}
-.rate-result{padding:10px 12px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-size:.88rem;display:flex;align-items:center}
+.rate-result{padding:0 12px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-size:.88rem;display:flex;align-items:center;height:42px;box-sizing:border-box}
 .rate-result-placeholder{color:var(--t4);font-size:.78rem}
 .rate-result-calc{display:flex;align-items:baseline;gap:10px;width:100%}
 .rate-result-range{font-family:'JetBrains Mono',monospace;font-size:.88rem;font-weight:600;color:var(--amber);white-space:nowrap}
