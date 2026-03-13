@@ -104,9 +104,9 @@
 .hourly-result{background:linear-gradient(135deg,rgba(52,199,123,.08),rgba(52,199,123,.02));border:1px solid rgba(52,199,123,.2);border-radius:var(--r);padding:1rem 1.15rem;margin-top:.65rem}
 .hourly-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem}
 .hval{text-align:center}
-.hval-num{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:600;line-height:1;margin-bottom:.2rem}
+.hval-label{font-size:.65rem;color:var(--t4);font-weight:600;margin-bottom:.35rem}
+.hval-num{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:600;line-height:1}
 .hval-num.a{color:var(--blue)}.hval-num.b{color:var(--amber)}.hval-num.diff{color:var(--green)}
-.hval-label{font-size:.62rem;color:var(--t3)}
 .hourly-verdict{margin-top:.75rem;padding-top:.75rem;border-top:1px solid rgba(52,199,123,.15);font-size:.78rem;color:var(--t2);display:flex;align-items:flex-start;gap:.5rem;line-height:1.5}
 .hourly-verdict .icon{font-size:1rem;flex-shrink:0;margin-top:1px}
 .hourly-note{font-size:.65rem;color:var(--t4);margin-top:.5rem}
