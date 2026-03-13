@@ -213,7 +213,7 @@ function compare(){
   let cumDiff=0;
   for(let y=1;y<=3;y++){projA.push(Math.round(projA[y-1]*(1+grA)));projB.push(Math.round(projB[y-1]*(1+grB)));cumDiff+=(projB[y]-projA[y])}
   const maxVal=Math.max(...projA,...projB);
-  html+=`<div class="cmp"><div class="cmp-head">📈 3년 후 기대 연봉 <span style="font-size:.55rem;background:var(--purple-d);color:var(--purple);padding:1px 6px;border-radius:3px;margin-left:6px">NEW</span></div><div class="cmp-body">`;
+  html+=`<div class="cmp"><div class="cmp-head">📈 3년 후 기대 연봉</div><div class="cmp-body">`;
   html+=`<div class="proj-legend"><div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--blue)"></div>${nA} (${TYPE_LABELS[typeAVal]||typeAVal})</div><div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--amber)"></div>${nB} (${TYPE_LABELS[typeBVal]||typeBVal})</div></div>`;
   html+=`<div class="proj-bars">`;
   const labels=['현재','1년차','2년차','3년차'];
