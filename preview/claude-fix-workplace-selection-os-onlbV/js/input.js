@@ -9,7 +9,9 @@ function setWS(s,field,val){
   document.querySelectorAll(`#${containerId} .ws-btn`).forEach(b=>b.classList.toggle('on',b.dataset.v===val));
   const w=wsState[s];
   const warn=document.getElementById('wsWarn'+s.toUpperCase());
+  const info=document.getElementById('wsInfo'+s.toUpperCase());
   warn.classList.toggle('show',w.wage==='inclusive'&&(w.ot==='mid'||w.ot==='high'));
+  info.classList.toggle('show',w.wage==='separate');
   renderOTCalc(s);
   calc();
 }

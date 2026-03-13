@@ -151,6 +151,9 @@
 .ws-warn{display:none;align-items:flex-start;gap:8px;padding:8px 12px;margin-top:6px;background:var(--red-d);border:1px solid rgba(239,80,80,.25);border-radius:7px;font-size:.72rem;color:#f2a0a2;line-height:1.4}
 .ws-warn.show{display:flex}
 .ws-warn strong{color:var(--red);font-weight:700}
+.ws-info{display:none;align-items:flex-start;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(52,199,123,.08);border:1px solid rgba(52,199,123,.2);border-radius:7px;font-size:.72rem;color:var(--t3);line-height:1.4}
+.ws-info.show{display:flex}
+.ws-info strong{color:var(--green);font-weight:700}
 .ot-calc{display:none;margin-top:.75rem;background:var(--bg-1);border:1px solid rgba(52,199,123,.2);border-radius:8px;padding:.85rem 1rem}
 .ot-calc.show{display:block}
 .ot-calc-title{font-size:.65rem;font-weight:700;color:var(--t4);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.5rem}
