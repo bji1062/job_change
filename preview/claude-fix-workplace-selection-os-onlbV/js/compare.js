@@ -135,8 +135,12 @@ function compare(){
     const otTagA=otPayA>0?` <span style="font-size:.58rem;color:var(--green)">+야근수당 ${otPayA}만</span>`:'';
     const otTagB=otPayB>0?` <span style="font-size:.58rem;color:var(--green)">+야근수당 ${otPayB}만</span>`:'';
     html+=`<div class="cmp"><div class="cmp-head">⏱ 시간당 실질 가치</div><div class="cmp-body">`;
-    if(wA.wage==='inclusive'&&wA.ot!=='low')html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nA}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
-    if(wB.wage==='inclusive'&&wB.ot!=='low')html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nB}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+    const incA=wA.wage==='inclusive'&&wA.ot!=='low',incB=wB.wage==='inclusive'&&wB.ot!=='low';
+    if(incA&&incB)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nA}, ${nB} 모두 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+    else{
+      if(incA)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nA}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+      if(incB)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nB}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+    }
     html+=`<div class="hourly-result"><div class="hourly-grid">`;
     html+=`<div class="hval"><div class="hval-num a">${hvA.toLocaleString()}원</div><div class="hval-label">${nA} / 시간${otTagA}</div></div>`;
     html+=`<div class="hval"><div class="hval-num b">${hvB.toLocaleString()}원</div><div class="hval-label">${nB} / 시간${otTagB}</div></div>`;
