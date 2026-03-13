@@ -15,19 +15,8 @@ function setWS(s,field,val){
 }
 
 function renderOTCalc(s){
-  const w=wsState[s],el=document.getElementById('otCalc'+s.toUpperCase());
-  if(w.wage!=='separate'||w.ot==='low'){el.classList.remove('show');return}
-  const salRange=s==='a'?getSalRange():getOfferRange();
-  if(!salRange.mid){el.classList.remove('show');return}
-  const monthSal=salRange.mid*10000/12;
-  const hourlyBase=Math.round(monthSal/209);
-  const extraHrs=OT_HRS[w.ot]-40;
-  const weeklyOTPay=Math.round(extraHrs*hourlyBase*1.5);
-  const monthlyOT=Math.round(weeklyOTPay*4.33);
-  const annualOT=Math.round(monthlyOT*12/10000);
-  const totalAnn=salRange.mid+annualOT;
-  el.innerHTML=`<div class="ot-calc-title">야근수당 추정 (주 ${extraHrs}시간 초과근무)</div><div class="ot-row"><span>통상시급 (연봉÷12÷209h)</span><span class="v">${hourlyBase.toLocaleString()}원</span></div><div class="ot-row"><span>주당 연장근로 (${extraHrs}h × 1.5배)</span><span class="v">+${weeklyOTPay.toLocaleString()}원</span></div><div class="ot-row"><span>월 추가 수당 (×4.33주)</span><span class="v">+${monthlyOT.toLocaleString()}원</span></div><div class="ot-div"></div><div class="ot-total"><span>연간 추가 수당</span><span class="v">+약 ${annualOT.toLocaleString()}만원</span></div><div class="ot-total" style="margin-top:.2rem"><span>실질 총 보상 추정</span><span class="v" style="font-size:.92rem">약 ${totalAnn.toLocaleString()}만원</span></div>`;
-  el.classList.add('show');
+  const el=document.getElementById('otCalc'+s.toUpperCase());
+  el.classList.remove('show');
 }
 
 function applyWSPreset(s,type){
