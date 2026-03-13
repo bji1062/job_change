@@ -142,10 +142,10 @@ function compare(){
       if(incB)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nB}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
     }
     html+=`<div class="hourly-result"><div class="hourly-grid">`;
-    html+=`<div class="hval"><div class="hval-num a">${hvA.toLocaleString()}원</div><div class="hval-label">${nA} / 시간${otTagA}</div></div>`;
-    html+=`<div class="hval"><div class="hval-num b">${hvB.toLocaleString()}원</div><div class="hval-label">${nB} / 시간${otTagB}</div></div>`;
+    html+=`<div class="hval"><div class="hval-label">${nA} / 시간${otTagA}</div><div class="hval-num a">${hvA.toLocaleString()}원</div></div>`;
+    html+=`<div class="hval"><div class="hval-label">${nB} / 시간${otTagB}</div><div class="hval-num b">${hvB.toLocaleString()}원</div></div>`;
     const pct=Math.round(Math.abs(hvDiff)/Math.min(hvA,hvB)*100);
-    html+=`<div class="hval"><div class="hval-num diff">${hvDiff>0?'+':''}${hvDiff.toLocaleString()}원</div><div class="hval-label">${hvWin} +${pct}%</div></div>`;
+    html+=`<div class="hval"><div class="hval-label">차이</div><div class="hval-num diff">${hvDiff>0?'+':''}${hvDiff.toLocaleString()}원 (${pct}%)</div></div>`;
     html+=`</div>`;
     const annDiffHrs=Math.abs(annHrsA-annHrsB);const annDiffDays=Math.round(annDiffHrs/8);
     const salMore=effBmidOT>effAmidOT?nB:nA;const salDiffAbs=Math.abs(effBmidOT-effAmidOT);
@@ -167,7 +167,7 @@ function compare(){
       else if(hvWinName===lessHrsName){msg=`<strong>${hvWinName}</strong>이 덜 일하면서 시간당 가치도 <strong>${pctHV}%</strong> 높습니다.${annDiffHrs>100?` ${moreHrsName}은 연 ${annDiffHrs.toLocaleString()}시간 더 일하고도 시간당으로는 뒤처집니다.`:''}`}
       else{msg=`<strong>${hvWinName}</strong>이 시간당 <strong>${pctHV}% (${Math.abs(hvDiff).toLocaleString()}원)</strong> 높습니다.`}
     }else{msg=`시간당 실질 가치 차이는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong>입니다.${annDiffHrs>0?` ${moreHrsName}이 연 ${annDiffHrs.toLocaleString()}시간 더 일합니다.`:''} ${Math.abs(benDiff)>100?`복지 차이(연 ${fW(Math.abs(benDiff))})도 함께 고려하세요.`:'근무 환경과 성장 기회를 비교하세요.'}`}
-    html+=`<div class="hourly-verdict"><span class="icon">⚡</span><span>${msg}</span></div>`;
+    html+=`<div class="hourly-verdict"><span class="icon">⚡</span><span>${msg.replace(/\. /g,'.<br>')}</span></div>`;
     let noteItems=[];if(effA.mid||effB.mid)noteItems.push('연봉');if(bA.ben||bB.ben)noteItems.push('복지');if(otPayA||otPayB)noteItems.push('야근수당');
     const noteFormula=noteItems.length?noteItems.join('+'):'연봉+복지';
     let noteExtra='';
