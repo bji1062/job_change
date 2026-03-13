@@ -110,6 +110,24 @@
 .hourly-verdict .icon{font-size:1rem;flex-shrink:0;margin-top:1px}
 .hourly-note{font-size:.65rem;color:var(--t4);margin-top:.5rem}
 
+/* Overtime detail */
+.ot-detail-box{margin-top:.75rem;background:linear-gradient(135deg,rgba(52,199,123,.06),rgba(52,199,123,.02));border:1px solid rgba(52,199,123,.18);border-radius:var(--r);padding:1rem 1.15rem}
+.ot-detail-head{font-size:.82rem;font-weight:700;color:var(--t2);margin-bottom:.75rem}
+.ot-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+@media(max-width:480px){.ot-detail-grid{grid-template-columns:1fr}}
+.ot-detail-side{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:.75rem .85rem}
+.ot-detail-name{font-size:.78rem;font-weight:700;color:var(--t2);margin-bottom:.5rem;display:flex;align-items:center;gap:6px}
+.ot-wage-tag{font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:3px}
+.ot-wage-tag.inc{background:rgba(240,160,48,.12);color:var(--amber)}
+.ot-wage-tag.sep{background:rgba(52,199,123,.12);color:var(--green)}
+.ot-detail-row{display:flex;justify-content:space-between;font-size:.7rem;margin-bottom:.2rem;color:var(--t3)}
+.ot-detail-row .v{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--t2)}
+.ot-detail-warn{font-size:.72rem;color:var(--t4);line-height:1.5;margin-bottom:.4rem}
+.ot-detail-sum{font-size:.78rem;color:var(--t2);margin-top:.4rem;padding-top:.4rem;border-top:1px solid var(--border)}
+.ot-detail-sum .green{color:var(--green)}
+.ot-detail-verdict{margin-top:.75rem;padding-top:.65rem;border-top:1px solid rgba(52,199,123,.15);font-size:.78rem;color:var(--t2);display:flex;align-items:flex-start;gap:.5rem;line-height:1.5}
+.ot-detail-verdict .icon{font-size:1rem;flex-shrink:0;margin-top:1px}
+
 /* 3년 투영 */
 .proj-legend{display:flex;gap:1rem;margin-bottom:.75rem}
 .proj-legend-item{display:flex;align-items:center;gap:.4rem;font-size:.7rem;color:var(--t3)}

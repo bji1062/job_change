@@ -104,6 +104,24 @@ function compare(){
   const effWin=effDiffMid>0?'b':effDiffMid<0?'a':'eq';
   html+=`<div class="cmp"><div class="cmp-head">💰 보상 비교</div><div class="cmp-body"><div class="vs-row"><div class="vs-card a-s${effWin==='a'?' win':''}"><div class="vs-side">${nA}</div><div class="vs-big">${fR(effA)}</div><div class="vs-detail">연봉 <strong>${fR(salA)}</strong> + 복지 <strong>${bA.net>=0?'+':''}${bA.net.toLocaleString()}만</strong></div></div><div class="vs-card b-s${effWin==='b'?' win':''}"><div class="vs-side">${nB}</div><div class="vs-big">${fR(effB)}</div><div class="vs-detail">연봉 <strong>${fR(salB)}</strong> + 복지 <strong>${bB.net>=0?'+':''}${bB.net.toLocaleString()}만</strong></div></div></div>`;
   if(salDiffMid>0&&effDiffMid<salDiffMid&&bA.ben>bB.ben)html+=`<div class="callout warn"><span class="callout-icon">⚠️</span><span>${nA}의 복지가 <strong>${fW(bA.ben-bB.ben)}</strong> 더 많아, 연봉이 올라도 실질 보상 차이는 줄어듭니다.${Math.abs(effDiffMid)<1200?' 이 정도 차이라면 복지 만족도가 더 중요할 수 있습니다.':''}</span></div>`;
+  // Overtime detail breakdown
+  if(otPayA>0||otPayB>0){
+    function otDetail(s,name){
+      const w=wsState[s],sal=s==='a'?salA:salB,otp=s==='a'?otPayA:otPayB;
+      if(w.wage==='inclusive'){return`<div class="ot-detail-side"><div class="ot-detail-name">${name} <span class="ot-wage-tag inc">포괄임금</span></div><div class="ot-detail-warn">⚠️ 야근수당이 연봉에 포함<br>추가 수당 없음</div><div class="ot-detail-sum">연간 추가: <strong>0원</strong></div></div>`}
+      if(w.wage==='separate'&&w.ot!=='low'&&sal.mid){
+        const monthSal=sal.mid*10000/12,hb=Math.round(monthSal/209),ex=OT_HRS[w.ot]-40,wk=Math.round(ex*hb*1.5),mo=Math.round(wk*4.33);
+        return`<div class="ot-detail-side"><div class="ot-detail-name">${name} <span class="ot-wage-tag sep">비포괄</span></div><div class="ot-detail-row"><span>통상시급 (연봉÷12÷209h)</span><span class="v">${hb.toLocaleString()}원</span></div><div class="ot-detail-row"><span>주당 연장근로 (${ex}h × 1.5배)</span><span class="v">+${wk.toLocaleString()}원</span></div><div class="ot-detail-row"><span>월 추가 수당 (×4.33주)</span><span class="v">+${mo.toLocaleString()}원</span></div><div class="ot-detail-sum">연간 추가: <strong class="green">+약 ${otp.toLocaleString()}만원</strong></div></div>`}
+      return''}
+    const dA=otDetail('a',nA),dB=otDetail('b',nB);
+    if(dA||dB){
+      let otMsg='';
+      if(otPayA>0&&otPayB>0){const d=otPayB-otPayA;otMsg=d===0?'양쪽 모두 비포괄임금제로 야근수당이 보전됩니다.':`양쪽 모두 야근수당이 보전되며, <strong>${d>0?nB:nA}</strong>이 연 약 <strong>${fW(Math.abs(d))}</strong> 더 받습니다.`}
+      else if(otPayB>0)otMsg=`<strong>${nB}</strong>는 비포괄임금제로 야근수당 연 약 <strong>${fW(otPayB)}</strong>이 추가 보전됩니다.`;
+      else if(otPayA>0)otMsg=`<strong>${nA}</strong>는 비포괄임금제로 야근수당 연 약 <strong>${fW(otPayA)}</strong>이 추가 보전됩니다.`;
+      html+=`<div class="ot-detail-box"><div class="ot-detail-head">💵 야근수당 상세</div><div class="ot-detail-grid">${dA}${dB}</div>${otMsg?`<div class="ot-detail-verdict"><span class="icon">⚡</span><span>${otMsg}</span></div>`:''}</div>`;
+    }
+  }
   html+=`</div></div>`;
 
   // [FIX] 시간당 실질 가치 — 양쪽 모두 입력된 경우만 비교 표시
