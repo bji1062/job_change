@@ -71,7 +71,7 @@
 .qs-a{background:var(--blue-d);color:var(--blue)}.qs-b{background:var(--amber-d);color:var(--amber)}
 .bottom-line{text-align:center;padding:1.5rem;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:1rem}
 .bl-label{font-size:.68rem;color:var(--t4);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem}
-.bl-text{font-size:.95rem;color:var(--t1);font-weight:600;line-height:1.5;max-width:480px;margin:0 auto}
+.bl-text{font-size:.95rem;color:var(--t1);font-weight:600;line-height:1.5}
 .bl-text .hl-a{color:var(--blue);font-weight:700}.bl-text .hl-b{color:var(--amber);font-weight:700}
 .rp-profiler-cta{text-align:center;padding:1.25rem;background:var(--gold-d);border:1px solid rgba(232,185,49,.2);border-radius:var(--rl);margin-bottom:1rem}
 .rp-profiler-cta p{font-size:.82rem;color:var(--gold);margin-bottom:.75rem;line-height:1.5}
