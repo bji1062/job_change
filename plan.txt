@@ -1,0 +1,524 @@
+# Oracle Cloud + MySQL 백엔드 구축 계획
+
+## Context
+
+현재 Job Choice OS는 순수 클라이언트 SPA(`index.html` 단일 파일)로, 모든 데이터(~100KB)가 JS 상수로 하드코딩되어 있다. 회사 DB 확장, 사용자 비교 이력 저장, 로그인 기능을 위해 Oracle Cloud Always Free 티어에 FastAPI + MySQL 백엔드를 구축한다.
+
+## 아키텍처
+
+┌──────────────┐
+│   Browser    │
+│  index.html  │  ← 계산 로직은 그대로 클라이언트
+└──────┬───────┘
+       │ fetch()
+┌──────▼───────┐
+│    Nginx     │  ← SSL + 리버스 프록시
+│   :443/:80   │
+└──────┬───────┘
+       │ proxy_pass :8000
+┌──────▼───────┐
+│   FastAPI    │  ← Python 백엔드
+│   :8000      │
+└──────┬───────┘
+       │ aiomysql
+┌──────▼───────┐
+│    MySQL     │  ← 자체 호스팅 (localhost)
+│   :3306      │
+└──────────────┘
+
+---
+
+## Phase 1: OCI 인프라 구축
+
+### 1.1 Compute 인스턴스 생성 (Always Free)
+- Shape: VM.Standard.A1.Flex (ARM Ampere)
+- Spec: 2 OCPU, 12GB RAM (무료 범위 내)
+- OS: Ubuntu 22.04
+- Boot Volume: 50GB
+
+### 1.2 네트워크 설정
+- VCN CIDR: 10.0.0.0/16, Public Subnet: 10.0.1.0/24
+- Internet Gateway + Route Table
+- Security List:
+  - TCP 22 (SSH) — 본인 IP만
+  - TCP 80, 443 (HTTP/HTTPS) — 전체 허용
+  - TCP 3306 (MySQL) — 차단 (localhost만 접근)
+
+  sudo ufw allow 22/tcp
+  sudo ufw allow 80/tcp
+  sudo ufw allow 443/tcp
+  sudo ufw enable
+
+### 1.3 MySQL 설치 (자체 호스팅)
+
+  sudo apt update && sudo apt install mysql-server -y
+  sudo systemctl enable --now mysql
+  sudo mysql_secure_installation
+
+  CREATE DATABASE jobchoice CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE USER 'jobapp'@'localhost' IDENTIFIED BY '<strong_password>';
+  GRANT ALL PRIVILEGES ON jobchoice.* TO 'jobapp'@'localhost';
+  FLUSH PRIVILEGES;
+
+### 1.4 도메인 & SSL
+- A 레코드 → Compute Public IP
+- Let's Encrypt + Certbot:
+
+  sudo apt install certbot python3-certbot-nginx -y
+  sudo certbot --nginx -d yourdomain.com
+
+---
+
+## Phase 2: MySQL 스키마
+
+### 2.1 레퍼런스 데이터 테이블
+
+  -- 기업 유형 (6종)
+  CREATE TABLE company_types (
+    id VARCHAR(20) PRIMARY KEY,
+    label VARCHAR(20) NOT NULL,
+    growth_rate DECIMAL(5,4) NOT NULL,
+    growth_label VARCHAR(50) NOT NULL,
+    stability_score TINYINT NOT NULL
+  );
+
+  -- 기업 DB (확장 가능)
+  CREATE TABLE companies (
+    id VARCHAR(30) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type_id VARCHAR(20) NOT NULL,
+    industry VARCHAR(50),
+    logo VARCHAR(10),
+    work_style JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (type_id) REFERENCES company_types(id),
+    FULLTEXT INDEX idx_name (name)
+  );
+
+  -- 기업 검색 별칭
+  CREATE TABLE company_aliases (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id VARCHAR(30) NOT NULL,
+    alias VARCHAR(100) NOT NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    INDEX idx_alias (alias)
+  );
+
+  -- 기업별 복리후생
+  CREATE TABLE company_benefits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id VARCHAR(30) NOT NULL,
+    ben_key VARCHAR(30) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    val INT DEFAULT 0,
+    category VARCHAR(20) NOT NULL,
+    badge VARCHAR(10) DEFAULT 'est',
+    note VARCHAR(200),
+    is_qualitative BOOLEAN DEFAULT FALSE,
+    qual_text VARCHAR(500),
+    sort_order SMALLINT DEFAULT 0,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+  );
+
+  -- 유형별 복지 프리셋
+  CREATE TABLE benefit_presets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    type_id VARCHAR(20) NOT NULL,
+    ben_key VARCHAR(30) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    val INT DEFAULT 0,
+    category VARCHAR(20) NOT NULL,
+    badge VARCHAR(10) DEFAULT 'est',
+    checked_default BOOLEAN DEFAULT TRUE,
+    sort_order SMALLINT DEFAULT 0,
+    FOREIGN KEY (type_id) REFERENCES company_types(id)
+  );
+
+  -- 커리어 프로필 (9종)
+  CREATE TABLE profiles (
+    id VARCHAR(20) PRIMARY KEY,
+    type_name VARCHAR(20) NOT NULL,
+    description TEXT NOT NULL,
+    map_priority VARCHAR(20) NOT NULL,
+    vec JSON NOT NULL
+  );
+
+  -- 프로필 직무 적합도
+  CREATE TABLE profile_job_fits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    profile_id VARCHAR(20) NOT NULL,
+    scenario VARCHAR(20) NOT NULL,
+    fit TEXT NOT NULL,
+    caution TEXT NOT NULL,
+    FOREIGN KEY (profile_id) REFERENCES profiles(id),
+    UNIQUE INDEX (profile_id, scenario)
+  );
+
+  -- 직군/직무
+  CREATE TABLE job_groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_label VARCHAR(30) NOT NULL,
+    color VARCHAR(10) NOT NULL,
+    sort_order TINYINT NOT NULL
+  );
+
+  CREATE TABLE jobs (
+    id VARCHAR(30) PRIMARY KEY,
+    group_id INT NOT NULL,
+    label VARCHAR(30) NOT NULL,
+    icon VARCHAR(10) NOT NULL,
+    scenario VARCHAR(20) NOT NULL,
+    sort_order TINYINT NOT NULL,
+    FOREIGN KEY (group_id) REFERENCES job_groups(id)
+  );
+
+  -- 프로파일러 질문 (12문항)
+  CREATE TABLE profiler_questions (
+    id INT PRIMARY KEY,
+    label VARCHAR(30) NOT NULL,
+    option_a_title VARCHAR(50) NOT NULL,
+    option_a_fx JSON NOT NULL,
+    option_b_title VARCHAR(50) NOT NULL,
+    option_b_fx JSON NOT NULL
+  );
+
+  -- 질문 시나리오별 설명
+  CREATE TABLE question_scenarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question_id INT NOT NULL,
+    scenario VARCHAR(20) NOT NULL,
+    desc_a TEXT NOT NULL,
+    desc_b TEXT NOT NULL,
+    FOREIGN KEY (question_id) REFERENCES profiler_questions(id),
+    UNIQUE INDEX (question_id, scenario)
+  );
+
+### 2.2 사용자 & 세션 테이블
+
+  -- 사용자 (이메일/비밀번호 로그인)
+  CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email (email)
+  );
+
+  -- 프로파일러 결과 저장
+  CREATE TABLE profiler_results (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    job_id VARCHAR(30),
+    scores JSON NOT NULL,
+    profile_id VARCHAR(20) NOT NULL,
+    similarity DECIMAL(5,4) NOT NULL,
+    answers JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_id) REFERENCES profiles(id)
+  );
+
+  -- 비교 이력 저장
+  CREATE TABLE comparisons (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    company_a_name VARCHAR(100),
+    type_a VARCHAR(20) NOT NULL,
+    salary_a_min INT, salary_a_max INT,
+    commute_a INT DEFAULT 0,
+    work_style_a JSON,
+    benefits_a JSON,
+    company_b_name VARCHAR(100),
+    type_b VARCHAR(20) NOT NULL,
+    salary_rate INT,
+    commute_b INT DEFAULT 0,
+    work_style_b JSON,
+    benefits_b JSON,
+    priority_key VARCHAR(20) NOT NULL,
+    sacrifice_key VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_created (user_id, created_at)
+  );
+
+---
+
+## Phase 3: FastAPI 백엔드
+
+### 3.1 프로젝트 구조
+
+  server/
+  ├── requirements.txt
+  ├── .env
+  ├── main.py                 # FastAPI 앱 진입점
+  ├── config.py               # 환경변수, DB 설정
+  ├── database.py             # aiomysql 커넥션 풀
+  ├── models/
+  │   ├── user.py             # Pydantic 모델 (User, Auth)
+  │   ├── company.py          # Company, Benefit 모델
+  │   ├── profiler.py         # Profile, Question 모델
+  │   └── comparison.py       # Comparison 모델
+  ├── routers/
+  │   ├── auth.py             # POST /auth/register, /auth/login
+  │   ├── companies.py        # GET /companies/search, /companies/{id}
+  │   ├── reference.py        # GET /reference/all
+  │   ├── profiler.py         # GET /profiler/jobs, questions, profiles
+  │   └── comparisons.py      # POST/GET /comparisons
+  ├── services/
+  │   ├── auth_service.py     # 비밀번호 해싱, JWT 생성
+  │   └── cache.py            # 레퍼런스 데이터 메모리 캐시
+  ├── middleware/
+  │   └── auth_middleware.py  # JWT 토큰 검증
+  └── seed/
+      ├── seed.py             # 시드 데이터 삽입 스크립트
+      └── schema.sql          # 전체 DDL
+
+### 3.2 핵심 의존성 (requirements.txt)
+
+  fastapi==0.115.*
+  uvicorn[standard]==0.34.*
+  aiomysql==0.2.*
+  pydantic==2.*
+  python-jose[cryptography]==3.3.*
+  passlib[bcrypt]==1.7.*
+  python-dotenv==1.*
+
+### 3.3 API 엔드포인트
+
+인증 (공개):
+  POST  /api/v1/auth/register    회원가입 (email, password, name)
+  POST  /api/v1/auth/login       로그인 → JWT 토큰 반환
+
+레퍼런스 데이터 (공개, 캐싱):
+  GET   /api/v1/reference/all    모든 상수 데이터 한 번에 반환
+
+기업 검색 (공개):
+  GET   /api/v1/companies/search?q=토스    이름/별칭 검색
+  GET   /api/v1/companies/{id}             기업 상세 (복지, 근무방식 포함)
+
+프로파일러 (공개):
+  GET   /api/v1/profiler/jobs                  직군/직무 목록
+  GET   /api/v1/profiler/questions?scenario=tech    질문 + 시나리오 설명
+  GET   /api/v1/profiler/profiles              프로필 유형 목록
+
+사용자 데이터 (인증 필요):
+  POST  /api/v1/profiler/results     프로파일러 결과 저장
+  POST  /api/v1/comparisons          비교 이력 저장
+  GET   /api/v1/comparisons          내 비교 이력 조회
+  GET   /api/v1/comparisons/{id}     비교 상세 조회
+
+### 3.4 인증 방식
+- JWT (JSON Web Token) 기반
+- 회원가입: email + password → bcrypt 해싱 저장
+- 로그인: email + password 검증 → JWT 발급 (24시간 만료)
+- 인증 필요 API: Authorization: Bearer <token> 헤더
+
+### 3.5 캐싱 전략
+- /reference/all 응답을 메모리에 캐싱 (TTL 1시간)
+- HTTP 헤더: Cache-Control: public, max-age=3600
+- 기업 검색은 캐싱 없음 (실시간)
+
+---
+
+## Phase 4: 프론트엔드 통합 (index.html 수정)
+
+### 4.1 전략: Progressive Enhancement (점진적 향상)
+- 하드코딩 데이터를 폴백으로 유지
+- API 사용 가능 시 서버 데이터로 교체
+- API 불가 시 기존처럼 동작
+
+### 4.2 변경 사항
+
+1) const → let 변경 (API 데이터로 교체 가능하도록):
+
+  // 변경 대상: DB, BEN_PRESETS, PROFILES, JOB_GROUPS, Q_BASE, Q_DESC
+  let DB = [...];        // const → let
+  let BEN_PRESETS = {};  // const → let
+  let PROFILES = [];     // const → let
+  // ... 기타 동일
+
+2) API 클라이언트 추가 (<script> 상단):
+
+  // ━━ API CLIENT ━━
+  const API_BASE = location.protocol === 'file:' ? '' : '';
+  let AUTH_TOKEN = localStorage.getItem('jc_token') || null;
+
+  async function apiFetch(path, opts = {}) {
+    if (!API_BASE) return null;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (AUTH_TOKEN) headers['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+      const r = await fetch(API_BASE + '/api/v1' + path, { ...opts, headers });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+3) 초기화 수정 (INIT 섹션):
+
+  (async function init() {
+    initPri(); calc();
+    if (!API_BASE) return;
+    const ref = await apiFetch('/reference/all');
+    if (ref) {
+      DB = ref.companies || DB;
+      BEN_PRESETS = ref.benPresets || BEN_PRESETS;
+      // ... 기타 데이터 교체
+    }
+  })();
+
+4) 기업 검색 API 연동:
+  - doSearch(s) 함수에서 API 우선 호출, 실패 시 로컬 DB 필터링
+
+5) 로그인/회원가입 UI 추가:
+  - 랜딩 페이지에 로그인 버튼 추가
+  - 간단한 모달 팝업 (이메일 + 비밀번호)
+  - 로그인 성공 시 JWT를 localStorage에 저장
+
+6) 비교 이력 저장:
+  - compare() 함수 끝에 API 호출 추가 (로그인 상태일 때만)
+  - 마이페이지에서 이전 비교 목록 조회
+
+---
+
+## Phase 5: 배포 및 운영
+
+### 5.1 서버 환경 구성
+
+  # Python 3.11+ 설치
+  sudo apt install python3.11 python3.11-venv python3-pip -y
+
+  # 프로젝트 셋업
+  cd /home/ubuntu/job_change/server
+  python3.11 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+
+  # 환경변수 (.env)
+  DB_HOST=localhost
+  DB_USER=jobapp
+  DB_PASS=<strong_password>
+  DB_NAME=jobchoice
+  JWT_SECRET=<random_secret_key>
+  JWT_EXPIRE_HOURS=24
+
+### 5.2 스키마 & 시드 데이터
+
+  mysql -u jobapp -p jobchoice < seed/schema.sql
+  python seed/seed.py
+
+### 5.3 Systemd 서비스
+
+  # /etc/systemd/system/jobchoice.service
+  [Unit]
+  Description=Job Choice OS API
+  After=network.target mysql.service
+
+  [Service]
+  User=ubuntu
+  WorkingDirectory=/home/ubuntu/job_change/server
+  Environment=PATH=/home/ubuntu/job_change/server/venv/bin
+  ExecStart=/home/ubuntu/job_change/server/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+  Restart=always
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+
+  sudo systemctl enable --now jobchoice
+
+### 5.4 Nginx 설정
+
+  server {
+      listen 80;
+      server_name yourdomain.com;
+      return 301 https://$host$request_uri;
+  }
+
+  server {
+      listen 443 ssl;
+      server_name yourdomain.com;
+
+      ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+      # 프론트엔드 (정적 파일)
+      root /home/ubuntu/job_change;
+      index index.html;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      # API 프록시
+      location /api/ {
+          proxy_pass http://127.0.0.1:8000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+---
+
+## 구현 순서 (총 6단계)
+
+Step 1: OCI 인프라 (서버 외부 작업)
+  - OCI 콘솔에서 Compute 인스턴스 생성
+  - VCN, 서브넷, Security List 설정
+  - SSH 접속 확인
+
+Step 2: MySQL 설치 & 스키마 생성
+  - MySQL 설치, 보안 설정, 유저/DB 생성
+  - seed/schema.sql 작성 및 실행
+
+Step 3: FastAPI 백엔드 개발
+  - 프로젝트 구조 생성
+  - 레퍼런스 데이터 API 구현
+  - 기업 검색 API 구현
+  - 인증 (회원가입/로그인) 구현
+  - 비교 이력 CRUD 구현
+
+Step 4: 시드 데이터 마이그레이션
+  - index.html의 하드코딩 데이터를 MySQL로 이전
+  - seed/seed.py 작성 및 실행
+
+Step 5: 프론트엔드 통합
+  - index.html에 API 클라이언트 추가
+  - const → let 변경
+  - 로그인 UI 추가
+  - 기업 검색 API 연동
+  - 비교 이력 저장/조회 연동
+
+Step 6: 배포
+  - Nginx + SSL 설정
+  - Systemd 서비스 등록
+  - 도메인 연결
+
+---
+
+## 수정 대상 파일
+
+  index.html              API 클라이언트 추가, const→let, 로그인 UI, API 연동
+  server/ (신규)          FastAPI 백엔드 전체
+  server/seed/schema.sql  MySQL DDL
+  server/seed/seed.py     시드 데이터 삽입
+
+## 검증 방법
+
+  1. mysql -u jobapp -p jobchoice -e "SELECT COUNT(*) FROM companies;"
+     → 데이터 확인
+
+  2. curl http://localhost:8000/api/v1/reference/all
+     → API 응답 확인
+
+  3. curl -X POST http://localhost:8000/api/v1/auth/register \
+       -H "Content-Type: application/json" \
+       -d '{"email":"test@test.com","password":"test1234","name":"테스트"}'
+     → 회원가입 테스트
+
+  4. 브라우저에서 index.html 열어 기존 기능 정상 동작 확인 (폴백)
+
+  5. 로그인 후 비교 실행 → DB에 이력 저장 확인
