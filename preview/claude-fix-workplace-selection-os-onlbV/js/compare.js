@@ -145,7 +145,7 @@ function compare(){
     html+=`<div class="hval"><div class="hval-label">${nA} / 시간${otTagA}</div><div class="hval-num a">${hvA.toLocaleString()}원</div></div>`;
     html+=`<div class="hval"><div class="hval-label">${nB} / 시간${otTagB}</div><div class="hval-num b">${hvB.toLocaleString()}원</div></div>`;
     const pct=Math.round(Math.abs(hvDiff)/Math.min(hvA,hvB)*100);
-    html+=`<div class="hval"><div class="hval-label">차이</div><div class="hval-num diff">${hvDiff>0?'+':''}${hvDiff.toLocaleString()}원 (${pct}%)</div></div>`;
+    html+=`<div class="hval"><div class="hval-label">차이</div><div class="hval-num diff">${hvDiff>0?'+':''}${hvDiff.toLocaleString()}원</div><div class="hval-sub">${hvWin} +${pct}%</div></div>`;
     html+=`</div>`;
     const annDiffHrs=Math.abs(annHrsA-annHrsB);const annDiffDays=Math.round(annDiffHrs/8);
     const salMore=effBmidOT>effAmidOT?nB:nA;const salDiffAbs=Math.abs(effBmidOT-effAmidOT);
