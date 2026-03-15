@@ -12,7 +12,7 @@ compartment_ocid = "ocid1.compartment.oc1..aaaa..."
 ssh_public_key = "ssh-rsa AAAA..."
 
 # SSH 접근 허용 IP (본인 IP)
-my_ip_cidr = "1.2.3.4/32"
+my_ip_cidr = "0.0.0.0/0"
 
 # 인스턴스 스펙 (Always Free 기본값)
 # instance_shape     = "VM.Standard.A1.Flex"
