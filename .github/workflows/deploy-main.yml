@@ -16,8 +16,21 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+
+      - name: Checkout gh-pages preview folder
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: __gh_pages_old
+
+      - name: Preserve preview directories
+        run: |
+          if [ -d "__gh_pages_old/preview" ]; then
+            cp -r __gh_pages_old/preview ./preview
+          fi
+          rm -rf __gh_pages_old
 
       - name: Deploy to GitHub Pages (root)
         uses: peaceiris/actions-gh-pages@v4
