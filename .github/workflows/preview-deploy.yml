@@ -6,6 +6,10 @@ on:
       - main
       - gh-pages
 
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy-preview:
     runs-on: ubuntu-latest
