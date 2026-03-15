@@ -1,0 +1,20 @@
+# OCI 인증 정보
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+fingerprint      = "aa:bb:cc:dd:..."
+private_key_path = "~/.oci/oci_api_key.pem"
+
+# 리전 및 컴파트먼트
+region           = "ap-seoul-1"
+compartment_ocid = "ocid1.compartment.oc1..aaaa..."
+
+# SSH 공개 키 (인스턴스 접속용)
+ssh_public_key = "ssh-rsa AAAA..."
+
+# SSH 접근 허용 IP (본인 IP)
+my_ip_cidr = "1.2.3.4/32"
+
+# 인스턴스 스펙 (Always Free 기본값)
+# instance_shape     = "VM.Standard.A1.Flex"
+# instance_ocpus     = 2
+# instance_memory_gb = 12

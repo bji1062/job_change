@@ -1,0 +1,48 @@
+import json
+from fastapi import APIRouter, Query
+import database
+
+router = APIRouter()
+
+@router.get("/search")
+async def search(q: str = Query(..., min_length=1)):
+    q_like = f"%{q}%"
+    rows = await database.fetch_all(
+        """SELECT DISTINCT c.id, c.name, c.type_id AS type, c.industry, c.logo
+           FROM companies c
+           LEFT JOIN company_aliases ca ON ca.company_id = c.id
+           WHERE c.name LIKE %s OR ca.alias LIKE %s
+           LIMIT 20""",
+        (q_like, q_like),
+    )
+    return rows
+
+@router.get("/{company_id}")
+async def detail(company_id: str):
+    comp = await database.fetch_one(
+        "SELECT id, name, type_id AS type, industry, logo, work_style FROM companies WHERE id=%s",
+        (company_id,),
+    )
+    if not comp:
+        return {"error": "not found"}
+
+    aliases = await database.fetch_all(
+        "SELECT alias FROM company_aliases WHERE company_id=%s", (company_id,)
+    )
+    benefits = await database.fetch_all(
+        """SELECT ben_key AS `key`, name, val, category AS cat, badge,
+                  note, is_qualitative AS qual, qual_text AS qualText
+           FROM company_benefits WHERE company_id=%s ORDER BY sort_order""",
+        (company_id,),
+    )
+
+    ws = comp.get("work_style")
+    if isinstance(ws, str):
+        ws = json.loads(ws)
+
+    return {
+        **comp,
+        "work_style": ws,
+        "aliases": [a["alias"] for a in aliases],
+        "benefits": benefits,
+    }
