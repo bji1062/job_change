@@ -6,7 +6,7 @@
 
 - **Frontend**: Vanilla HTML/CSS/JavaScript SPA (`index.html`)
 - **Backend**: Python FastAPI REST API with MySQL
-- **Infra**: AWS Terraform IaC
+- **Infra**: Oracle Cloud (OCI) Terraform IaC — Always Free ARM
 - **Language**: Korean UI with English variable/function names
 
 ## File Structure
@@ -42,12 +42,13 @@
 │   │   └── seed.py               # Initial data population
 │   └── deploy/
 │       ├── nginx.conf            # Nginx reverse proxy + SSL
-│       └── jobchoice.service     # systemd service unit
-└── infra/                        # Terraform IaC for AWS
-    ├── provider.tf               # AWS provider config
+│       ├── jobchoice.service     # systemd service unit
+│       └── my.cnf                # MySQL config (6GB RAM optimized)
+└── infra/                        # Terraform IaC for OCI (Always Free)
+    ├── provider.tf               # OCI provider config
     ├── variables.tf              # Variable declarations
-    ├── network.tf                # VPC, subnet, security group
-    ├── compute.tf                # EC2 ARM instance (Graviton t4g)
+    ├── network.tf                # VCN, subnet, security list
+    ├── compute.tf                # ARM instance (VM.Standard.A1.Flex)
     ├── outputs.tf                # Public IP, SSH command
     └── terraform.tfvars.example  # Example variables
 ```
@@ -75,12 +76,13 @@
 | Validation | Pydantic 2.10.4 |
 | Server | Uvicorn (ASGI) |
 
-### Infrastructure (AWS)
+### Infrastructure (Oracle Cloud — Always Free)
 | Component | Config |
 |-----------|--------|
-| Compute | t4g.small (Graviton ARM), 2 vCPU, 2GB RAM |
-| Region | ap-northeast-2 (Seoul) |
-| Network | VPC 10.0.0.0/16, public subnet 10.0.1.0/24 |
+| Compute | VM.Standard.A1.Flex (ARM), 2 OCPU, 6GB RAM |
+| Region | ap-chuncheon-1 (춘천) |
+| Network | VCN 10.0.0.0/16, public subnet 10.0.1.0/24 |
+| Storage | 50GB boot volume (Always Free 최대 200GB) |
 | Security | SSH restricted, HTTP/HTTPS open, MySQL blocked externally |
 | Reverse proxy | Nginx (SSL via Let's Encrypt) |
 | Process mgmt | systemd (auto-restart on failure) |
