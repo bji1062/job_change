@@ -41,7 +41,7 @@ variable "instance_ocpus" {
 }
 
 variable "instance_memory_gb" {
-  default     = 6
+  default     = 12
   description = "메모리 GB (Always Free 최대 24, OCPU당 최대 6)"
 }
 

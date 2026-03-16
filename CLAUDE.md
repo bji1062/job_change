@@ -79,7 +79,7 @@
 ### Infrastructure (Oracle Cloud — Always Free)
 | Component | Config |
 |-----------|--------|
-| Compute | VM.Standard.A1.Flex (ARM), 2 OCPU, 6GB RAM |
+| Compute | VM.Standard.A1.Flex (ARM), 2 OCPU, 12GB RAM |
 | Region | ap-chuncheon-1 (춘천) |
 | Network | VCN 10.0.0.0/16, public subnet 10.0.1.0/24 |
 | Storage | 50GB boot volume (Always Free 최대 200GB) |
