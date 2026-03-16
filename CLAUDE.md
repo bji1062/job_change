@@ -6,7 +6,7 @@
 
 - **Frontend**: Vanilla HTML/CSS/JavaScript SPA (`index.html`)
 - **Backend**: Python FastAPI REST API with MySQL
-- **Infra**: Oracle Cloud (OCI) Terraform IaC
+- **Infra**: AWS Terraform IaC
 - **Language**: Korean UI with English variable/function names
 
 ## File Structure
@@ -43,11 +43,11 @@
 │   └── deploy/
 │       ├── nginx.conf            # Nginx reverse proxy + SSL
 │       └── jobchoice.service     # systemd service unit
-└── infra/                        # Terraform IaC for OCI
-    ├── provider.tf               # OCI provider config
+└── infra/                        # Terraform IaC for AWS
+    ├── provider.tf               # AWS provider config
     ├── variables.tf              # Variable declarations
-    ├── network.tf                # VCN, subnet, security list
-    ├── compute.tf                # ARM VM instance (A1.Flex)
+    ├── network.tf                # VPC, subnet, security group
+    ├── compute.tf                # EC2 ARM instance (Graviton t4g)
     ├── outputs.tf                # Public IP, SSH command
     └── terraform.tfvars.example  # Example variables
 ```
@@ -75,12 +75,12 @@
 | Validation | Pydantic 2.10.4 |
 | Server | Uvicorn (ASGI) |
 
-### Infrastructure (OCI)
+### Infrastructure (AWS)
 | Component | Config |
 |-----------|--------|
-| Compute | VM.Standard.A1.Flex (ARM), 2 OCPU, 12GB RAM |
-| Region | ap-seoul-1 |
-| Network | VCN 10.0.0.0/16, public subnet 10.0.1.0/24 |
+| Compute | t4g.small (Graviton ARM), 2 vCPU, 2GB RAM |
+| Region | ap-northeast-2 (Seoul) |
+| Network | VPC 10.0.0.0/16, public subnet 10.0.1.0/24 |
 | Security | SSH restricted, HTTP/HTTPS open, MySQL blocked externally |
 | Reverse proxy | Nginx (SSL via Let's Encrypt) |
 | Process mgmt | systemd (auto-restart on failure) |
