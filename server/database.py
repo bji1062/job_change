@@ -11,6 +11,7 @@ async def init_pool():
         user=config.DB_USER, password=config.DB_PASS,
         db=config.DB_NAME, charset="utf8mb4",
         autocommit=True, minsize=2, maxsize=10,
+        auth_plugin="mysql_native_password",
     )
 
 async def close_pool():
