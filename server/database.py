@@ -1,6 +1,13 @@
 import aiomysql
 import pymysql
+from decimal import Decimal
 import config
+
+def _convert_row(row):
+    """Convert Decimal values to float for JSON serialization."""
+    if row is None:
+        return None
+    return {k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()}
 
 pool = None
 
@@ -24,13 +31,14 @@ async def fetch_all(sql, args=None):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql, args)
-            return await cur.fetchall()
+            rows = await cur.fetchall()
+            return [_convert_row(r) for r in rows]
 
 async def fetch_one(sql, args=None):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql, args)
-            return await cur.fetchone()
+            return _convert_row(await cur.fetchone())
 
 async def execute(sql, args=None):
     async with pool.acquire() as conn:
