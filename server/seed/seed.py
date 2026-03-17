@@ -2,9 +2,10 @@
 Seed script — migrates hardcoded data from index.html into MySQL.
 Usage: cd server && python seed/seed.py
 """
-import asyncio, json, sys, os
+import json, sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import database
+import pymysql
+import config
 
 # ━━ COMPANY TYPES ━━
 COMPANY_TYPES = [
@@ -275,12 +276,19 @@ Q_DESC = {
 }
 
 
-async def seed():
-    await database.init_pool()
+def seed():
+    conn = pymysql.connect(
+        host=config.DB_HOST, port=config.DB_PORT,
+        user=config.DB_USER, password=config.DB_PASS,
+        db=config.DB_NAME, charset="utf8mb4",
+        autocommit=True,
+        auth_plugin_map={'mysql_native_password': None},
+    )
+    cur = conn.cursor()
 
     # 1. Company types
     for t in COMPANY_TYPES:
-        await database.execute(
+        cur.execute(
             "INSERT IGNORE INTO company_types (id, label, growth_rate, growth_label, stability_score) VALUES (%s,%s,%s,%s,%s)", t
         )
     print(f"  company_types: {len(COMPANY_TYPES)}")
@@ -289,7 +297,7 @@ async def seed():
     count = 0
     for type_id, items in BEN_PRESETS.items():
         for i, b in enumerate(items):
-            await database.execute(
+            cur.execute(
                 "INSERT INTO benefit_presets (type_id, ben_key, name, val, category, badge, checked_default, sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (type_id, b["key"], b["name"], b["val"], b["cat"], b["badge"], b["checked"], i),
             )
@@ -298,16 +306,16 @@ async def seed():
 
     # 3. Companies
     for c in COMPANIES:
-        await database.execute(
+        cur.execute(
             "INSERT IGNORE INTO companies (id, name, type_id, industry, logo, work_style) VALUES (%s,%s,%s,%s,%s,%s)",
             (c["id"], c["name"], c["type"], c.get("industry"), c.get("logo"), json.dumps(c.get("workStyle")) if c.get("workStyle") else None),
         )
         for alias in c.get("aliases", []):
-            await database.execute(
+            cur.execute(
                 "INSERT INTO company_aliases (company_id, alias) VALUES (%s,%s)", (c["id"], alias)
             )
         for i, b in enumerate(c.get("benefits", [])):
-            await database.execute(
+            cur.execute(
                 "INSERT INTO company_benefits (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (c["id"], b["key"], b["name"], b["val"], b["cat"], b["badge"], b.get("note"), b.get("qual", False), b.get("qualText"), i),
             )
@@ -315,12 +323,12 @@ async def seed():
 
     # 4. Profiles
     for p in PROFILES:
-        await database.execute(
+        cur.execute(
             "INSERT IGNORE INTO profiles (id, type_name, description, map_priority, vec) VALUES (%s,%s,%s,%s,%s)",
             (p["id"], p["type"], p["desc"], p["mapPri"], json.dumps(p["vec"])),
         )
         for scenario, fit in p["jobFit"].items():
-            await database.execute(
+            cur.execute(
                 "INSERT IGNORE INTO profile_job_fits (profile_id, scenario, fit, caution) VALUES (%s,%s,%s,%s)",
                 (p["id"], scenario, fit["fit"], fit["caution"]),
             )
@@ -329,12 +337,13 @@ async def seed():
     # 5. Job groups & jobs
     job_count = 0
     for i, g in enumerate(JOB_GROUPS):
-        gid = await database.execute(
+        cur.execute(
             "INSERT INTO job_groups (group_label, color, sort_order) VALUES (%s,%s,%s)",
             (g["groupLabel"], g["color"], i),
         )
+        gid = cur.lastrowid
         for j, job in enumerate(g["jobs"]):
-            await database.execute(
+            cur.execute(
                 "INSERT IGNORE INTO jobs (id, group_id, label, icon, scenario, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
                 (job["id"], gid, job["label"], job["icon"], job["scenario"], j),
             )
@@ -343,7 +352,7 @@ async def seed():
 
     # 6. Profiler questions
     for q in Q_BASE:
-        await database.execute(
+        cur.execute(
             "INSERT IGNORE INTO profiler_questions (id, label, option_a_title, option_a_fx, option_b_title, option_b_fx) VALUES (%s,%s,%s,%s,%s,%s)",
             (q["id"], q["label"], q["a"]["title"], json.dumps(q["a"]["fx"]), q["b"]["title"], json.dumps(q["b"]["fx"])),
         )
@@ -354,15 +363,16 @@ async def seed():
     for scenario, descs in Q_DESC.items():
         for i, d in enumerate(descs):
             q_id = Q_BASE[i]["id"]
-            await database.execute(
+            cur.execute(
                 "INSERT IGNORE INTO question_scenarios (question_id, scenario, desc_a, desc_b) VALUES (%s,%s,%s,%s)",
                 (q_id, scenario, d["a"], d["b"]),
             )
             desc_count += 1
     print(f"  question_scenarios: {desc_count}")
 
-    await database.close_pool()
+    cur.close()
+    conn.close()
     print("\nSeed complete!")
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    seed()
