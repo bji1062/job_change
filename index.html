@@ -64,25 +64,34 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-stat strong{color:var(--t2);font-weight:700}
 .l-scroll-hint{text-align:center;padding:1.5rem;font-size:.75rem;color:var(--t4);z-index:2;animation:fadeUp 1.5s ease infinite alternate}
 .l-sec-header{font-size:1.1rem;font-weight:800;color:var(--t1);margin-bottom:1rem;letter-spacing:-.02em}
-.l-pop-wrap,.l-feed-wrap{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
+.l-pop-wrap{max-width:1600px;margin:0 auto;padding:2rem 2.5rem}
+.l-feed-wrap{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
 .l-filter-row{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap}
 .l-filter{font-size:.75rem;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:inherit;transition:all .15s}
 .l-filter.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
 .l-filter:hover{border-color:var(--t3);color:var(--t2)}
-.pop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
-.pop-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.pop-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem}
+.pop-sub{font-size:.8rem;color:var(--t3);margin-bottom:1.25rem;margin-top:-.5rem}
+.pop-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;display:flex;flex-direction:column}
 .pop-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
-.pop-card .pc-tag{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:.75rem}
+.pop-card .pc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem}
+.pop-card .pc-tag{font-size:.6rem;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:4px;display:inline-block}
 .pop-card.type-company .pc-tag{color:var(--blue);background:var(--blue-d)}
 .pop-card.type-scenario .pc-tag{color:var(--purple);background:var(--purple-d)}
-.pop-card .pc-vs{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
-.pop-card .pc-name{font-size:.95rem;font-weight:700;color:var(--t1)}
-.pop-card .pc-sub{font-size:.65rem;color:var(--t3)}
-.pop-card .pc-x{font-size:.7rem;color:var(--t4);font-weight:700}
-.pop-card .pc-points{display:flex;flex-direction:column;gap:4px}
-.pop-card .pc-point{font-size:.7rem;color:var(--t3);display:flex;align-items:center;gap:6px}
-.pop-card .pc-point::before{content:'';width:3px;height:3px;border-radius:50%;background:var(--t4);flex-shrink:0}
-.pop-card .pc-count{position:absolute;top:1rem;right:1rem;font-size:.6rem;color:var(--t4)}
+.pop-card.type-type .pc-tag{color:var(--amber);background:var(--amber-d)}
+.pop-card .pc-views{font-size:.6rem;color:var(--t4)}
+.pop-card .pc-vs{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;justify-content:center}
+.pop-card .pc-side{display:flex;flex-direction:column;align-items:center;gap:2px}
+.pop-card .pc-name{font-size:.9rem;font-weight:800;color:var(--t1)}
+.pop-card .pc-sub{font-size:.6rem;color:var(--t3)}
+.pop-card .pc-x{font-size:.7rem;color:var(--t4);font-weight:700;margin:0 .25rem}
+.pop-card .pc-points{display:flex;flex-direction:column;gap:5px;flex:1}
+.pop-card .pc-point{font-size:.68rem;color:var(--t3);line-height:1.45}
+.pop-card .pc-point strong{color:var(--t2);font-weight:700}
+.pop-card .pc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border)}
+.pop-card .pc-cta{font-size:.65rem;color:var(--blue);font-weight:600}
+.pop-card .pc-viewers{font-size:.58rem;color:var(--t4);display:flex;align-items:center;gap:3px}
+.pop-card .pc-viewers::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0}
 .result-feed{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
 .result-item{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:1rem;transition:border-color .15s}
 .result-item:hover{border-color:var(--bh)}
@@ -99,6 +108,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-bottom-cta button:first-child:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,255,255,.08)}
 .l-bottom-cta button:last-child{padding:14px 40px;background:none;border:1px solid var(--border);color:var(--t3);border-radius:50px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
 .l-bottom-cta button:last-child:hover{border-color:var(--gold);color:var(--gold)}
+@media(max-width:1200px){.pop-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.pop-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.pop-grid{grid-template-columns:1fr}.result-feed{grid-template-columns:1fr}.l-stats-bar{gap:1rem}.l-bottom-cta{flex-direction:column;align-items:center}}
 
 /* ━━ PROFILER ━━ */
@@ -527,11 +538,13 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
   <div class="l-scroll-hint">스크롤하여 사례 보기 ↓</div>
 
   <div class="l-pop-wrap" id="popSection">
-    <div class="l-sec-header">인기 비교 사례</div>
+    <div class="l-sec-header">💡 인기 비교 사례</div>
+    <div class="pop-sub">클릭하면 두 회사가 미리 입력된 상태로 비교 화면이 열립니다</div>
     <div class="l-filter-row" id="popFilter">
       <button class="l-filter active" onclick="filterPop('all',this)">전체</button>
       <button class="l-filter" onclick="filterPop('company',this)">🏢 회사 직접 비교</button>
-      <button class="l-filter" onclick="filterPop('scenario',this)">🔀 내 상황 시나리오</button>
+      <button class="l-filter" onclick="filterPop('scenario',this)">🔀 시나리오</button>
+      <button class="l-filter" onclick="filterPop('type',this)">🏷 기업 유형</button>
     </div>
     <div class="pop-grid" id="popGrid"></div>
   </div>
@@ -1492,9 +1505,13 @@ document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.get
 
 // ━━ LANDING SOCIAL FEED ━━
 const FALLBACK_POP=[
-  {id:1,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'네이버',type_b:'large',sub_b:'대기업',points:['연봉 vs 복지 밸런스','물류 vs IT 플랫폼','성장 속도 비교'],view_count:0,comparison_count:0},
-  {id:2,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'삼성전자',type_b:'large',sub_b:'대기업',points:['IT 플랫폼 vs 제조 대기업','자율 문화 vs 체계적 구조','복지 패키지 비교'],view_count:0,comparison_count:0},
-  {id:3,case_type:'scenario',title_a:'현직 유지',type_a:'large',sub_a:'안정성',title_b:'이직처',type_b:'startup',sub_b:'성장성',points:['현재 연봉 대비 인상률','워라밸 변화 예측','커리어 성장 기대치'],view_count:0,comparison_count:0}
+  {id:1,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'네이버',type_b:'large',sub_b:'대기업',points:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_count:12341,comparison_count:847},
+  {id:2,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'삼성전자',type_b:'large',sub_b:'대기업',points:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_count:9823,comparison_count:623},
+  {id:3,case_type:'scenario',title_a:'현직 유지',type_a:'large',sub_a:'안정성',title_b:'이직처',type_b:'startup',sub_b:'성장성',points:['현재 <strong>연봉 대비 인상률</strong> 비교','<strong>워라밸</strong> 변화 예측','<strong>커리어 성장</strong> 기대치 분석'],view_count:8456,comparison_count:512},
+  {id:4,case_type:'type',title_a:'대기업',type_a:'large',sub_a:'안정성',title_b:'스타트업',type_b:'startup',sub_b:'성장성',points:['<strong>연봉 상승률</strong>은 스타트업이 빠르지만 변동성 큼','<strong>복지·안정성</strong>은 대기업이 압도적','<strong>성장 속도</strong>는 직무 · 역할에 따라 다름'],view_count:7234,comparison_count:445},
+  {id:5,case_type:'type',title_a:'외국계',type_a:'foreign',sub_a:'글로벌',title_b:'대기업',type_b:'large',sub_b:'국내',points:['<strong>연봉</strong>은 외국계가 높은 편 · 성과급 구조 차이','<strong>워라밸</strong>은 외국계 우세 · 유연근무 보편적','<strong>고용 안정성</strong>은 국내 대기업이 유리'],view_count:6891,comparison_count:389},
+  {id:6,case_type:'company',title_a:'토스',type_a:'startup',sub_a:'핀테크',title_b:'카카오뱅크',type_b:'large',sub_b:'인터넷은행',points:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_count:5432,comparison_count:298},
+  {id:7,case_type:'scenario',title_a:'현직',type_a:'mid',sub_a:'중견기업',title_b:'이직처',type_b:'foreign',sub_b:'외국계',points:['<strong>연봉 점프</strong> 가능성 높음 · 30%+ 인상 사례 다수','<strong>문화 적응</strong> 비용 고려 필요','<strong>장기 커리어</strong> 관점에서 비교'],view_count:4567,comparison_count:267}
 ];
 const FALLBACK_FEED=[
   {id:1,company_a_display:'현직',type_a:'large',company_b_display:'이직처',type_b:'startup',headline:'총 보상 기준 이직처가 유리합니다.',metric_val:'+820만원',metric_label:'총 보상 차이',metric_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
@@ -1518,14 +1535,18 @@ async function loadLanding(){
 function renderPopular(data){
   const grid=document.getElementById('popGrid');if(!grid)return;
   const filtered=_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter);
+  const tagMap={company:'🏢 회사 직접 비교',scenario:'🔀 시나리오',type:'🏷 기업 유형'};
   grid.innerHTML=filtered.map(c=>{
-    const tag=c.case_type==='company'?'회사 비교':'시나리오';
-    const pts=(c.points||[]).map(p=>`<div class="pc-point">${p}</div>`).join('');
-    return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${JSON.stringify(c)})'>
-      <span class="pc-tag">${tag}</span>
-      ${c.comparison_count?`<span class="pc-count">${c.comparison_count}회 비교됨</span>`:''}
-      <div class="pc-vs"><span class="pc-name">${c.title_a}</span><span class="pc-sub">${c.sub_a||''}</span><span class="pc-x">VS</span><span class="pc-name">${c.title_b}</span><span class="pc-sub">${c.sub_b||''}</span></div>
+    const tag=tagMap[c.case_type]||'비교';
+    const pts=(c.points||[]).map(p=>`<div class="pc-point">• ${p}</div>`).join('');
+    const viewers=Math.floor(Math.random()*80)+10;
+    const views=c.view_count?(c.view_count).toLocaleString()+'회':'';
+    const safeJson=JSON.stringify(c).replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${safeJson})'>
+      <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
+      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${c.title_a}</span><span class="pc-sub">${c.sub_a||''}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${c.title_b}</span><span class="pc-sub">${c.sub_b||''}</span></div></div>
       <div class="pc-points">${pts}</div>
+      <div class="pc-foot"><span class="pc-cta">이 조합으로 비교 시작 →</span><span class="pc-viewers">지금 ${viewers}명 보는 중</span></div>
     </div>`}).join('');
 }
 
