@@ -221,6 +221,13 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 - **No test framework**: Verify manually in browser / API client.
 - **Bug fix comments**: Annotated with `// [FIX]`.
 
+## Database Conventions
+
+- **No ENUM** — 모든 컬럼은 `VARCHAR`로 선언. 허용 값은 `COMMENT`에 명시. ENUM은 스키마 변경 시 ALTER TABLE 필요하므로 사용 금지.
+- **모든 컬럼에 COMMENT 필수** — 한국어로 컬럼 용도, 단위, 허용 값 범위를 기재. 예: `COMMENT '기업유형 (large, startup, mid, foreign, public, freelance)'`
+- **FK 참조 대상은 COMMENT에 명시** — 예: `COMMENT '사용자 FK (users.id)'`
+- **금액 단위는 만원** — 별도 표기 없으면 만원 기준. COMMENT에 `(만원)` 명시.
+
 ## Common Pitfalls
 
 - Variable shadowing in `compare()` (~300 lines with many locals)
