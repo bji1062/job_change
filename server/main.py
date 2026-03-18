@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import database
-from routers import auth, companies, reference, profiler, comparisons
+from routers import auth, companies, reference, profiler, comparisons, landing
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +25,7 @@ app.include_router(companies.router, prefix="/api/v1/companies", tags=["companie
 app.include_router(reference.router, prefix="/api/v1/reference", tags=["reference"])
 app.include_router(profiler.router, prefix="/api/v1/profiler", tags=["profiler"])
 app.include_router(comparisons.router, prefix="/api/v1/comparisons", tags=["comparisons"])
+app.include_router(landing.router, prefix="/api/v1/landing", tags=["landing"])
 
 @app.get("/api/v1/health")
 async def health():

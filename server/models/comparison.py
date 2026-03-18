@@ -17,6 +17,13 @@ class ComparisonReq(BaseModel):
     benefits_b: list[dict] | None = None
     priority_key: str
     sacrifice_key: str | None = None
+    # Feed fields (optional, for landing page social feed)
+    feed_headline: str | None = None
+    feed_detail: str | None = None
+    feed_metric_val: str | None = None
+    feed_metric_label: str | None = None
+    feed_metric_type: str | None = None
+    feed_job_category: str | None = None
 
 class ComparisonResp(ComparisonReq):
     id: int

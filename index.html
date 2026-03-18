@@ -44,7 +44,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .logo-m{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;font-weight:900}
 .l-login{font-size:.78rem;color:var(--t3);background:none;border:1px solid var(--border);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
 .l-login:hover{border-color:var(--t3);color:var(--t2)}
-.l-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 1.5rem;z-index:2;position:relative}
+.l-center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 1.5rem;z-index:2;position:relative}
 .landing::before{content:'';position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(75,141,248,.06),transparent 70%);pointer-events:none}
 .l-h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:900;letter-spacing:-.04em;line-height:1.25;margin-bottom:.75rem}
 .l-h1 em{font-style:normal;background:linear-gradient(135deg,var(--blue),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
@@ -56,6 +56,50 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-cta2{padding:12px 32px;background:none;border:1px solid var(--border);color:var(--t3);border-radius:50px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
 .l-cta2:hover{border-color:var(--gold);color:var(--gold)}
 .l-foot{padding:1.5rem;text-align:center;font-size:.7rem;color:var(--t4);z-index:2}
+.l-center{min-height:100vh}
+.l-stats-bar{display:flex;justify-content:center;gap:2rem;margin-top:2rem;z-index:2;position:relative}
+.l-stat{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--t3)}
+.l-stat-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.l-stat strong{color:var(--t2);font-weight:700}
+.l-scroll-hint{text-align:center;padding:1.5rem;font-size:.75rem;color:var(--t4);z-index:2;animation:fadeUp 1.5s ease infinite alternate}
+.l-sec-header{font-size:1.1rem;font-weight:800;color:var(--t1);margin-bottom:1rem;letter-spacing:-.02em}
+.l-pop-wrap,.l-feed-wrap{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
+.l-filter-row{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap}
+.l-filter{font-size:.75rem;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:inherit;transition:all .15s}
+.l-filter.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.l-filter:hover{border-color:var(--t3);color:var(--t2)}
+.pop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
+.pop-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.pop-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.pop-card .pc-tag{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:.75rem}
+.pop-card.type-company .pc-tag{color:var(--blue);background:var(--blue-d)}
+.pop-card.type-scenario .pc-tag{color:var(--purple);background:var(--purple-d)}
+.pop-card .pc-vs{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
+.pop-card .pc-name{font-size:.95rem;font-weight:700;color:var(--t1)}
+.pop-card .pc-sub{font-size:.65rem;color:var(--t3)}
+.pop-card .pc-x{font-size:.7rem;color:var(--t4);font-weight:700}
+.pop-card .pc-points{display:flex;flex-direction:column;gap:4px}
+.pop-card .pc-point{font-size:.7rem;color:var(--t3);display:flex;align-items:center;gap:6px}
+.pop-card .pc-point::before{content:'';width:3px;height:3px;border-radius:50%;background:var(--t4);flex-shrink:0}
+.pop-card .pc-count{position:absolute;top:1rem;right:1rem;font-size:.6rem;color:var(--t4)}
+.result-feed{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
+.result-item{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:1rem;transition:border-color .15s}
+.result-item:hover{border-color:var(--bh)}
+.ri-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem}
+.ri-names{font-size:.78rem;font-weight:700;color:var(--t1)}
+.ri-time{font-size:.6rem;color:var(--t4);white-space:nowrap}
+.ri-headline{font-size:.72rem;color:var(--t2);line-height:1.5;margin-bottom:.5rem}
+.ri-metric{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:4px}
+.ri-metric.up{color:var(--green);background:var(--green-d)}
+.ri-metric.down{color:var(--red);background:var(--red-d)}
+.ri-metric.neu{color:var(--t3);background:var(--bg-3)}
+.l-bottom-cta{text-align:center;padding:3rem 1.5rem;display:flex;justify-content:center;gap:1rem;flex-wrap:wrap}
+.l-bottom-cta button:first-child{padding:14px 40px;background:var(--t1);color:var(--bg-0);border:none;border-radius:50px;font-family:inherit;font-size:.95rem;font-weight:700;cursor:pointer;transition:all .2s}
+.l-bottom-cta button:first-child:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,255,255,.08)}
+.l-bottom-cta button:last-child{padding:14px 40px;background:none;border:1px solid var(--border);color:var(--t3);border-radius:50px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
+.l-bottom-cta button:last-child:hover{border-color:var(--gold);color:var(--gold)}
+@media(max-width:480px){.pop-grid{grid-template-columns:1fr}.result-feed{grid-template-columns:1fr}.l-stats-bar{gap:1rem}.l-bottom-cta{flex-direction:column;align-items:center}}
 
 /* ━━ PROFILER ━━ */
 .pf-intro{text-align:center;max-width:520px;margin:0 auto}
@@ -475,7 +519,33 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
       <button class="l-cta" onclick="go('s-input')">비교 시작</button>
       <button class="l-cta2" onclick="go('s-profiler')">🎯 나의 커리어 가치관 먼저 알아보기</button>
     </div>
+    <div class="l-stats-bar" id="landingStats">
+      <div class="l-stat"><div class="l-stat-dot"></div> 지금 <strong id="lsVisitors">0</strong>명 보는 중</div>
+      <div class="l-stat">오늘 <strong id="lsCompares">0</strong>건 비교됨</div>
+    </div>
   </div>
+  <div class="l-scroll-hint">스크롤하여 사례 보기 ↓</div>
+
+  <div class="l-pop-wrap" id="popSection">
+    <div class="l-sec-header">인기 비교 사례</div>
+    <div class="l-filter-row" id="popFilter">
+      <button class="l-filter active" onclick="filterPop('all',this)">전체</button>
+      <button class="l-filter" onclick="filterPop('company',this)">🏢 회사 직접 비교</button>
+      <button class="l-filter" onclick="filterPop('scenario',this)">🔀 내 상황 시나리오</button>
+    </div>
+    <div class="pop-grid" id="popGrid"></div>
+  </div>
+
+  <div class="l-feed-wrap" id="feedSection">
+    <div class="l-sec-header">최근 비교 결과</div>
+    <div class="result-feed" id="feedList"></div>
+  </div>
+
+  <div class="l-bottom-cta">
+    <button onclick="go('s-input')">직접 비교해보기</button>
+    <button onclick="go('s-profiler')">나의 가치관 알아보기</button>
+  </div>
+
   <div class="l-foot">나의 기준 맞춤 비교 리포트</div>
 </div>
 
@@ -647,7 +717,7 @@ async function saveComparison(){
   if(!AUTH_TOKEN||!API_BASE)return;
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
   if(!tA||!tB)return;
-  await apiFetch('/comparisons',{method:'POST',body:JSON.stringify({
+  const payload={
     company_a_name:matched.a?.name||null,type_a:tA,
     salary_a_min:getSalRange().min,salary_a_max:getSalRange().max,
     commute_a:parseInt(document.getElementById('comA')?.value)||0,
@@ -657,7 +727,9 @@ async function saveComparison(){
     commute_b:parseInt(document.getElementById('comB')?.value)||0,
     work_style_b:wsState.b,benefits_b:benS.b.filter(b=>b.checked),
     priority_key:curPri,sacrifice_key:curSacrifice
-  })});
+  };
+  if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
+  await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1402,6 +1474,11 @@ function compare(){
 
   if(!pfResult){html+=`<div class="rp-profiler-cta"><p>내가 선택한 기준이 정말 맞을까?<br><strong>커리어 가치관 테스트</strong>로 검증해보세요.</p><button class="rp-profiler-btn" onclick="go('s-profiler')">🎯 가치관 테스트 하기</button></div>`}
   html+=`<div class="disclaimer">복리후생 금액은 공개 채용 정보 기반 추정치이며 실제와 다를 수 있습니다.</div>`;
+  // Feed data for social landing
+  const _totalA=effA.mid+otPayA,_totalB=effB.mid+otPayB,_td=_totalB-_totalA;
+  const _mType=_td>0?'up':_td<0?'down':'neu';
+  const _mVal=_td!==0?(_td>0?'+':'')+fW(_td):'동일';
+  window._lastFeedData={feed_headline:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail:pri.label+' 기준 비교',feed_metric_val:_mVal,feed_metric_label:'총 보상 차이',feed_metric_type:_mType,feed_job_category:pfJob?pfJob.label:null};
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1409,13 +1486,95 @@ function compare(){
 
 // ━━ APP (navigation + init) ━━
 
-function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()}}
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding()}
 
 document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.getElementById(s==='a'?'sA':'sB').parentElement;if(!w.contains(e.target))document.getElementById(s==='a'?'rA':'rB').classList.remove('open')})});
+
+// ━━ LANDING SOCIAL FEED ━━
+const FALLBACK_POP=[
+  {id:1,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'네이버',type_b:'large',sub_b:'대기업',points:['연봉 vs 복지 밸런스','물류 vs IT 플랫폼','성장 속도 비교'],view_count:0,comparison_count:0},
+  {id:2,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'삼성전자',type_b:'large',sub_b:'대기업',points:['IT 플랫폼 vs 제조 대기업','자율 문화 vs 체계적 구조','복지 패키지 비교'],view_count:0,comparison_count:0},
+  {id:3,case_type:'scenario',title_a:'현직 유지',type_a:'large',sub_a:'안정성',title_b:'이직처',type_b:'startup',sub_b:'성장성',points:['현재 연봉 대비 인상률','워라밸 변화 예측','커리어 성장 기대치'],view_count:0,comparison_count:0}
+];
+const FALLBACK_FEED=[
+  {id:1,company_a_display:'현직',type_a:'large',company_b_display:'이직처',type_b:'startup',headline:'총 보상 기준 이직처가 유리합니다.',metric_val:'+820만원',metric_label:'총 보상 차이',metric_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
+  {id:2,company_a_display:'A사',type_a:'large',company_b_display:'B사',type_b:'foreign',headline:'시간당 가치는 B사가 높지만 총액은 A사가 유리합니다.',metric_val:'+1,200만원',metric_label:'총 보상 차이',metric_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
+  {id:3,company_a_display:'현직',type_a:'mid',company_b_display:'이직처',type_b:'large',headline:'복지 포함 시 이직처가 연 450만원 유리합니다.',metric_val:'+450만원',metric_label:'복지 포함',metric_type:'up',created_at:new Date(Date.now()-7200000).toISOString()}
+];
+let _popData=null,_popFilter='all';
+let pingTimer=null;
+
+function timeAgo(d){const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return '방금 전';if(s<3600)return Math.floor(s/60)+'분 전';if(s<86400)return Math.floor(s/3600)+'시간 전';return Math.floor(s/86400)+'일 전'}
+
+async function loadLanding(){
+  const [pop,feed,stats]=await Promise.all([apiFetch('/landing/popular'),apiFetch('/landing/feed'),apiFetch('/landing/stats')]);
+  _popData=pop&&pop.length?pop:FALLBACK_POP;
+  renderPopular(_popData);
+  renderFeed(feed&&feed.length?feed:FALLBACK_FEED);
+  renderStats(stats);
+  startPing();
+}
+
+function renderPopular(data){
+  const grid=document.getElementById('popGrid');if(!grid)return;
+  const filtered=_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter);
+  grid.innerHTML=filtered.map(c=>{
+    const tag=c.case_type==='company'?'회사 비교':'시나리오';
+    const pts=(c.points||[]).map(p=>`<div class="pc-point">${p}</div>`).join('');
+    return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${JSON.stringify(c)})'>
+      <span class="pc-tag">${tag}</span>
+      ${c.comparison_count?`<span class="pc-count">${c.comparison_count}회 비교됨</span>`:''}
+      <div class="pc-vs"><span class="pc-name">${c.title_a}</span><span class="pc-sub">${c.sub_a||''}</span><span class="pc-x">VS</span><span class="pc-name">${c.title_b}</span><span class="pc-sub">${c.sub_b||''}</span></div>
+      <div class="pc-points">${pts}</div>
+    </div>`}).join('');
+}
+
+function filterPop(type,btn){
+  _popFilter=type;
+  document.querySelectorAll('#popFilter .l-filter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(_popData)renderPopular(_popData);
+}
+
+function renderFeed(data){
+  const el=document.getElementById('feedList');if(!el)return;
+  el.innerHTML=data.map(f=>`<div class="result-item">
+    <div class="ri-head"><span class="ri-names">${f.company_a_display} vs ${f.company_b_display}</span><span class="ri-time">${timeAgo(f.created_at)}</span></div>
+    <div class="ri-headline">${f.headline}</div>
+    ${f.metric_val?`<span class="ri-metric ${f.metric_type||'neu'}">${f.metric_val} ${f.metric_label||''}</span>`:''}
+  </div>`).join('');
+}
+
+function renderStats(s){
+  if(!s)return;
+  const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
+  if(v)v.textContent=s.active_visitors||0;
+  if(c)c.textContent=s.today_comparisons||0;
+}
+
+function startFromCase(c){
+  go('s-input');
+  if(c.case_type==='company'){
+    const a=DB.find(x=>x.name===c.title_a);
+    const b=DB.find(x=>x.name===c.title_b);
+    if(a)selComp('a',a.id);else document.getElementById('sA').value=c.title_a;
+    if(b)selComp('b',b.id);else document.getElementById('sB').value=c.title_b;
+  }
+}
+
+function startPing(){
+  if(pingTimer)return;
+  let cid=sessionStorage.getItem('jc_cid');
+  if(!cid){cid=Math.random().toString(36).slice(2);sessionStorage.setItem('jc_cid',cid)}
+  const doPing=async()=>{const r=await apiFetch('/landing/ping',{method:'POST',body:JSON.stringify({client_id:cid})});if(r)renderStats(r)};
+  doPing();
+  pingTimer=setInterval(doPing,30000);
+}
 
 // ━━ INIT ━━
 initPri();calc();
 updateAuthUI();
+loadLanding();
 
 </script>
 </body>

@@ -1,6 +1,7 @@
 import json
 from fastapi import APIRouter, Depends
 import database
+from services import cache
 from middleware.auth_middleware import get_current_user
 from models.comparison import ComparisonReq
 
@@ -22,6 +23,30 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
          json.dumps(req.benefits_b) if req.benefits_b else None,
          req.priority_key, req.sacrifice_key),
     )
+    # Feed auto-generation
+    if req.feed_headline:
+        try:
+            await database.execute(
+                """INSERT INTO comparison_feed
+                   (comparison_id, job_category, company_a_display, type_a,
+                    company_b_display, type_b, headline, detail,
+                    metric_val, metric_label, metric_type)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (cid, req.feed_job_category, req.company_a_name or '현직', req.type_a,
+                 req.company_b_name or '이직처', req.type_b, req.feed_headline,
+                 req.feed_detail, req.feed_metric_val, req.feed_metric_label,
+                 req.feed_metric_type or 'neu'))
+        except Exception:
+            pass
+    # Daily stats increment
+    try:
+        await database.execute(
+            """INSERT INTO daily_stats (stat_date, comparison_count) VALUES (CURDATE(), 1)
+               ON DUPLICATE KEY UPDATE comparison_count = comparison_count + 1""")
+    except Exception:
+        pass
+    # Invalidate feed cache
+    cache.set("landing_feed", None, ttl=0)
     return {"id": cid}
 
 @router.get("")
