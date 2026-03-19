@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL COMMENT '이메일 (로그인 ID)',
   password_hash VARCHAR(255) NOT NULL COMMENT 'bcrypt 해시된 비밀번호',
   name VARCHAR(50) COMMENT '사용자 표시 이름',
+  job_id VARCHAR(30) COMMENT '선택한 직군 코드 (dev, pm, uxui 등)',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '가입 시각',
   INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
