@@ -1511,7 +1511,7 @@ const FALLBACK_FEED=[
   {id:2,company_a_display:'A사',type_a:'large',company_b_display:'B사',type_b:'foreign',headline:'시간당 가치는 B사가 높지만 총액은 A사가 유리합니다.',metric_val:'+1,200만원',metric_label:'총 보상 차이',metric_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
   {id:3,company_a_display:'현직',type_a:'mid',company_b_display:'이직처',type_b:'large',headline:'복지 포함 시 이직처가 연 450만원 유리합니다.',metric_val:'+450만원',metric_label:'복지 포함',metric_type:'up',created_at:new Date(Date.now()-7200000).toISOString()}
 ];
-let _popData=null,_popFilter='all';
+let _popData=null,_popFilter='all',_activeViewers=0;
 let pingTimer=null;
 
 function timeAgo(d){const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return '방금 전';if(s<3600)return Math.floor(s/60)+'분 전';if(s<86400)return Math.floor(s/3600)+'시간 전';return Math.floor(s/86400)+'일 전'}
@@ -1532,14 +1532,13 @@ function renderPopular(data){
   grid.innerHTML=filtered.map(c=>{
     const tag=tagMap[c.case_type]||'비교';
     const pts=(c.points||[]).map(p=>`<div class="pc-point">• ${p}</div>`).join('');
-    const viewers=Math.floor(Math.random()*80)+10;
     const views=c.view_count?'📊 '+(c.view_count).toLocaleString()+'회':'';
     const safeJson=JSON.stringify(c).replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${safeJson})'>
       <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
       <div class="pc-vs"><div class="pc-side"><span class="pc-name">${c.title_a}</span><span class="pc-sub">${c.sub_a||''}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${c.title_b}</span><span class="pc-sub">${c.sub_b||''}</span></div></div>
       <div class="pc-points">${pts}</div>
-      <div class="pc-foot"><span class="pc-cta">이 조합으로 비교 시작 →</span><span class="pc-viewers">지금 ${viewers}명 보는 중</span></div>
+      <div class="pc-foot"><span class="pc-cta">이 조합으로 비교 시작 →</span><span class="pc-viewers">지금 <span class="pc-viewers-count">${_activeViewers}</span>명 보는 중</span></div>
     </div>`}).join('');
 }
 
@@ -1561,9 +1560,11 @@ function renderFeed(data){
 
 function renderStats(s){
   if(!s)return;
+  _activeViewers=s.active_visitors||0;
   const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
-  if(v)v.textContent=s.active_visitors||0;
+  if(v)v.textContent=_activeViewers;
   if(c)c.textContent=s.today_comparisons||0;
+  document.querySelectorAll('.pc-viewers-count').forEach(el=>{el.textContent=_activeViewers});
 }
 
 function startFromCase(c){
