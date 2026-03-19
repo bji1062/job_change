@@ -2,30 +2,149 @@
 
 ## Project Overview
 
-**직장 선택 OS (Job Choice OS)** — A Korean-language single-page web application for comparing job offers across multiple criteria including compensation, work-life balance, job security, career growth, benefits, and company brand value.
+**직장 선택 OS (Job Choice OS)** — A Korean-language full-stack web application for comparing job offers across multiple criteria including compensation, work-life balance, job security, career growth, benefits, and company brand value.
 
-- **Tech stack**: Vanilla HTML/CSS/JavaScript (no frameworks, no build tools)
-- **Architecture**: Single-file monolithic SPA (`index.html`, ~1,289 lines)
-- **Backend**: None — fully client-side
+- **Frontend**: Vanilla HTML/CSS/JavaScript SPA (`index.html`)
+- **Backend**: Python FastAPI REST API with MySQL
+- **Infra**: Oracle Cloud (OCI) Terraform IaC — Always Free ARM
 - **Language**: Korean UI with English variable/function names
 
 ## File Structure
 
 ```
 /
-├── index.html    # Entire application (HTML + CSS + JS)
-└── CLAUDE.md     # This file
+├── index.html                    # Frontend SPA (HTML + CSS + JS)
+├── CLAUDE.md                     # This file
+├── server/
+│   ├── main.py                   # FastAPI entry point
+│   ├── config.py                 # Environment variables (DB, JWT)
+│   ├── database.py               # Async MySQL pool (aiomysql)
+│   ├── requirements.txt          # Python dependencies
+│   ├── .env.example              # Env template
+│   ├── models/                   # Pydantic request/response models
+│   │   ├── user.py               # RegisterReq, LoginReq, TokenResp
+│   │   ├── company.py            # CompanyBrief, Benefit, CompanyDetail
+│   │   ├── profiler.py           # Job, JobGroup, Profile, ProfilerResultReq
+│   │   └── comparison.py         # ComparisonReq, ComparisonResp
+│   ├── routers/                  # API endpoint handlers
+│   │   ├── auth.py               # POST /register, /login
+│   │   ├── companies.py          # GET /search, /{id}
+│   │   ├── reference.py          # GET /all (cached reference data)
+│   │   ├── profiler.py           # GET /jobs, /questions, /profiles; POST /results
+│   │   └── comparisons.py        # POST/GET comparisons (user history)
+│   ├── services/                 # Business logic
+│   │   ├── auth_service.py       # Password hashing, JWT creation
+│   │   └── cache.py              # In-memory TTL cache (1hr)
+│   ├── middleware/
+│   │   └── auth_middleware.py    # JWT Bearer token validation
+│   ├── seed/
+│   │   ├── schema.sql            # MySQL DDL (all tables)
+│   │   └── seed.py               # Initial data population
+│   └── deploy/
+│       ├── nginx.conf            # Nginx reverse proxy + SSL
+│       ├── jobchoice.service     # systemd service unit
+│       └── my.cnf                # MySQL config (6GB RAM optimized)
+└── infra/                        # Terraform IaC for OCI (Always Free)
+    ├── provider.tf               # OCI provider config
+    ├── variables.tf              # Variable declarations
+    ├── network.tf                # VCN, subnet, security list
+    ├── compute.tf                # ARM instance (VM.Standard.A1.Flex)
+    ├── outputs.tf                # Public IP, SSH command
+    └── terraform.tfvars.example  # Example variables
 ```
 
-Everything lives in `index.html`. There is no `package.json`, build system, or test framework.
+## Tech Stack
+
+### Frontend
+| Layer | Technology |
+|-------|-----------|
+| Language | Vanilla JavaScript (ES6+), HTML5, CSS3 |
+| Build | None — direct browser execution |
+| Fonts | Pretendard (Korean), JetBrains Mono (CDN) |
+| HTTP | Fetch API → `/api/v1/*` |
+| Auth storage | `localStorage` (`jc_token`) |
+
+### Backend
+| Layer | Technology |
+|-------|-----------|
+| Framework | FastAPI 0.115.6 |
+| Runtime | Python 3.11+ (async) |
+| DB driver | aiomysql 0.2.0 (async pool, 2–10 conn) |
+| Database | MySQL 8.0+ (utf8mb4) |
+| Auth | JWT HS256 (24hr expiry) via python-jose |
+| Password | bcrypt via passlib |
+| Validation | Pydantic 2.10.4 |
+| Server | Uvicorn (ASGI) |
+
+### Infrastructure (Oracle Cloud — Always Free)
+| Component | Config |
+|-----------|--------|
+| Compute | VM.Standard.A1.Flex (ARM), 2 OCPU, 12GB RAM |
+| Region | ap-chuncheon-1 (춘천) |
+| Network | VCN 10.0.0.0/16, public subnet 10.0.1.0/24 |
+| Storage | 50GB boot volume (Always Free 최대 200GB) |
+| Security | SSH restricted, HTTP/HTTPS open, MySQL blocked externally |
+| Reverse proxy | Nginx (SSL via Let's Encrypt) |
+| Process mgmt | systemd (auto-restart on failure) |
 
 ## Running the App
 
-Open `index.html` directly in a browser. No server or build step required.
+### Frontend only (offline mode)
+Open `index.html` in a browser. Hardcoded data serves as fallback.
 
-## Code Organization
+### Full stack (local)
+```bash
+# 1. MySQL setup
+mysql -u root -e "CREATE DATABASE jobchoice CHARACTER SET utf8mb4;"
+mysql -u root jobchoice < server/seed/schema.sql
+python server/seed/seed.py
 
-The file is organized into sections delimited by ASCII comment headers:
+# 2. Backend
+cd server
+cp .env.example .env  # edit DB credentials, JWT_SECRET
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 3. Frontend
+# Open index.html or serve via nginx
+```
+
+### Production deployment
+```
+Internet → Nginx (:443 SSL) ─┬─ /          → index.html (static)
+                              └─ /api/v1/   → Uvicorn (:8000) → MySQL (:3306)
+```
+
+## API Endpoints
+
+### Public
+- `GET  /api/v1/health` — Health check
+- `POST /api/v1/auth/register` — Create account (email, password, name)
+- `POST /api/v1/auth/login` — Login → JWT token
+- `GET  /api/v1/reference/all` — All companies, benefits, profiles, jobs, questions (1hr cache)
+- `GET  /api/v1/companies/search?q=` — Company search (LIKE)
+- `GET  /api/v1/companies/{id}` — Company detail
+- `GET  /api/v1/profiler/jobs` — Job groups + jobs
+- `GET  /api/v1/profiler/questions?scenario=` — Profiler questions
+- `GET  /api/v1/profiler/profiles` — Career profiles
+
+### Auth required (Bearer token)
+- `POST /api/v1/profiler/results` — Save profiler result
+- `POST /api/v1/comparisons` — Save comparison
+- `GET  /api/v1/comparisons` — List user's comparisons
+- `GET  /api/v1/comparisons/{id}` — Get specific comparison
+
+## Database Schema
+
+| Category | Tables |
+|----------|--------|
+| Reference | `company_types`, `companies`, `company_aliases`, `company_benefits`, `benefit_presets` |
+| Profiler | `profiles`, `profile_job_fits`, `job_groups`, `jobs`, `profiler_questions`, `question_scenarios` |
+| User | `users`, `profiler_results`, `comparisons` |
+
+## Frontend Code Organization
+
+Sections in `index.html` delimited by ASCII comment headers:
 
 ```
 // ━━ LANDING ━━       Landing page styles and layout
@@ -46,74 +165,75 @@ Structure within `index.html`:
 
 ## Naming Conventions
 
+### Frontend
 | Type | Convention | Examples |
 |------|-----------|----------|
-| Variables | camelCase (often abbreviated) | `pfJob`, `wsState`, `curPri`, `benS` |
+| Variables | camelCase (abbreviated) | `pfJob`, `wsState`, `curPri`, `benS` |
 | Functions | camelCase | `doSearch()`, `compare()`, `calc()`, `renderBen()` |
 | Constants | UPPER_SNAKE_CASE | `DIMS`, `OT_HRS`, `DB`, `PRIORITIES` |
-| CSS classes | kebab-case (often abbreviated) | `.pf-intro`, `.ws-btn`, `.vs-card` |
-| Data attributes | Short keys | `data-v`, `data-k`, `data-jid` |
+| CSS classes | kebab-case (abbreviated) | `.pf-intro`, `.ws-btn`, `.vs-card` |
 | DOM IDs | camelCase or short codes | `sA`, `sB`, `tA`, `tB`, `blA`, `blB` |
 
 Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 
-## Key Data Structures
+### Backend
+| Type | Convention | Examples |
+|------|-----------|----------|
+| Files/modules | snake_case | `auth_service.py`, `auth_middleware.py` |
+| Classes | PascalCase | `RegisterReq`, `CompanyBrief`, `TokenResp` |
+| Functions | snake_case | `init_pool()`, `fetch_all()`, `create_token()` |
+| Config | UPPER_SNAKE_CASE | `DB_HOST`, `JWT_SECRET`, `JWT_EXPIRE_HOURS` |
 
-```javascript
-// 6 career value dimensions
-const DIMS = ["compensation", "security", "growth", "autonomy", "impact", "flexibility"]
+## Key Frontend Functions
 
-// Company database entries
-const DB = [{ id, name, type, logo, industry, aliases, benefits, workStyle }]
+- `compare()` — Main report generation (~300 lines). Verdict cards, salary, hourly value, WLB, 3-year projection, bottom line.
+- `calc()` — Real-time summary triggered on input change.
+- `doSearch(s)` / `selComp(s, id)` — Company search/selection.
+- `renderBen(s)` — Benefits list rendering.
+- `setWS(s, key, val)` — Work style state update.
+- `getWSHours(s)` / `getOTPay(s)` — Weekly hours and overtime pay calc.
+- `go(screenId)` — SPA screen navigation.
+- `apiFetch(path, opts)` — API client with JWT auth header.
 
-// Work style state per side
-const wsState = { a: { ot, wage, remote, flex }, b: { ot, wage, remote, flex } }
+## Key Backend Patterns
 
-// Benefits per side
-const benS = { a: [{ key, name, val, cat, badge, checked }], b: [...] }
-```
-
-## Key Functions
-
-- `compare()` — Main report generation (~300 lines). Builds HTML for verdict cards, salary comparison, hourly value, WLB, 3-year projection, and bottom line.
-- `calc()` — Real-time summary calculation triggered on any input change.
-- `doSearch(s)` / `selComp(s, id)` — Company search and selection from DB.
-- `renderBen(s)` — Render benefits list for a side.
-- `setWS(s, key, val)` — Update work style state.
-- `getWSHours(s)` / `getOTPay(s)` — Calculate weekly hours and overtime pay.
-- `go(screenId)` — Screen navigation (SPA routing).
+- **Stateless API** — No sessions, JWT-only auth.
+- **Connection pool** — aiomysql async pool (2–10 connections, autocommit).
+- **Raw SQL** — No ORM. `database.fetch_all()`, `fetch_one()`, `execute()`.
+- **In-memory cache** — 1hr TTL for `/reference/all` (companies, benefits, profiles, questions).
+- **Progressive enhancement** — Frontend works offline with hardcoded data, enhanced when API is available.
 
 ## Styling
 
-- CSS custom properties for theming (dark theme): `--bg-0` through `--bg-4`, `--t1` through `--t4`
-- Color accents: `--blue`, `--amber`, `--green`, `--red`, `--purple`, `--gold` (each with a `-d` dim variant)
-- Responsive breakpoint: `@media(max-width:480px)`
+- CSS custom properties (dark theme): `--bg-0` through `--bg-4`, `--t1` through `--t4`
+- Color accents: `--blue`, `--amber`, `--green`, `--red`, `--purple`, `--gold` (each with `-d` dim variant)
+- Responsive: `@media(max-width:480px)`
 - Animations: `fadeUp`, `slideUp` with `cubic-bezier` easing
-- Fonts: Pretendard (Korean sans-serif), JetBrains Mono (numbers)
-
-## External Dependencies (CDN)
-
-- **Pretendard font**: `cdn.jsdelivr.net/gh/orioncactus/pretendard/...`
-- **JetBrains Mono**: `fonts.googleapis.com`
-
-No JavaScript libraries are used.
 
 ## Development Guidelines
 
-- **Single-file constraint**: All changes go into `index.html`. Do not split into separate files without explicit request.
-- **No build tools**: Changes are immediately testable by refreshing the browser.
-- **Compact code style**: The codebase uses a compact/minified inline style. Match existing density when adding code — avoid verbose formatting.
-- **Korean UI text**: All user-facing strings are in Korean. Variable names and comments are in English.
-- **State is global**: Variables like `wsState`, `benS`, `matched`, `curPri`, `curSacrifice`, `pfResult` are global. No module system.
-- **DOM updates via innerHTML**: Rendering is done by building HTML strings and assigning to `innerHTML`. Event handlers use inline `onclick`.
-- **Side pattern**: Functions that operate on one job side take `s` parameter (`'a'` or `'b'`). DOM IDs follow patterns like `sA`/`sB`, `tA`/`tB`.
-- **No tests**: There is no test framework. Verify changes manually in the browser.
-- **Bug fix comments**: Recent fixes are annotated with `// [FIX]` comments explaining the correction.
+- **Frontend**: All frontend code stays in `index.html`. Compact/minified style — match existing density.
+- **Backend**: Follow existing module structure (`routers/`, `models/`, `services/`). Raw SQL, no ORM.
+- **Korean UI text**: All user-facing strings are in Korean. Code in English.
+- **Frontend state is global**: `wsState`, `benS`, `matched`, `curPri`, `curSacrifice`, `pfResult`, `AUTH_TOKEN`.
+- **DOM updates via innerHTML**: Build HTML strings, assign to `innerHTML`. Inline `onclick` handlers.
+- **Side pattern**: Functions take `s` parameter (`'a'` or `'b'`). DOM IDs: `sA`/`sB`, `tA`/`tB`.
+- **No test framework**: Verify manually in browser / API client.
+- **Bug fix comments**: Annotated with `// [FIX]`.
+
+## Database Conventions
+
+- **No ENUM** — 모든 컬럼은 `VARCHAR`로 선언. 허용 값은 `COMMENT`에 명시. ENUM은 스키마 변경 시 ALTER TABLE 필요하므로 사용 금지.
+- **모든 컬럼에 COMMENT 필수** — 한국어로 컬럼 용도, 단위, 허용 값 범위를 기재. 예: `COMMENT '기업유형 (large, startup, mid, foreign, public, freelance)'`
+- **FK 참조 대상은 COMMENT에 명시** — 예: `COMMENT '사용자 FK (users.id)'`
+- **금액 단위는 만원** — 별도 표기 없으면 만원 기준. COMMENT에 `(만원)` 명시.
 
 ## Common Pitfalls
 
-- Variable shadowing in long functions (e.g., `compare()` is ~300 lines with many local variables)
-- The `compare()` function validates inputs at the top — ensure new comparison logic has proper null/undefined checks
-- Benefits use both `val` (numeric) and `checked` (boolean) — always check both when summing
-- Overtime pay calculation differs between `'inclusive'` (포괄임금) and `'separate'` (비포괄) wage types
-- Company type (`large`, `startup`, `mid`, `foreign`, `public`, `freelance`) affects stability scores, growth rates, and benefit presets
+- Variable shadowing in `compare()` (~300 lines with many locals)
+- `compare()` validates inputs at top — new comparison logic needs null/undefined checks
+- Benefits use both `val` (numeric) and `checked` (boolean) — check both when summing
+- Overtime pay differs between `'inclusive'` (포괄임금) and `'separate'` (비포괄) wage types
+- Company type (`large`, `startup`, `mid`, `foreign`, `public`, `freelance`) affects stability scores, growth rates, benefit presets
+- Backend SQL uses `%s` placeholders (aiomysql) — never use f-strings for queries
+- JWT token stored in `localStorage` as `jc_token` — frontend reads on init

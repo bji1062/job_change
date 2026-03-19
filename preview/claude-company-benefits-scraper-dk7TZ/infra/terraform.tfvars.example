@@ -1,0 +1,21 @@
+# OCI 인증 — OCI 콘솔 > 사용자 > API Keys에서 확인
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+compartment_ocid = "ocid1.compartment.oc1..aaaa..."
+fingerprint      = "aa:bb:cc:dd:..."
+private_key_path = "~/.oci/oci_api_key.pem"
+
+# 리전 (춘천)
+region = "ap-chuncheon-1"
+
+# SSH 공개 키 (인스턴스 접속용)
+ssh_public_key = "ssh-rsa AAAA..."
+
+# SSH 접근 허용 IP (본인 IP)
+my_ip_cidr = "0.0.0.0/0"
+
+# 인스턴스 스펙 (Always Free 기본값)
+# instance_shape     = "VM.Standard.A1.Flex"
+# instance_ocpus     = 2
+# instance_memory_gb = 6
+# boot_volume_gb     = 50
