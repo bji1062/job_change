@@ -1,0 +1,19 @@
+/* ━━ LANDING ━━ */
+.landing{position:relative;overflow:hidden}
+.l-nav{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 2rem;z-index:2;position:relative}
+.logo{font-size:.85rem;font-weight:800;letter-spacing:-.02em;color:var(--t1);display:flex;align-items:center;gap:6px}
+.logo-m{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;font-weight:900}
+.l-login{font-size:.78rem;color:var(--t3);background:none;border:1px solid var(--border);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
+.l-login:hover{border-color:var(--t3);color:var(--t2)}
+.l-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 1.5rem;z-index:2;position:relative}
+.landing::before{content:'';position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(75,141,248,.06),transparent 70%);pointer-events:none}
+.l-h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:900;letter-spacing:-.04em;line-height:1.25;margin-bottom:.75rem}
+.l-h1 em{font-style:normal;background:linear-gradient(135deg,var(--blue),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.l-sub{font-size:1.05rem;color:var(--t3);max-width:420px;margin:0 auto 2.5rem;line-height:1.6}
+.l-btns{display:flex;flex-direction:column;align-items:center;gap:12px}
+.l-cta{padding:16px 48px;background:var(--t1);color:var(--bg-0);border:none;border-radius:50px;font-family:inherit;font-size:1.05rem;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 0 40px rgba(255,255,255,.06)}
+.l-cta:hover{transform:translateY(-2px);box-shadow:0 8px 40px rgba(255,255,255,.1)}
+.l-cta:active{transform:translateY(0)}
+.l-cta2{padding:12px 32px;background:none;border:1px solid var(--border);color:var(--t3);border-radius:50px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
+.l-cta2:hover{border-color:var(--gold);color:var(--gold)}
+.l-foot{padding:1.5rem;text-align:center;font-size:.7rem;color:var(--t4);z-index:2}
