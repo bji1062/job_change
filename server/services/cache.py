@@ -12,5 +12,8 @@ def get(key: str):
 def set(key: str, data, ttl: int = DEFAULT_TTL):
     _cache[key] = {"data": data, "exp": time.time() + ttl}
 
+def delete(key: str):
+    _cache.pop(key, None)
+
 def clear():
     _cache.clear()

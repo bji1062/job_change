@@ -55,7 +55,7 @@ async def get_popular():
         """SELECT id, case_type, title_a, type_a, sub_a,
                   title_b, type_b, sub_b, points,
                   view_count, comparison_count
-           FROM popular_cases WHERE is_active=1
+           FROM popular_cases WHERE is_active=1 AND case_type='company'
            ORDER BY comparison_count DESC"""
     )
     for r in rows:
@@ -63,6 +63,19 @@ async def get_popular():
             r["points"] = json.loads(r["points"])
     cache.set("landing_popular", rows, ttl=3600)
     return rows
+
+@router.post("/popular/{case_id}/view")
+async def increment_view(case_id: int):
+    await database.execute(
+        "UPDATE popular_cases SET view_count = view_count + 1 WHERE id = %s",
+        (case_id,)
+    )
+    row = await database.fetch_one(
+        "SELECT view_count FROM popular_cases WHERE id = %s", (case_id,)
+    )
+    # Invalidate cache so next load reflects updated count
+    cache.delete("landing_popular")
+    return {"view_count": int(row["view_count"]) if row else 0}
 
 @router.post("/ping")
 async def ping(req: PingReq):
