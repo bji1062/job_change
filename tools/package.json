@@ -1,0 +1,9 @@
+{
+  "name": "job-change-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "회사 복지 스크래퍼 (Claude API 기반)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0"
+  }
+}

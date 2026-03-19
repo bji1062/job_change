@@ -1,0 +1,33 @@
+name: Cleanup Branch Preview
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Remove preview directory
+        run: |
+          SAFE_BRANCH=$(echo "${{ github.head_ref }}" | sed 's/\//-/g')
+          if [ -d "preview/${SAFE_BRANCH}" ]; then
+            rm -rf "preview/${SAFE_BRANCH}"
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add -A
+            git commit -m "cleanup: remove preview/${SAFE_BRANCH}"
+            git push
+          fi
