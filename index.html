@@ -521,7 +521,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 
 <!-- ━━ LANDING ━━ -->
 <div class="screen landing active" id="s-landing">
-  <nav class="l-nav"><div class="logo"><div class="logo-m">OS</div>직장선택OS</div><div style="position:relative"><button class="l-login" id="authNavBtn" onclick="openAuth()">로그인</button><div class="u-drop" id="userDrop"><button class="u-drop-item" onclick="logout()">로그아웃</button></div></div></nav>
+  <nav class="l-nav"><div class="logo"><div class="logo-m">OS</div>직장선택OS</div><div style="position:relative"><button class="l-login" id="authNavBtn" onclick="openAuth()">로그인</button><div class="u-drop" id="userDrop"><button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button></div></div></nav>
   <div class="l-center">
     <h1 class="l-h1">이직할까, 말까.<br>고민 중이라면<br><em>이직 vs 잔류</em><br>비교해 보세요</h1> 
     <p class="l-sub">연봉 숫자만 보지 마세요.<br>복지, 워라밸, 성장성까지 — 나의 기준으로 비교합니다.</p>
@@ -668,8 +668,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     <button class="auth-close" onclick="closeAuth()">&times;</button>
     <h3 id="authTitle">로그인</h3>
     <div class="fd" id="authNameField" style="display:none"><div class="fl">이름</div><input id="authName" placeholder="홍길동"></div>
-    <div class="fd"><div class="fl">이메일</div><input id="authEmail" type="email" placeholder="email@example.com"></div>
-    <div class="fd"><div class="fl">비밀번호</div><input id="authPass" type="password" placeholder="8자 이상"></div>
+    <div class="fd"><div class="fl">이메일</div><input id="authEmail" type="email" placeholder="email@example.com" onkeydown="if(event.key==='Enter')submitAuth()"></div>
+    <div class="fd"><div class="fl">비밀번호</div><input id="authPass" type="password" placeholder="8자 이상" onkeydown="if(event.key==='Enter')submitAuth()"></div>
     <div class="fd" id="authJobField" style="display:none"><div class="fl">직군 <span style="color:var(--red)">*</span></div><select id="authJob"><option value="">직군을 선택하세요</option></select></div>
     <button class="auth-btn" id="authSubmit" onclick="submitAuth()">로그인</button>
     <div class="auth-toggle" id="authToggle">계정이 없으신가요? <a onclick="toggleAuthMode()">회원가입</a></div>
