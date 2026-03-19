@@ -1536,7 +1536,7 @@ function renderPopular(data){
     const tag=tagMap[c.case_type]||'비교';
     const pts=(c.points||[]).map(p=>`<div class="pc-point">• ${p}</div>`).join('');
     const viewers=Math.floor(Math.random()*80)+10;
-    const views=c.view_count?(c.view_count).toLocaleString()+'회':'';
+    const views=c.view_count?'📊 '+(c.view_count).toLocaleString()+'회':'';
     const safeJson=JSON.stringify(c).replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${safeJson})'>
       <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
