@@ -163,58 +163,100 @@ async function scrape(companyName) {
     console.error(`⚠️  누락된 필드: ${missing.join(', ')}`);
   }
 
-  // Format as JS code for DB insertion
-  const jsCode = formatAsDB(data);
-
   console.log('✅ 스크래핑 완료!\n');
+
+  // ── 1) 회사 기본 정보 ──
+  const typeLabels = {large:'대기업',mid:'중견기업',startup:'스타트업',foreign:'외국계',public:'공기업',freelance:'프리랜서'};
   console.log('━'.repeat(60));
-  console.log('  아래 코드를 js/data.js의 DB 배열에 추가하세요');
+  console.log('  📋 스크래핑 결과');
   console.log('━'.repeat(60));
-  console.log();
-  console.log(jsCode);
+  console.log(`  회사명  : ${data.name} (${data.id})`);
+  console.log(`  유형    : ${typeLabels[data.type] || data.type} (${data.type})`);
+  console.log(`  업종    : ${data.industry}`);
+  console.log(`  로고    : ${data.logo}`);
+  console.log(`  별칭    : ${data.aliases.join(', ')}`);
   console.log();
 
-  // Also output summary
+  // ── 2) 근무 형태 ──
+  const ws = data.workStyle || {};
+  console.log('  🏠 근무 형태');
+  console.log(`    원격근무      : ${ws.remote ? '✓' : '✗'}`);
+  console.log(`    유연출퇴근    : ${ws.flex ? '✓' : '✗'}`);
+  console.log(`    자율휴가      : ${ws.unlimitedPTO ? '✓' : '✗'}`);
+  console.log(`    리프레시 휴가 : ${ws.refreshLeave || '-'}`);
+  console.log(`    야근 문화     : ${ws.overtime || '-'}`);
+  console.log();
+
+  // ── 3) 복지 항목 목록 ──
+  const catLabels = {money:'💰 금전',health:'🏥 건강',housing:'🏠 주거',edu:'📚 교육',family:'👨‍👩‍👧 가족',life:'🎯 생활',leave:'🌴 휴가'};
   const benCount = data.benefits ? data.benefits.length : 0;
   const autoCount = data.benefits ? data.benefits.filter(b => b.badge === 'auto').length : 0;
   const estCount = benCount - autoCount;
-  console.log(`📊 요약: 복지 ${benCount}개 (검증 ${autoCount}개 / 추정 ${estCount}개)`);
-  console.log(`🏢 유형: ${data.type} | 업종: ${data.industry}`);
+  const totalVal = data.benefits ? data.benefits.reduce((s,b) => s + (b.val || 0), 0) : 0;
+
+  console.log(`  🎁 복지 항목 (${benCount}개 — 검증 ${autoCount} / 추정 ${estCount} | 합계 ${totalVal.toLocaleString()}만원/년)`);
+  console.log('  ' + '─'.repeat(56));
+  console.log('  ' + padR('항목', 30) + padR('카테고리', 10) + padR('연간(만원)', 10) + '신뢰');
+  console.log('  ' + '─'.repeat(56));
+  for (const b of (data.benefits || [])) {
+    const badge = b.badge === 'auto' ? '✓검증' : '~추정';
+    const valStr = b.qual ? '(정성적)' : String(b.val || 0);
+    console.log('  ' + padR(b.name, 30) + padR(catLabels[b.cat] || b.cat, 10) + padR(valStr, 10) + badge);
+    if (b.note) console.log('  ' + ' '.repeat(2) + `↳ ${b.note}`);
+    if (b.qual && b.qualText) console.log('  ' + ' '.repeat(2) + `↳ ${b.qualText}`);
+  }
+  console.log();
+
+  // ── 4) DB 저장 계획 ──
+  console.log('━'.repeat(60));
+  console.log('  🗄️  DB 저장 계획 (3개 테이블)');
+  console.log('━'.repeat(60));
+  console.log();
+
+  // 4-a) companies
+  const wsJson = JSON.stringify({
+    remote: !!ws.remote, flex: !!ws.flex, unlimitedPTO: !!ws.unlimitedPTO,
+    refreshLeave: ws.refreshLeave || '', overtime: ws.overtime || ''
+  });
+  console.log('  [1] companies — 1행 INSERT');
+  console.log('  ' + '─'.repeat(56));
+  console.log(`  INSERT INTO companies (id, name, type_id, industry, logo, work_style)`);
+  console.log(`  VALUES ('${esc(data.id)}', '${esc(data.name)}', '${esc(data.type)}', '${esc(data.industry)}', '${esc(data.logo)}', '${esc(wsJson)}');`);
+  console.log();
+
+  // 4-b) company_aliases
+  console.log(`  [2] company_aliases — ${data.aliases.length}행 INSERT`);
+  console.log('  ' + '─'.repeat(56));
+  for (const alias of data.aliases) {
+    console.log(`  INSERT INTO company_aliases (company_id, alias) VALUES ('${esc(data.id)}', '${esc(alias)}');`);
+  }
+  console.log();
+
+  // 4-c) company_benefits
+  console.log(`  [3] company_benefits — ${benCount}행 INSERT`);
+  console.log('  ' + '─'.repeat(56));
+  for (let i = 0; i < (data.benefits || []).length; i++) {
+    const b = data.benefits[i];
+    console.log(`  INSERT INTO company_benefits (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)`);
+    console.log(`  VALUES ('${esc(data.id)}', '${esc(b.key)}', '${esc(b.name)}', ${b.val || 0}, '${esc(b.cat)}', '${esc(b.badge || 'est')}', ${b.note ? "'" + esc(b.note) + "'" : 'NULL'}, ${b.qual ? 'TRUE' : 'FALSE'}, ${b.qualText ? "'" + esc(b.qualText) + "'" : 'NULL'}, ${i});`);
+  }
+  console.log();
+  console.log('━'.repeat(60));
+  console.log(`  합계: ${1 + data.aliases.length + benCount}행 INSERT (3개 테이블)`);
+  console.log('━'.repeat(60));
+
+  // ── 5) JSON 원본 출력 ──
+  console.log();
+  console.log('📎 원본 JSON (--save 옵션으로 자동 저장 예정):');
+  console.log(JSON.stringify(data, null, 2));
 }
 
-function formatAsDB(data) {
-  // Format benefits array compactly (matching existing DB style)
-  const benStr = data.benefits.map(b => {
-    let parts = [
-      `key:'${b.key}'`,
-      `name:'${esc(b.name)}'`,
-      `val:${b.val || 0}`,
-      `cat:'${b.cat}'`,
-      `badge:'${b.badge || 'est'}'`,
-    ];
-    if (b.note) parts.push(`note:'${esc(b.note)}'`);
-    if (b.qual) {
-      parts.push(`qual:true`);
-      if (b.qualText) parts.push(`qualText:'${esc(b.qualText)}'`);
-    }
-    return `{${parts.join(',')}}`;
-  }).join(',');
-
-  // Format workStyle
-  const ws = data.workStyle || {};
-  const wsStr = [
-    `remote:${!!ws.remote}`,
-    `flex:${!!ws.flex}`,
-    `unlimitedPTO:${!!ws.unlimitedPTO}`,
-    `refreshLeave:'${esc(ws.refreshLeave || '')}'`,
-    `overtime:'${esc(ws.overtime || '')}'`,
-  ].join(',');
-
-  // Format aliases
-  const aliasStr = data.aliases.map(a => `'${esc(a)}'`).join(',');
-
-  return `  {id:'${data.id}',name:'${esc(data.name)}',aliases:[${aliasStr}],type:'${data.type}',industry:'${esc(data.industry)}',logo:'${esc(data.logo)}',
-  benefits:[${benStr}],workStyle:{${wsStr}}},`;
+function padR(str, len) {
+  const s = String(str);
+  // Approximate: count CJK characters as width 2
+  let w = 0;
+  for (const ch of s) w += ch.charCodeAt(0) > 0x7f ? 2 : 1;
+  return s + ' '.repeat(Math.max(0, len - w));
 }
 
 function esc(s) {
@@ -235,7 +277,7 @@ if (!company) {
     node scrape-benefits.js "네이버"
     node scrape-benefits.js "카카오"
 
-  결과는 js/data.js의 DB 배열에 바로 복사할 수 있는 형태로 출력됩니다.
+  결과를 미리보기로 출력하고, DB 저장 계획(SQL)을 보여줍니다.
   `);
   process.exit(0);
 }
