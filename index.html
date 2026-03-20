@@ -547,7 +547,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
   <div class="l-scroll-hint">스크롤하여 사례 보기 ↓</div>
 
   <div class="l-pop-wrap" id="popSection">
-    <div class="l-sec-header">💡 인기 비교 사례</div>
+    <div class="l-sec-header">💡 인기 비교 사례 (TOP 10)</div>
     <div class="pop-sub">클릭하면 두 회사가 미리 입력된 상태로 비교 화면이 열립니다</div>
     <div class="l-filter-row" id="popFilter">
       <button class="l-filter active" onclick="filterPop('all',this)">전체</button>
@@ -558,7 +558,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 
   <div class="l-feed-wrap" id="feedSection">
     <div class="l-feed-header">
-      <div><div class="l-sec-header">📊 최근 비교 결과</div><div class="l-feed-sub">실제 사용자들이 비교한 결과 요약 · 개인정보 없이 직군·연차·결과만 표시</div></div>
+      <div><div class="l-sec-header">📊 최근 비교 결과 (TOP 10)</div><div class="l-feed-sub">실제 사용자들이 비교한 결과 요약 · 개인정보 없이 직군·연차·결과만 표시</div></div>
       <a class="l-feed-more" onclick="go('s-input')">전체 보기 →</a>
     </div>
     <div class="result-feed" id="feedList"></div>
@@ -1590,7 +1590,7 @@ function filterPop(type,btn){
 
 function renderFeed(data){
   const el=document.getElementById('feedList');if(!el)return;
-  el.innerHTML=data.map(f=>{
+  el.innerHTML=data.slice(0,10).map(f=>{
     const emoji=f.emoji||'💼',job=f.job_name||'',a=f.company_a_display,b=f.company_b_display;
     let title=(f.headline||`${a} vs ${b}`).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
     title=title.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
