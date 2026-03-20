@@ -1,4 +1,5 @@
 import json
+import traceback
 from fastapi import APIRouter, Depends
 import database
 from services import cache
@@ -39,6 +40,7 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
         except Exception:
             pass
     # Auto-upsert into popular_cases
+    print(f"[popular_cases] company_a={req.company_a_name!r}, company_b={req.company_b_name!r}")
     if req.company_a_name and req.company_b_name:
         try:
             type_labels = {
@@ -52,10 +54,12 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
                    LIMIT 1""",
                 (req.company_a_name, req.company_b_name,
                  req.company_b_name, req.company_a_name))
+            print(f"[popular_cases] existing={existing}")
             if existing:
                 await database.execute(
                     "UPDATE popular_cases SET comparison_count=comparison_count+1 WHERE id=%s",
                     (existing["id"],))
+                print(f"[popular_cases] UPDATE done for id={existing['id']}")
             else:
                 points = json.dumps(req.feed_points[:3], ensure_ascii=False) if req.feed_points else '[]'
                 await database.execute(
@@ -66,9 +70,13 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
                     (req.company_a_name, req.type_a, type_labels.get(req.type_a, req.type_a),
                      req.company_b_name, req.type_b, type_labels.get(req.type_b, req.type_b),
                      points))
+                print(f"[popular_cases] INSERT done: {req.company_a_name} vs {req.company_b_name}")
             cache.delete("landing_popular")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[popular_cases upsert error] {e}")
+            traceback.print_exc()
+    else:
+        print(f"[popular_cases] SKIPPED — company name is None")
     # Daily stats increment
     try:
         await database.execute(
