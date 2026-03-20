@@ -65,7 +65,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-scroll-hint{text-align:center;padding:1.5rem;font-size:.75rem;color:var(--t4);z-index:2;animation:fadeUp 1.5s ease infinite alternate}
 .l-sec-header{font-size:1.1rem;font-weight:800;color:var(--t1);margin-bottom:1rem;letter-spacing:-.02em}
 .l-pop-wrap{max-width:1600px;margin:0 auto;padding:2rem 2.5rem}
-.l-feed-wrap{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
+.l-feed-wrap{max-width:1600px;margin:0 auto;padding:2rem 2.5rem}
 .l-filter-row{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap}
 .l-filter{font-size:.75rem;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:inherit;transition:all .15s}
 .l-filter.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
@@ -91,7 +91,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-feed-sub{font-size:.75rem;color:var(--t3);margin-top:.25rem}
 .l-feed-more{font-size:.78rem;color:var(--blue);cursor:pointer;white-space:nowrap;text-decoration:none}
 .l-feed-more:hover{text-decoration:underline}
-.result-feed{display:flex;flex-direction:column;gap:.75rem}
+.result-feed{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
 .result-item{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;transition:border-color .15s;display:flex;align-items:center;gap:1rem}
 .result-item:hover{border-color:var(--bh)}
 .ri-avatar{font-size:1.5rem;flex-shrink:0}
@@ -114,7 +114,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .l-bottom-cta button:last-child{padding:14px 40px;background:none;border:1px solid var(--border);color:var(--t3);border-radius:50px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s}
 .l-bottom-cta button:last-child:hover{border-color:var(--gold);color:var(--gold)}
 @media(max-width:1200px){.pop-grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:768px){.pop-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.pop-grid{grid-template-columns:repeat(2,1fr)}.result-feed{grid-template-columns:1fr}}
 @media(max-width:480px){.pop-grid{grid-template-columns:1fr}.l-stats-bar{gap:1rem}.l-bottom-cta{flex-direction:column;align-items:center}.ri-pct{font-size:1rem}}
 
 /* ━━ PROFILER ━━ */
