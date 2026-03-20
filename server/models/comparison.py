@@ -24,6 +24,7 @@ class ComparisonReq(BaseModel):
     feed_metric_label: str | None = None
     feed_metric_type: str | None = None
     feed_job_category: str | None = None
+    feed_points: list[str] | None = None
 
 class ComparisonResp(ComparisonReq):
     id: int

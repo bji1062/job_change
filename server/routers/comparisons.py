@@ -38,6 +38,37 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
                  req.feed_metric_type or 'neu'))
         except Exception:
             pass
+    # Auto-upsert into popular_cases
+    if req.company_a_name and req.company_b_name:
+        try:
+            type_labels = {
+                'large': '대기업', 'mid': '중견기업', 'public': '공기업',
+                'startup': '스타트업', 'foreign': '외국계', 'freelance': '프리랜서'
+            }
+            # Check if this pair already exists (A vs B or B vs A)
+            existing = await database.fetch_one(
+                """SELECT id FROM popular_cases
+                   WHERE (title_a=%s AND title_b=%s) OR (title_a=%s AND title_b=%s)
+                   LIMIT 1""",
+                (req.company_a_name, req.company_b_name,
+                 req.company_b_name, req.company_a_name))
+            if existing:
+                await database.execute(
+                    "UPDATE popular_cases SET comparison_count=comparison_count+1 WHERE id=%s",
+                    (existing["id"],))
+            else:
+                points = json.dumps(req.feed_points[:3], ensure_ascii=False) if req.feed_points else '[]'
+                await database.execute(
+                    """INSERT INTO popular_cases
+                       (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
+                        points, view_count, comparison_count)
+                       VALUES ('company',%s,%s,%s,%s,%s,%s,%s,0,1)""",
+                    (req.company_a_name, req.type_a, type_labels.get(req.type_a, req.type_a),
+                     req.company_b_name, req.type_b, type_labels.get(req.type_b, req.type_b),
+                     points))
+            cache.delete("landing_popular")
+        except Exception:
+            pass
     # Daily stats increment
     try:
         await database.execute(

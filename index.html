@@ -1512,7 +1512,13 @@ function compare(){
   const _totalA=effA.mid+otPayA,_totalB=effB.mid+otPayB,_td=_totalB-_totalA;
   const _mType=_td>0?'up':_td<0?'down':'neu';
   const _mVal=_td!==0?(_td>0?'+':'')+fW(_td):'동일';
-  window._lastFeedData={feed_headline:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail:pri.label+' 기준 비교',feed_metric_val:_mVal,feed_metric_label:'총 보상 차이',feed_metric_type:_mType,feed_job_category:pfJob?pfJob.label:null};
+  // Auto-generate points for popular_cases
+  const _pts=[];
+  if(_td!==0)_pts.push('<strong>총 보상</strong> '+_mVal+' — '+(_td>0?nB:nA)+'이 유리');
+  if(hvA&&hvB&&hvA!==hvB)_pts.push('<strong>시간당 가치</strong> '+(hvA>hvB?nA:nB)+'이 우세 · 실질 효율 기준');
+  if(curPri)_pts.push('<strong>'+pri.label+'</strong> 기준 비교 · '+(pfJob?pfJob.label+' 직무':'직무 미지정'));
+  if(!_pts.length)_pts.push(nA+' vs '+nB+' 비교 결과');
+  window._lastFeedData={feed_headline:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail:pri.label+' 기준 비교',feed_metric_val:_mVal,feed_metric_label:'총 보상 차이',feed_metric_type:_mType,feed_job_category:pfJob?pfJob.label:null,feed_points:_pts};
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
