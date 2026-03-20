@@ -1,6 +1,7 @@
 import json
 from fastapi import APIRouter, Query
 import database
+from models.company import BenefitUpsert
 
 router = APIRouter()
 
@@ -46,3 +47,34 @@ async def detail(company_id: str):
         "aliases": [a["alias"] for a in aliases],
         "benefits": benefits,
     }
+
+@router.put("/{company_id}/benefits")
+async def upsert_benefits(company_id: str, items: list[BenefitUpsert]):
+    comp = await database.fetch_one(
+        "SELECT id FROM companies WHERE id=%s", (company_id,)
+    )
+    if not comp:
+        return {"error": "company not found"}
+
+    # est badge 항목만 삭제 (official 보존)
+    await database.execute(
+        "DELETE FROM company_benefits WHERE company_id=%s AND badge='est'",
+        (company_id,),
+    )
+
+    for i, b in enumerate(items):
+        await database.execute(
+            """INSERT INTO company_benefits
+               (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (company_id, b.key, b.name, b.val, b.cat, b.badge,
+             b.note, b.qual, b.qualText, b.sortOrder or i),
+        )
+
+    benefits = await database.fetch_all(
+        """SELECT ben_key AS `key`, name, val, category AS cat, badge,
+                  note, is_qualitative AS qual, qual_text AS qualText
+           FROM company_benefits WHERE company_id=%s ORDER BY sort_order""",
+        (company_id,),
+    )
+    return {"count": len(benefits), "benefits": benefits}

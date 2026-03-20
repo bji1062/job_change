@@ -66,6 +66,7 @@ COMPANIES = [
         "id": "cj", "name": "CJ그룹",
         "aliases": ["CJ", "cj", "씨제이", "CJ제일제당", "CJ올리브영", "CJ ENM"],
         "type": "large", "industry": "식품/유통/엔터", "logo": "CJ",
+        "careersUrl": "https://recruit.cj.net/recruit/culture/welfare",
         "benefits": [
             {"key": "meal", "name": "구내식당 (아침·점심·저녁 100%)", "val": 432, "cat": "money", "badge": "auto", "note": "일 18,000원 × 240일"},
             {"key": "cafe_point", "name": "카페테리아 포인트", "val": 200, "cat": "money", "badge": "auto"},
@@ -92,6 +93,7 @@ COMPANIES = [
         "id": "toss", "name": "토스 (비바리퍼블리카)",
         "aliases": ["토스", "toss", "Toss", "비바리퍼블리카", "비바"],
         "type": "startup", "industry": "핀테크", "logo": "T",
+        "careersUrl": "https://toss.im/career/culture",
         "benefits": [
             {"key": "meal", "name": "법인카드 식사 (점심+저녁 100%)", "val": 432, "cat": "money", "badge": "auto", "note": "일 18,000원 × 240일"},
             {"key": "fitness_comm", "name": "체력단련비+통신비 (매월)", "val": 120, "cat": "money", "badge": "auto"},
@@ -307,8 +309,8 @@ def seed():
     # 3. Companies
     for c in COMPANIES:
         cur.execute(
-            "INSERT IGNORE INTO companies (id, name, type_id, industry, logo, work_style) VALUES (%s,%s,%s,%s,%s,%s)",
-            (c["id"], c["name"], c["type"], c.get("industry"), c.get("logo"), json.dumps(c.get("workStyle")) if c.get("workStyle") else None),
+            "INSERT IGNORE INTO companies (id, name, type_id, industry, logo, work_style, careers_benefit_url) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (c["id"], c["name"], c["type"], c.get("industry"), c.get("logo"), json.dumps(c.get("workStyle")) if c.get("workStyle") else None, c.get("careersUrl")),
         )
         for alias in c.get("aliases", []):
             cur.execute(

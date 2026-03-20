@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS companies (
   industry VARCHAR(50) COMMENT '산업 분류 (식품/유통, 핀테크 등)',
   logo VARCHAR(10) COMMENT '로고 약어 (CJ, T 등)',
   work_style JSON COMMENT '근무 형태 {remote, flex, unlimitedPTO, refreshLeave, overtime}',
+  careers_benefit_url VARCHAR(500) COMMENT '채용 홈페이지 복지 페이지 URL',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '레코드 생성 시각',
   FOREIGN KEY (type_id) REFERENCES company_types(id),
   FULLTEXT INDEX idx_name (name)
