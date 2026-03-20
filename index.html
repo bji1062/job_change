@@ -536,7 +536,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     <h1 class="l-h1">이직할까, 말까.<br>고민 중이라면<br><em>이직 vs 잔류</em><br>비교해 보세요</h1> 
     <p class="l-sub">연봉 숫자만 보지 마세요.<br>복지, 워라밸, 성장성까지 — 나의 기준으로 비교합니다.</p>
     <div class="l-btns">
-      <button class="l-cta" onclick="go('s-input')">비교 시작</button>
+      <button class="l-cta" onclick="if(!AUTH_TOKEN||!API_BASE){openAuth();return}go('s-input')">비교 시작</button>
       <button class="l-cta2" onclick="go('s-profiler')">🎯 나의 커리어 가치관 먼저 알아보기</button>
     </div>
     <div class="l-stats-bar" id="landingStats">
