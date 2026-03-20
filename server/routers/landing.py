@@ -55,8 +55,8 @@ async def get_popular():
         """SELECT id, case_type, title_a, type_a, sub_a,
                   title_b, type_b, sub_b, points,
                   view_count, comparison_count
-           FROM popular_cases WHERE is_active=1 AND case_type='company'
-           ORDER BY comparison_count DESC"""
+           FROM popular_cases WHERE is_active=1
+           ORDER BY view_count DESC LIMIT 10"""
     )
     for r in rows:
         if isinstance(r.get("points"), str):

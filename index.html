@@ -1528,7 +1528,14 @@ document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.get
 const FALLBACK_POP=[
   {id:1,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'네이버',type_b:'large',sub_b:'대기업',points:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_count:12341,comparison_count:847},
   {id:2,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'삼성전자',type_b:'large',sub_b:'대기업',points:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_count:9823,comparison_count:623},
-  {id:3,case_type:'company',title_a:'토스',type_a:'startup',sub_a:'핀테크',title_b:'카카오뱅크',type_b:'large',sub_b:'인터넷은행',points:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_count:5432,comparison_count:298}
+  {id:3,case_type:'company',title_a:'토스',type_a:'startup',sub_a:'핀테크',title_b:'카카오뱅크',type_b:'large',sub_b:'인터넷은행',points:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_count:5432,comparison_count:298},
+  {id:4,case_type:'company',title_a:'라인',type_a:'large',sub_a:'글로벌 IT',title_b:'카카오',type_b:'large',sub_b:'대기업',points:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_count:4821,comparison_count:245},
+  {id:5,case_type:'company',title_a:'삼성전자',type_a:'large',sub_a:'대기업',title_b:'SK하이닉스',type_b:'large',sub_b:'대기업',points:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_count:4512,comparison_count:231},
+  {id:6,case_type:'company',title_a:'배달의민족',type_a:'large',sub_a:'플랫폼',title_b:'당근',type_b:'startup',sub_b:'플랫폼',points:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_count:3987,comparison_count:198},
+  {id:7,case_type:'company',title_a:'현대자동차',type_a:'large',sub_a:'대기업',title_b:'LG에너지솔루션',type_b:'large',sub_b:'대기업',points:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_count:3654,comparison_count:187},
+  {id:8,case_type:'company',title_a:'네이버',type_a:'large',sub_a:'대기업',title_b:'구글코리아',type_b:'foreign',sub_b:'외국계',points:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_count:3421,comparison_count:176},
+  {id:9,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'토스',type_b:'startup',sub_b:'핀테크',points:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_count:3198,comparison_count:165},
+  {id:10,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'마켓컬리',type_b:'startup',sub_b:'이커머스',points:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_count:2876,comparison_count:142}
 ];
 const FALLBACK_FEED=[
   {id:1,job_name:'개발자',emoji:'👨‍💻',company_a_display:'카카오',type_a:'large',company_b_display:'토스',type_b:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
@@ -1551,7 +1558,7 @@ async function loadLanding(){
 
 function renderPopular(data){
   const grid=document.getElementById('popGrid');if(!grid)return;
-  const filtered=_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter);
+  const filtered=(_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter)).slice(0,10);
   const tagMap={company:'🏢 회사 직접 비교',scenario:'🔀 시나리오'};
   grid.innerHTML=filtered.map(c=>{
     const tag=tagMap[c.case_type]||'비교';
