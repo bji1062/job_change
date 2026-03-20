@@ -1204,6 +1204,7 @@ function fW(v){return Math.abs(v)>=10000?(v/10000).toFixed(1)+'억원':Math.roun
 function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.cat===cat)t+=b.val});return t}
 
 function compare(){
+  if(!AUTH_TOKEN||!API_BASE){openAuth();return}
   const salA=getSalRange(),salB=getOfferRange();
   if(!salA.min||!salB.min){alert('현직 연봉과 이직 인상율을 모두 선택해주세요.');return}
   // [FIX] 기업 유형 미선택 검증
@@ -1523,6 +1524,7 @@ function compare(){
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
+  saveComparison();
 }
 
 // ━━ APP (navigation + init) ━━

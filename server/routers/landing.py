@@ -30,7 +30,9 @@ async def get_feed():
         """SELECT id, job_category, company_a_display, type_a,
                   company_b_display, type_b, headline, detail,
                   metric_val, metric_label, metric_type, created_at
-           FROM comparison_feed ORDER BY created_at DESC LIMIT 10"""
+           FROM comparison_feed
+           WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+           ORDER BY created_at DESC LIMIT 10"""
     )
     for r in rows:
         if r.get("created_at"):
