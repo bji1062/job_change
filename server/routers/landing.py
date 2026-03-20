@@ -36,7 +36,8 @@ async def get_feed():
     )
     for r in rows:
         if r.get("created_at"):
-            r["created_at"] = r["created_at"].isoformat()
+            from datetime import timezone
+            r["created_at"] = r["created_at"].replace(tzinfo=timezone.utc).isoformat()
     cache.set("landing_feed", rows, ttl=300)
     return rows
 

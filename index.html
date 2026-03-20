@@ -1592,14 +1592,18 @@ function renderFeed(data){
   const el=document.getElementById('feedList');if(!el)return;
   el.innerHTML=data.slice(0,10).map(f=>{
     const emoji=f.emoji||'💼',job=f.job_name||'',a=f.company_a_display,b=f.company_b_display;
-    let title=(f.headline||`${a} vs ${b}`).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
-    title=title.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
+    const raw=f.headline||`${a} vs ${b}`;
+    const dashIdx=raw.indexOf(' — ');
+    let vsTitle=(dashIdx>=0?raw.slice(0,dashIdx):raw).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
+    let desc=dashIdx>=0?raw.slice(dashIdx+3):'';
+    desc=desc.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
     const summary=f.summary||'',pv=f.pct_val||f.metric_val||'',pl=f.pct_label||f.metric_label||'',pt=f.pct_type||f.metric_type||'neu';
     return `<div class="result-item">
       <div class="ri-avatar">${emoji}</div>
       <div class="ri-body">
         <div class="ri-job">${job}</div>
-        <div class="ri-title">${title}</div>
+        <div class="ri-title">${vsTitle}</div>
+        ${desc?`<div class="ri-summary">${desc}</div>`:''}
         ${summary?`<div class="ri-summary">${summary}</div>`:''}
         <div class="ri-time">${timeAgo(f.created_at)}</div>
       </div>
