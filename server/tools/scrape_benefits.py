@@ -2,10 +2,18 @@
 """
 회사 복리후생 스크래핑 → SQL 파일 생성 도구
 
+Setup (별도 venv):
+  cd server/tools
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+  playwright install chromium
+  deactivate
+
 Usage:
-  python server/tools/scrape_benefits.py "삼성전자" --url "https://www.samsung-dxrecruit.com/benefit"
-  python server/tools/scrape_benefits.py "네이버" --url "https://recruit.navercorp.com/..." --id naver
-  python server/tools/scrape_benefits.py "현대자동차" --url "https://talent.hyundai.com/culture/benefit.hc" --type large --industry "자동차"
+  server/tools/.venv/bin/python server/tools/scrape_benefits.py "삼성전자" --url "https://www.samsung-dxrecruit.com/benefit"
+  server/tools/.venv/bin/python server/tools/scrape_benefits.py "네이버" --url "https://recruit.navercorp.com/..." --id naver
+  server/tools/.venv/bin/python server/tools/scrape_benefits.py "현대자동차" --url "https://talent.hyundai.com/culture/benefit.hc" --type large --industry "자동차"
 """
 import argparse
 import asyncio
