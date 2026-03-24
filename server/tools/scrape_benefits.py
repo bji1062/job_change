@@ -42,42 +42,43 @@ KNOWN_IDS = {
 }
 
 # ━━ 복지 키워드 → (ben_key, category) 매핑 ━━
+# 카테고리: financial, work_env, wellness, time, growth, family, life
 BENEFIT_KEYWORDS = [
-    # money
-    (r"식대|구내식당|중식|조식|석식", "meal", "money"),
-    (r"복지포인트|선택복지|카페테리아\s*포인트", "welfare_point", "money"),
-    (r"교통비|주차", "transport", "money"),
-    (r"경조사|경조금", "event", "money"),
-    (r"성과급|인센티브|보너스", "bonus", "money"),
-    (r"자사주|RSU|스톡옵션|주식", "stock", "money"),
-    (r"통신비", "telecom", "money"),
-    # health
-    (r"건강검진|종합검진", "health_check", "health"),
-    (r"의료비", "medical", "health"),
-    (r"단체보험|생명보험|상해보험", "insurance", "health"),
-    (r"심리상담|EAP|마음건강", "mental", "health"),
-    (r"피트니스|헬스장|체력단련|운동", "fitness", "health"),
-    (r"치과|한의원|부속의원|사내\s*병원", "clinic", "health"),
-    # housing
-    (r"주택.*대출|주택자금|사내대출|전세.*대출", "housing_loan", "housing"),
-    (r"기숙사|사택|숙소", "dormitory", "housing"),
-    # family
+    # ━━ financial (보상·금전) ━━
+    (r"복지\s*포인트|복리\s*포인트|선택.{0,2}복[리지]|카페테리아\s*포인트|업무\s*지원비|통신비", "welfare_point", "financial"),
+    (r"경조사|경조금|명절", "event", "financial"),
+    (r"성과급|인센티브|보너스", "bonus", "financial"),
+    (r"자사주|RSU|스톡옵션|주식\s*매입|주식\s*보상", "stock", "financial"),
+    (r"할인.*구매|임직원.*할인|사내.*매장|자사.*제품|서비스\s*이용권", "discount", "financial"),
+    (r"주택.*대출|주택자금|사내\s*대출|전세.*대출|대출.*이자|대출.*지원", "housing_loan", "financial"),
+    (r"기숙사|사택|숙소", "dormitory", "financial"),
+    # ━━ work_env (근무환경) ━━
+    (r"식대|식당|식사|중식|조식|석식|세\s*끼|카페|캔틴", "meal", "work_env"),
+    (r"교통비|주차|통근|셔틀", "transport", "work_env"),
+    (r"업무\s*기기|노트북|모니터|장비.*지원|가구|허먼밀러|스탠딩\s*데스크", "work_tools", "work_env"),
+    # ━━ wellness (건강·의료) ━━
+    (r"건강\s*검진|종합\s*검진|심리\s*검진", "health_check", "wellness"),
+    (r"의료비|의료.*보험|실손|진단비|의료.*상담", "medical", "wellness"),
+    (r"단체\s*보험|생명\s*보험|상해\s*보험", "insurance", "wellness"),
+    (r"심리\s*상담|EAP|마음\s*건강|심리\s*센터", "mental", "wellness"),
+    (r"피트니스|헬스장|체력단련|수영장|트레이너", "fitness", "wellness"),
+    (r"부속의원|사내\s*병원|치과|한의원|약국|물리\s*치료|재활|근골격|이비인후|비뇨", "clinic", "wellness"),
+    # ━━ time (시간·휴가) ━━
+    (r"리프레시|안식.*휴가|장기.*휴가|워케이션|휴가비|휴가.*지원금", "refresh_leave", "time"),
+    (r"유연.*근무|재택|원격|플렉스|자율\s*출퇴근|자율\s*근무|해외\s*근무", "flex_work", "time"),
+    (r"연차|휴직|단축\s*근무", "leave_general", "time"),
+    # ━━ growth (성장·커리어) ━━
+    (r"어학|외국어|영어", "lang", "growth"),
+    (r"사내\s*교육|직무\s*교육|교육\s*지원|외부\s*교육|컨퍼런스|학회|세미나|멘토링|온보딩", "edu_support", "growth"),
+    (r"사내\s*공모|OCC|근속.*기념|시상|Awards?|추천.*리워드|스카우트", "career", "growth"),
+    # ━━ family (가족) ━━
     (r"학자금|자녀.*교육", "child_edu", "family"),
-    (r"출산|육아|임신|보육|어린이집", "parenting", "family"),
-    (r"결혼|웨딩", "wedding", "family"),
-    # life
-    (r"통근.*버스|셔틀", "commute", "life"),
-    (r"동호회|동아리|사내.*클럽", "club", "life"),
+    (r"출산|육아|임신|보육|어린이집|난임|가족\s*돌봄", "parenting", "family"),
+    (r"결혼|웨딩|예식", "wedding", "family"),
+    # ━━ life (라이프스타일) ━━
+    (r"동호회|동아리|사내.*클럽|커뮤니티|활동비", "club", "life"),
     (r"도서|북카페|라이브러리", "library", "life"),
-    (r"여행|휴양|리조트|호텔|콘도", "resort", "life"),
-    (r"할인.*구매|임직원.*할인|사내.*매장", "discount", "life"),
-    # leave
-    (r"리프레시.*휴가|안식.*휴가|장기.*휴가", "refresh_leave", "leave"),
-    (r"유연.*근무|재택.*근무|원격.*근무|플렉스", "flex_work", "leave"),
-    (r"연차|휴가|휴직", "leave_general", "leave"),
-    # edu
-    (r"어학|외국어|영어", "lang", "edu"),
-    (r"자기.*개발|교육.*지원|직무.*교육|온라인.*강의", "edu_support", "edu"),
+    (r"여행|휴양|리조트|콘도|워터파크|테마파크|숙박.*지원", "resort", "life"),
 ]
 
 # ━━ 출력 경로 ━━
@@ -179,36 +180,89 @@ async def scrape_page(context, url: str, timeout: int = 30000, screenshot_path: 
         await page.close()
 
 
-def parse_benefits(raw_text: str, company_id: str) -> list[dict]:
-    """키워드 매칭으로 복리후생 항목 추출 (best-effort)"""
-    found = []
-    seen_keys = set()
-    lines = raw_text.split("\n")
+_NAV_RE = re.compile(
+    r"^(회사소개|사업부소개|직무소개|직무인터뷰|DX스토리|"
+    r"Copyright|©|\+82|e\.recruit|개인정보|이용약관|채용문의)"
+)
 
-    for line in lines:
+
+def segment_blocks(raw_text: str) -> list[dict]:
+    """텍스트를 {title, lines[]} 블록으로 구조화"""
+    blocks = []
+    current = None
+
+    for line in raw_text.split("\n"):
         line = line.strip()
-        if not line or len(line) < 2:
+        if not line or len(line) < 2 or _NAV_RE.match(line):
             continue
+
+        is_title = len(line) <= 30 and not line.endswith(('.', '다', '요'))
+
+        if is_title:
+            current = {"title": line, "lines": []}
+            blocks.append(current)
+        elif current:
+            current["lines"].append(line)
+        else:
+            current = {"title": line, "lines": []}
+            blocks.append(current)
+
+    return blocks
+
+
+def split_compound_line(line: str) -> list[str]:
+    """'부속의원, 치과, 한의원, 약국' → ['부속의원', '치과', '한의원', '약국']"""
+    parts = re.split(r'[,·⋅、]', line)
+    return [p.strip() for p in parts if len(p.strip()) >= 2]
+
+
+def parse_benefits(raw_text: str, company_id: str) -> list[dict]:
+    """블록 기반 키워드 매칭으로 복리후생 항목 추출"""
+    blocks = segment_blocks(raw_text)
+    found = []
+    seen_keys: set[str] = set()
+
+    for block in blocks:
+        full_text = block["title"] + " " + " ".join(block["lines"])
+
+        # 1) 블록 전체에 대해 키워드 매칭
+        matched_in_block: list[tuple[str, str, str]] = []
         for pattern, ben_key, category in BENEFIT_KEYWORDS:
             if ben_key in seen_keys:
                 continue
-            if re.search(pattern, line):
-                # 해당 라인을 복지명으로 사용 (최대 100자)
-                name = line[:100].strip()
-                found.append({
-                    "company_id": company_id,
-                    "ben_key": ben_key,
-                    "name": name,
-                    "val": 0,
-                    "category": category,
-                    "badge": "est",
-                    "note": None,
-                    "is_qualitative": True,
-                    "qual_text": line[:500] if len(line) > 100 else None,
-                    "sort_order": len(found) + 1,
-                })
-                seen_keys.add(ben_key)
-                break
+            if re.search(pattern, full_text, re.IGNORECASE):
+                matched_in_block.append((ben_key, category, pattern))
+
+        # 2) 복합 라인 분해 → 추가 매칭
+        for line in block["lines"]:
+            sub_items = split_compound_line(line)
+            if len(sub_items) >= 3:
+                for sub in sub_items:
+                    for pattern, ben_key, category in BENEFIT_KEYWORDS:
+                        if ben_key in seen_keys:
+                            continue
+                        if re.search(pattern, sub, re.IGNORECASE):
+                            if not any(m[0] == ben_key for m in matched_in_block):
+                                matched_in_block.append((ben_key, category, pattern))
+
+        # 3) 매칭 결과 등록
+        for ben_key, category, _ in matched_in_block:
+            if ben_key in seen_keys:
+                continue
+            name = block["title"][:100]
+            found.append({
+                "company_id": company_id,
+                "ben_key": ben_key,
+                "name": name,
+                "val": 0,
+                "category": category,
+                "badge": "est",
+                "note": None,
+                "is_qualitative": True,
+                "qual_text": " ".join(block["lines"])[:500] if block["lines"] else None,
+                "sort_order": len(found) + 1,
+            })
+            seen_keys.add(ben_key)
 
     return found
 
@@ -266,7 +320,7 @@ def generate_sql(
         lines.append(",\n".join(value_lines) + ";")
     else:
         lines.append("  -- [NOTE] 자동 파싱된 항목 없음 — raw 텍스트를 참고하여 수동 작성 필요")
-        lines.append("  ('placeholder', 'placeholder', 'placeholder', 0, 'money', 'est', NULL, FALSE, NULL, 0);")
+        lines.append("  ('placeholder', 'placeholder', 'placeholder', 0, 'financial', 'est', NULL, FALSE, NULL, 0);")
 
     return "\n".join(lines) + "\n"
 
