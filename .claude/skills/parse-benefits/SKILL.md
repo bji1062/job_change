@@ -1,7 +1,7 @@
 ---
 name: parse-benefits
 description: 스크래핑된 복지 텍스트(.txt)를 AI 파싱으로 SQL 파일 변환
-user_invocable: true
+user-invocable: true
 ---
 
 # /parse-benefits — 복지 텍스트 AI 파싱 → SQL 생성

@@ -1,7 +1,7 @@
 ---
 name: research-benefits
 description: 회사 복지 정보를 웹 검색으로 조사하여 DB에 저장
-user_invocable: true
+user-invocable: true
 ---
 
 # /research-benefits — 회사 복지 자동 조사
