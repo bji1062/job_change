@@ -751,9 +751,9 @@ function updateAuthUI(){
 }
 document.addEventListener('click',function(e){const d=document.getElementById('userDrop');if(d&&!e.target.closest('.l-user')&&!e.target.closest('.u-drop'))d.classList.remove('open')})
 async function saveComparison(){
-  if(!AUTH_TOKEN||!API_BASE)return;
+  if(!AUTH_TOKEN||!API_BASE){console.warn('[saveComparison] skip: no auth or api');return}
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
-  if(!tA||!tB)return;
+  if(!tA||!tB){console.warn('[saveComparison] skip: no type');return}
   const payload={
     company_a_name:matched.a?.name||document.getElementById('sA')?.value?.trim()||null,type_a:tA,
     salary_a_min:getSalRange().min,salary_a_max:getSalRange().max,
@@ -766,9 +766,11 @@ async function saveComparison(){
     priority_key:curPri,sacrifice_key:curSacrifice
   };
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
+  console.log('[saveComparison] sending:',Object.keys(payload).filter(k=>k.startsWith('feed_')).map(k=>k+':'+(payload[k]?'OK':'null')).join(', '));
   try{
     const r=await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
-    if(!r||r.error)console.error('[saveComparison] failed:',r);
+    if(r&&r.id){console.log('[saveComparison] saved id='+r.id)}
+    else{console.error('[saveComparison] failed:',r)}
   }catch(e){console.error('[saveComparison] error:',e)}
 }
 
