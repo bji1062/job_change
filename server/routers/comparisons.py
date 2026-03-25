@@ -85,7 +85,7 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
     except Exception:
         pass
     # Invalidate feed cache
-    cache.set("landing_feed", None, ttl=0)
+    cache.delete("landing_feed")
     return {"id": cid}
 
 @router.get("")

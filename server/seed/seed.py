@@ -372,6 +372,51 @@ def seed():
             desc_count += 1
     print(f"  question_scenarios: {desc_count}")
 
+    # 8. Popular cases (landing page)
+    POPULAR_CASES = [
+        ('company','쿠팡','large','대기업','네이버','large','대기업',
+         json.dumps(['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],ensure_ascii=False),
+         12341,847),
+        ('company','카카오','large','대기업','삼성전자','large','대기업',
+         json.dumps(['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],ensure_ascii=False),
+         9823,623),
+        ('company','토스','startup','핀테크','카카오뱅크','large','인터넷은행',
+         json.dumps(['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],ensure_ascii=False),
+         5432,298),
+        ('company','라인','large','글로벌 IT','카카오','large','대기업',
+         json.dumps(['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],ensure_ascii=False),
+         4821,245),
+        ('company','삼성전자','large','대기업','SK하이닉스','large','대기업',
+         json.dumps(['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],ensure_ascii=False),
+         4512,231),
+        ('company','배달의민족','large','플랫폼','당근','startup','플랫폼',
+         json.dumps(['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],ensure_ascii=False),
+         3987,198),
+        ('company','현대자동차','large','대기업','LG에너지솔루션','large','대기업',
+         json.dumps(['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],ensure_ascii=False),
+         3654,187),
+        ('company','네이버','large','대기업','구글코리아','foreign','외국계',
+         json.dumps(['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],ensure_ascii=False),
+         3421,176),
+        ('company','카카오','large','대기업','토스','startup','핀테크',
+         json.dumps(['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],ensure_ascii=False),
+         3198,165),
+        ('company','쿠팡','large','대기업','마켓컬리','startup','이커머스',
+         json.dumps(['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],ensure_ascii=False),
+         2876,142),
+    ]
+    pop_count = 0
+    for pc in POPULAR_CASES:
+        cur.execute(
+            """INSERT IGNORE INTO popular_cases
+               (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
+                points, view_count, comparison_count)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            pc,
+        )
+        pop_count += 1
+    print(f"  popular_cases: {pop_count}")
+
     cur.close()
     conn.close()
     print("\nSeed complete!")
