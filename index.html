@@ -751,9 +751,9 @@ function updateAuthUI(){
 }
 document.addEventListener('click',function(e){const d=document.getElementById('userDrop');if(d&&!e.target.closest('.l-user')&&!e.target.closest('.u-drop'))d.classList.remove('open')})
 async function saveComparison(){
-  if(!AUTH_TOKEN||!API_BASE){console.warn('[saveComparison] skip: no auth or api');return}
+  if(!AUTH_TOKEN||!API_BASE)throw new Error('로그인이 필요합니다 (AUTH_TOKEN='+(!!AUTH_TOKEN)+', API_BASE='+(!!API_BASE)+')');
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
-  if(!tA||!tB){console.warn('[saveComparison] skip: no type');return}
+  if(!tA||!tB)throw new Error('기업 유형이 선택되지 않았습니다');
   const payload={
     company_a_name:matched.a?.name||document.getElementById('sA')?.value?.trim()||null,type_a:tA,
     salary_a_min:getSalRange().min,salary_a_max:getSalRange().max,
@@ -766,12 +766,8 @@ async function saveComparison(){
     priority_key:curPri,sacrifice_key:curSacrifice
   };
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
-  console.log('[saveComparison] sending:',Object.keys(payload).filter(k=>k.startsWith('feed_')).map(k=>k+':'+(payload[k]?'OK':'null')).join(', '));
-  try{
-    const r=await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
-    if(r&&r.id){console.log('[saveComparison] saved id='+r.id)}
-    else{console.error('[saveComparison] failed:',r)}
-  }catch(e){console.error('[saveComparison] error:',e)}
+  const r=await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
+  if(!r||r.error)throw new Error('서버 응답 오류: '+(r?JSON.stringify(r):'null (HTTP 에러 — 브라우저 콘솔 확인)'));
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1525,10 +1521,11 @@ function compare(){
   if(curPri)_pts.push('<strong>'+pri.label+'</strong> 기준 비교 · '+(pfJob?pfJob.label+' 직무':'직무 미지정'));
   if(!_pts.length)_pts.push(nA+' vs '+nB+' 비교 결과');
   window._lastFeedData={feed_headline:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail:pri.label+' 기준 비교',feed_metric_val:_mVal,feed_metric_label:'총 보상 차이',feed_metric_type:_mType,feed_job_category:pfJob?pfJob.label:null,feed_points:_pts};
+  html+=`<div id="saveStatus" style="text-align:center;padding:.5rem;margin-top:.5rem;font-size:.75rem;color:var(--t4)">비교 결과 저장 중...</div>`;
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
-  saveComparison().catch(e=>console.error('[compare→save]',e));
+  saveComparison().then(()=>{const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
 }
 
 // ━━ APP (navigation + init) ━━
