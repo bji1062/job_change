@@ -56,9 +56,9 @@ async def upsert_benefits(company_id: str, items: list[BenefitUpsert]):
     if not comp:
         return {"error": "company not found"}
 
-    # est badge 항목만 삭제 (official 보존)
+    # 기존 복지 전체 삭제 후 재삽입 (중복 방지)
     await database.execute(
-        "DELETE FROM company_benefits WHERE company_id=%s AND badge='est'",
+        "DELETE FROM company_benefits WHERE company_id=%s",
         (company_id,),
     )
 
@@ -66,7 +66,11 @@ async def upsert_benefits(company_id: str, items: list[BenefitUpsert]):
         await database.execute(
             """INSERT INTO company_benefits
                (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON DUPLICATE KEY UPDATE
+               name=VALUES(name), val=VALUES(val), category=VALUES(category),
+               badge=VALUES(badge), note=VALUES(note), is_qualitative=VALUES(is_qualitative),
+               qual_text=VALUES(qual_text), sort_order=VALUES(sort_order)""",
             (company_id, b.key, b.name, b.val, b.cat, b.badge,
              b.note, b.qual, b.qualText, b.sortOrder or i),
         )
