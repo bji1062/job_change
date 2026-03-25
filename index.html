@@ -617,8 +617,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     <div class="cc-label"><span class="dot"></span> 현직</div>
     <div class="fd"><div class="fl">회사명</div><div class="sw"><input class="fi" id="sA" placeholder="회사명 검색 (예: CJ, 토스)" autocomplete="off" oninput="doSearch('a')" onfocus="doSearch('a')"><div class="sr" id="rA"></div></div><div class="mb" id="mA"><span>✓ DB 매칭 — 복리후생 자동 입력</span><button class="xb" onclick="clearM('a')">✕</button></div><div class="pb" id="pA"></div></div>
     <div class="fd"><div class="fl">기업 유형</div><select class="fs" id="tA" required onchange="onTypeChange('a')"><option value="" disabled selected>기업 유형 선택 (예: 대기업, 스타트업)</option><option value="large">대기업</option><option value="mid">중견기업</option><option value="public">공기업/공공기관</option><option value="startup">스타트업</option><option value="foreign">외국계</option><option value="freelance">프리랜서/계약직</option></select></div>
-    <div class="fd"><div class="fl">현재 연봉</div><select class="fs" id="salA" required onchange="calc()"><option value="" disabled selected>현재 연봉 구간 선택</option><option value="2000-3000">2,000 ~ 3,000만원</option><option value="3000-4000">3,000 ~ 4,000만원</option><option value="4000-5000">4,000 ~ 5,000만원</option><option value="5000-6000">5,000 ~ 6,000만원</option><option value="6000-7000">6,000 ~ 7,000만원</option><option value="7000-8000">7,000 ~ 8,000만원</option><option value="8000-9000">8,000 ~ 9,000만원</option><option value="9000-10000">9,000 ~ 10,000만원</option><option value="10000-12000">1억 ~ 1.2억</option><option value="15000-15000">1.5억 이상</option></select></div>
-    <div class="fd"><div class="fl">통근 편도 <span class="u">(분)</span></div><input class="fi mono" type="number" id="comA" placeholder="편도 통근 시간 (예: 50)" min="0" max="180" step="5" oninput="calc()"></div>
+    <div class="fd"><div class="fl">현재 연봉</div><select class="fs" id="salA" required onchange="calc();saveDraft()"><option value="" disabled selected>현재 연봉 구간 선택</option><option value="2000-3000">2,000 ~ 3,000만원</option><option value="3000-4000">3,000 ~ 4,000만원</option><option value="4000-5000">4,000 ~ 5,000만원</option><option value="5000-6000">5,000 ~ 6,000만원</option><option value="6000-7000">6,000 ~ 7,000만원</option><option value="7000-8000">7,000 ~ 8,000만원</option><option value="8000-9000">8,000 ~ 9,000만원</option><option value="9000-10000">9,000 ~ 10,000만원</option><option value="10000-12000">1억 ~ 1.2억</option><option value="15000-15000">1.5억 이상</option></select></div>
+    <div class="fd"><div class="fl">통근 편도 <span class="u">(분)</span></div><input class="fi mono" type="number" id="comA" placeholder="편도 통근 시간 (예: 50)" min="0" max="180" step="5" oninput="calc();saveDraft()"></div>
     <div class="tc"><span class="tc-b" id="tcbA">5,000</span><span class="tc-p">+</span><span class="tc-bn" id="tcnA">복지 0만</span><span class="tc-e">=</span><span class="tc-t" id="tctA">5,000만</span></div>
   </div>
 
@@ -627,7 +627,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     <div class="fd"><div class="fl">회사명</div><div class="sw"><input class="fi" id="sB" placeholder="회사명 검색 (예: CJ, 토스)" autocomplete="off" oninput="doSearch('b')" onfocus="doSearch('b')"><div class="sr" id="rB"></div></div><div class="mb" id="mB"><span>✓ DB 매칭 — 복리후생 자동 입력</span><button class="xb" onclick="clearM('b')">✕</button></div><div class="pb" id="pB"></div></div>
     <div class="fd"><div class="fl">기업 유형</div><select class="fs" id="tB" required onchange="onTypeChange('b')"><option value="" disabled selected>기업 유형 선택 (예: 대기업, 스타트업)</option><option value="large">대기업</option><option value="mid">중견기업</option><option value="public">공기업/공공기관</option><option value="startup">스타트업</option><option value="foreign">외국계</option><option value="freelance">프리랜서/계약직</option></select></div>
     <div class="fd"><div class="fl">이직 예상 연봉</div><div class="rate-result" id="rateResult"><span class="rate-result-placeholder">현직 연봉을 먼저 선택하면 예상 연봉이 계산됩니다.</span></div></div>
-    <div class="fd"><div class="fl">통근 편도 <span class="u">(분)</span></div><input class="fi mono" type="number" id="comB" placeholder="편도 통근 시간 (예: 40)" min="0" max="180" step="5" oninput="calc()"></div>
+    <div class="fd"><div class="fl">통근 편도 <span class="u">(분)</span></div><input class="fi mono" type="number" id="comB" placeholder="편도 통근 시간 (예: 40)" min="0" max="180" step="5" oninput="calc();saveDraft()"></div>
     <div class="tc"><span class="tc-b" id="tcbB">7,000</span><span class="tc-p">+</span><span class="tc-bn" id="tcnB">복지 0만</span><span class="tc-e">=</span><span class="tc-t" id="tctB">7,000만</span></div>
   </div>
   </div><!-- /.cards-row -->
@@ -1009,6 +1009,49 @@ let wsState={a:{ot:null,wage:null,remote:null,flex:null},b:{ot:null,wage:null,re
 let selectedRate=null;
 let pfShuffled=[],pfCur=0,pfAnswers=[],pfResult=null,pfJob=null;
 
+// ━━ DRAFT PERSISTENCE ━━
+let _draftTimer=null;
+function saveDraft(){
+  if(_draftTimer)clearTimeout(_draftTimer);
+  _draftTimer=setTimeout(()=>{
+    try{localStorage.setItem('jc_draft',JSON.stringify({
+      sA:document.getElementById('sA')?.value||'',sB:document.getElementById('sB')?.value||'',
+      tA:document.getElementById('tA')?.value||'',tB:document.getElementById('tB')?.value||'',
+      salA:document.getElementById('salA')?.value||'',
+      comA:document.getElementById('comA')?.value||'',comB:document.getElementById('comB')?.value||'',
+      selectedRate,wsState,benS,curPri,curSacrifice,pfResult,pfJob,
+      mA:matched.a?{id:matched.a.id,name:matched.a.name}:null,
+      mB:matched.b?{id:matched.b.id,name:matched.b.name}:null,
+      t:Date.now()
+    }))}catch{}
+  },300);
+}
+function clearDraft(){try{localStorage.removeItem('jc_draft')}catch{}}
+async function restoreDraft(){
+  try{
+    const raw=localStorage.getItem('jc_draft');if(!raw)return;
+    const d=JSON.parse(raw);
+    if(Date.now()-d.t>7*86400000){clearDraft();return}
+    if(d.tA)document.getElementById('tA').value=d.tA;
+    if(d.tB)document.getElementById('tB').value=d.tB;
+    if(d.salA)document.getElementById('salA').value=d.salA;
+    if(d.comA)document.getElementById('comA').value=d.comA;
+    if(d.comB)document.getElementById('comB').value=d.comB;
+    if(d.selectedRate!==null&&d.selectedRate!==undefined)setRate(d.selectedRate);
+    if(d.wsState){wsState=d.wsState;['a','b'].forEach(s=>['ot','wage','remote','flex'].forEach(f=>{const v=wsState[s][f];if(v){const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.toggle('on',b.dataset.v===v))}}))}
+    if(d.benS&&(d.benS.a?.length||d.benS.b?.length)){benS=d.benS;renderBen('a');renderBen('b')}
+    if(d.curPri)setPri(d.curPri);
+    if(d.curSacrifice)setSacrifice(d.curSacrifice);
+    if(d.pfResult)pfResult=d.pfResult;
+    if(d.pfJob)pfJob=d.pfJob;
+    if(d.mA?.id&&API_BASE){document.getElementById('sA').value=d.mA.name||'';await selComp('a',d.mA.id)}
+    else if(d.sA)document.getElementById('sA').value=d.sA;
+    if(d.mB?.id&&API_BASE){document.getElementById('sB').value=d.mB.name||'';await selComp('b',d.mB.id)}
+    else if(d.sB)document.getElementById('sB').value=d.sB;
+    calc();
+  }catch(e){console.error('[restoreDraft]',e)}
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  PROFILER ENGINE (v3 — job-aware)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1061,7 +1104,7 @@ function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];d
 function pfFinish(){
   const scores={};DIMS.forEach(d=>scores[d]=0);pfAnswers.forEach(a=>DIMS.forEach(d=>scores[d]+=(a.fx[d]||0)));
   let best=null,bestSim=-Infinity;PROFILES.forEach(p=>{const s=pfCos(scores,p.vec);if(s>bestSim){bestSim=s;best=p}});
-  pfResult={scores,profile:best,similarity:bestSim,job:pfJob};
+  pfResult={scores,profile:best,similarity:bestSim,job:pfJob};saveDraft();
   const allSim=PROFILES.map(p=>({p,s:pfCos(scores,p.vec)})).sort((a,b)=>b.s-a.s);
   const vals=DIMS.map(d=>scores[d]),mn=Math.min(...vals);const shifted={};DIMS.forEach(d=>shifted[d]=scores[d]-mn);const mx=Math.max(...DIMS.map(d=>shifted[d]),.01);const norm={};DIMS.forEach(d=>norm[d]=shifted[d]/mx);
   const sz=280,cx=sz/2,cy=sz/2,r=sz*.34,as=Math.PI*2/DIMS.length;const pt=(i,v)=>({x:cx+r*v*Math.cos(as*i-Math.PI/2),y:cy+r*v*Math.sin(as*i-Math.PI/2)});
@@ -1108,7 +1151,7 @@ function setWS(s,field,val){
   warn.classList.toggle('show',w.wage==='inclusive'&&(w.ot==='mid'||w.ot==='high'));
   info.classList.toggle('show',w.wage==='separate');
   renderOTCalc(s);
-  calc();
+  calc();saveDraft();
 }
 
 function renderOTCalc(s){
@@ -1153,6 +1196,7 @@ function setPri(k){
   document.getElementById('priSacSection').style.display='block';
   renderSacGrid();
   updateSelSummary();
+  saveDraft();
 }
 function renderSacGrid(){
   const grid=document.getElementById('sacGrid');
@@ -1170,6 +1214,7 @@ function setSacrifice(k){
     requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')));
   }
   updateSelSummary();
+  saveDraft();
 }
 function updateSelSummary(){
   const el=document.getElementById('priSelSummary');
@@ -1197,20 +1242,20 @@ async function selComp(s,id){document.getElementById(s==='a'?'rA':'rB').classLis
   setWS(s,'flex',ws.flex?'flexible':preset.flex||'none');
   const pr=document.getElementById('wsPr'+s.toUpperCase());
   pr.innerHTML=`✓ <strong>${esc(c.name)}</strong> DB 근무방식 + ${TYPE_LABELS[type]} 평균 추정 적용`;pr.classList.add('show');
-  calc()}
-function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc()}
-function onTypeChange(s){if(matched[s])return;const type=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[type];const label=TYPE_LABELS[type]||type;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,type);calc()}
+  calc();saveDraft()}
+function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc();saveDraft()}
+function onTypeChange(s){if(matched[s])return;const type=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[type];const label=TYPE_LABELS[type]||type;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,type);calc();saveDraft()}
 
 // ━━ BENEFITS ━━
 function renderBen(s){const list=benS[s];if(!list?.length){document.getElementById(s==='a'?'blA':'blB').innerHTML='';document.getElementById(s==='a'?'bcA':'bcB').textContent='';return}const grouped={};list.forEach((b,i)=>{if(!grouped[b.cat])grouped[b.cat]=[];grouped[b.cat].push({...b,idx:i})});let h='';for(const[cat,items]of Object.entries(grouped)){h+=`<div class="bg"><div class="bg-label">${CAT_LABELS[cat]||cat}</div>`;items.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('${s}',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}${b.note?`<span class="bi-note">${esc(b.note)}</span>`:''}</span><span class="bi-badge ${b.badge==='auto'?'b-auto':'b-est'}">${b.badge==='auto'?'DB':'추정'}</span><input type="number" class="bi-v" value="${b.val}" onchange="setBenV('${s}',${b.idx},this.value)"><span class="bi-u">만</span></div>`});h+='</div>'}const isPreset=!matched[s]&&list.length>0;if(isPreset){const type=document.getElementById(s==='a'?'tA':'tB').value;h+=`<div class="ben-note-preset">모든 금액은 <strong>${TYPE_LABELS[type]||type} 평균 추정치</strong>입니다. 실제 금액을 아는 항목만 수정하세요. 체크 해제 항목은 합산 제외.</div>`}document.getElementById(s==='a'?'blA':'blB').innerHTML=h;const ac=list.filter(b=>b.checked&&b.val>0).length;document.getElementById(s==='a'?'bcA':'bcB').textContent=isPreset?`(${ac}/${list.length}개 · 평균 추정)`:`(${ac}개 항목)`}
-function togBen(s,i,c){benS[s][i].checked=c;calc()}
-function setBenV(s,i,v){benS[s][i].val=Number(v)||0;calc()}
+function togBen(s,i,c){benS[s][i].checked=c;calc();saveDraft()}
+function setBenV(s,i,v){benS[s][i].val=Number(v)||0;calc();saveDraft()}
 function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.val;if(!b.qual)net+=b.val}});return{ben,net}}
 
 // ━━ Salary helpers ━━
 function getSalRange(){const v=document.getElementById('salA').value;if(!v)return{min:0,max:0,mid:0};const[lo,hi]=v.split('-').map(Number);return{min:lo,max:hi,mid:Math.round((lo+hi)/2)}}
 function getOfferRange(){const base=getSalRange();if(!base.min||selectedRate===null)return{min:0,max:0,mid:0};const mult=1+selectedRate/100;return{min:Math.round(base.min*mult),max:Math.round(base.max*mult),mid:Math.round(base.mid*mult)}}
-function setRate(r){selectedRate=r;document.querySelectorAll('.rate-chip').forEach(c=>c.classList.toggle('on',Number(c.dataset.rate)===r));updateRateResult();calc()}
+function setRate(r){selectedRate=r;document.querySelectorAll('.rate-chip').forEach(c=>c.classList.toggle('on',Number(c.dataset.rate)===r));updateRateResult();calc();saveDraft()}
 function updateRateResult(){const el=document.getElementById('rateResult');const base=getSalRange();if(!base.min){el.innerHTML=`<span class="rate-result-placeholder">현직 연봉을 먼저 선택하면 예상 연봉이 계산됩니다.</span>`;return}if(selectedRate===null){el.innerHTML=`<span class="rate-result-placeholder">인상율을 선택해주세요.</span>`;return}const offer=getOfferRange();const rateLabel=selectedRate===0?'동결':'+'+selectedRate+'%';el.innerHTML=`<div class="rate-result-calc"><span class="rate-result-range">${offer.min.toLocaleString()} ~ ${offer.max.toLocaleString()}만원</span><span class="rate-result-detail">현직 ${base.min.toLocaleString()}~${base.max.toLocaleString()} × ${rateLabel}</span></div>`}
 function fR(range){if(!range||!range.min)return'—';const f=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';return range.min===range.max?f(range.min):`${f(range.min)} ~ ${f(range.max)}`}
 function calc(){const salA=getSalRange(),salB=getOfferRange();const bA=getBenTotal('a'),bB=getBenTotal('b');
@@ -1548,7 +1593,7 @@ function compare(){
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
-  saveComparison().then(()=>{const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
+  saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
 }
 
 // ━━ APP (navigation + init) ━━
@@ -1678,6 +1723,7 @@ async function loadRefData(){
 }
 loadRefData();
 initPri();calc();
+restoreDraft();
 updateAuthUI();
 loadLanding();
 
