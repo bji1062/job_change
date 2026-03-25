@@ -706,9 +706,9 @@ async function apiFetch(path,opts={}){
     const h={'Content-Type':'application/json'};
     if(AUTH_TOKEN)h['Authorization']='Bearer '+AUTH_TOKEN;
     const r=await fetch(API_BASE+'/api/v1'+path,{...opts,headers:h});
-    if(!r.ok)return null;
+    if(!r.ok){console.error('[apiFetch]',opts.method||'GET',path,'→',r.status);try{const b=await r.text();if(b)console.error('[apiFetch body]',b.slice(0,500))}catch{};return null}
     return await r.json();
-  }catch{return null}
+  }catch(e){console.error('[apiFetch error]',path,e);return null}
 }
 function openAuth(){document.getElementById('authOverlay').classList.add('open');document.getElementById('authErr').textContent=''}
 function closeAuth(){document.getElementById('authOverlay').classList.remove('open')}
@@ -766,7 +766,10 @@ async function saveComparison(){
     priority_key:curPri,sacrifice_key:curSacrifice
   };
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
-  await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
+  try{
+    const r=await apiFetch('/comparisons',{method:'POST',body:JSON.stringify(payload)});
+    if(!r||r.error)console.error('[saveComparison] failed:',r);
+  }catch(e){console.error('[saveComparison] error:',e)}
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1523,7 +1526,7 @@ function compare(){
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
-  saveComparison();
+  saveComparison().catch(e=>console.error('[compare→save]',e));
 }
 
 // ━━ APP (navigation + init) ━━

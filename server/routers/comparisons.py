@@ -10,20 +10,28 @@ router = APIRouter()
 
 @router.post("")
 async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
-    cid = await database.execute(
-        """INSERT INTO comparisons
-           (user_id, company_a_name, type_a, salary_a_min, salary_a_max, commute_a,
-            work_style_a, benefits_a, company_b_name, type_b, salary_rate, commute_b,
-            work_style_b, benefits_b, priority_key, sacrifice_key)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        (user_id, req.company_a_name, req.type_a, req.salary_a_min, req.salary_a_max,
-         req.commute_a, json.dumps(req.work_style_a) if req.work_style_a else None,
-         json.dumps(req.benefits_a) if req.benefits_a else None,
-         req.company_b_name, req.type_b, req.salary_rate, req.commute_b,
-         json.dumps(req.work_style_b) if req.work_style_b else None,
-         json.dumps(req.benefits_b) if req.benefits_b else None,
-         req.priority_key, req.sacrifice_key),
-    )
+    try:
+        cid = await database.execute(
+            """INSERT INTO comparisons
+               (user_id, company_a_name, type_a, salary_a_min, salary_a_max, commute_a,
+                work_style_a, benefits_a, company_b_name, type_b, salary_rate, commute_b,
+                work_style_b, benefits_b, priority_key, sacrifice_key)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (user_id, req.company_a_name, req.type_a, req.salary_a_min, req.salary_a_max,
+             req.commute_a, json.dumps(req.work_style_a, ensure_ascii=False) if req.work_style_a else None,
+             json.dumps(req.benefits_a, ensure_ascii=False) if req.benefits_a else None,
+             req.company_b_name, req.type_b, req.salary_rate, req.commute_b,
+             json.dumps(req.work_style_b, ensure_ascii=False) if req.work_style_b else None,
+             json.dumps(req.benefits_b, ensure_ascii=False) if req.benefits_b else None,
+             req.priority_key, req.sacrifice_key),
+        )
+    except Exception as e:
+        print(f"[comparisons INSERT error] {e}")
+        traceback.print_exc()
+        return {"error": "comparison save failed"}
+    if not cid:
+        print(f"[comparisons] WARNING: cid is {cid!r}")
+        return {"error": "comparison save failed"}
     # Feed auto-generation
     if req.feed_headline:
         try:
@@ -37,8 +45,10 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
                  req.company_b_name or '이직처', req.type_b, req.feed_headline,
                  req.feed_detail, req.feed_metric_val, req.feed_metric_label,
                  req.feed_metric_type or 'neu'))
-        except Exception:
-            pass
+            print(f"[comparison_feed] INSERT done for comparison_id={cid}")
+        except Exception as e:
+            print(f"[comparison_feed error] {e}")
+            traceback.print_exc()
     # Auto-upsert into popular_cases
     print(f"[popular_cases] company_a={req.company_a_name!r}, company_b={req.company_b_name!r}")
     if req.company_a_name and req.company_b_name:
@@ -82,8 +92,8 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
         await database.execute(
             """INSERT INTO daily_stats (stat_date, comparison_count) VALUES (CURDATE(), 1)
                ON DUPLICATE KEY UPDATE comparison_count = comparison_count + 1""")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[daily_stats error] {e}")
     # Invalidate feed cache
     cache.delete("landing_feed")
     return {"id": cid}
