@@ -691,6 +691,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 </div>
 
 <script>
+// ━━ UTILS ━━
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+
 // ━━ API CLIENT ━━
 const API_BASE=(location.protocol==='file:')?'':location.origin;
 let AUTH_TOKEN=localStorage.getItem('jc_token')||null;
@@ -1159,7 +1162,7 @@ function updateSelSummary(){
 function renderPriPreview(k){const pv=PRI_PREVIEW[k],pri=PRIORITIES.find(p=>p.key===k);if(!pv||!pri)return;const el=document.getElementById('priPreview'),inner=document.getElementById('priPvInner');inner.innerHTML=`<div class="pri-pv-head"><span class="pri-pv-icon">${pri.icon}</span><div class="pri-pv-title"><span>${pv.title}</span>을 최우선으로<br>비교하겠습니다.</div></div><div class="pri-pv-checks">${pv.checks.map(c=>`<div class="pri-pv-check"><span class="pri-pv-check-icon">✓</span><span>${c}</span></div>`).join('')}</div><div class="pri-pv-tip"><span class="pri-pv-tip-icon">📌</span><span>${pv.tip}</span></div>`;el.classList.remove('open');requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')))}
 
 // ━━ SEARCH ━━
-function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}','${c.id}')"><div class="si-logo">${c.logo||c.name[0]}</div><div class="si-info"><div class="si-name">${c.name}</div><div class="si-meta">${c.industry||''}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
+function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}','${esc(c.id)}')"><div class="si-logo">${esc(c.logo||c.name[0])}</div><div class="si-info"><div class="si-name">${esc(c.name)}</div><div class="si-meta">${esc(c.industry||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
 function doSearch(s){const q=document.getElementById(s==='a'?'sA':'sB').value.trim();const el=document.getElementById(s==='a'?'rA':'rB');if(q.length<1){el.classList.remove('open');return}if(!API_BASE){const ql=q.toLowerCase();const m=DB.filter(c=>c.name.toLowerCase().includes(ql)||(c.aliases||[]).some(a=>a.toLowerCase().includes(ql)));_renderSR(s,el,m);return}clearTimeout(_searchTimers[s]);el.innerHTML='<div class="sr-empty">검색 중...</div>';el.classList.add('open');_searchTimers[s]=setTimeout(async()=>{const r=await apiFetch('/companies/search?q='+encodeURIComponent(q));_renderSR(s,el,r||[])},300)}
 async function selComp(s,id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c={...raw,workStyle:raw.work_style||{},benefits:(raw.benefits||[]).map(b=>({...b,qual:!!b.qual}))}}else{c=DB.find(x=>x.id===id);if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.name;document.getElementById(s==='a'?'tA':'tB').value=c.type;const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:b.val>0}));renderBen(s);
   const ws=c.workStyle||{};const type=c.type;
@@ -1169,13 +1172,13 @@ async function selComp(s,id){document.getElementById(s==='a'?'rA':'rB').classLis
   setWS(s,'remote',ws.remote&&ws.unlimitedPTO?'free':ws.remote?'hybrid':preset.remote||'none');
   setWS(s,'flex',ws.flex?'flexible':preset.flex||'none');
   const pr=document.getElementById('wsPr'+s.toUpperCase());
-  pr.innerHTML=`✓ <strong>${c.name}</strong> DB 근무방식 + ${TYPE_LABELS[type]} 평균 추정 적용`;pr.classList.add('show');
+  pr.innerHTML=`✓ <strong>${esc(c.name)}</strong> DB 근무방식 + ${TYPE_LABELS[type]} 평균 추정 적용`;pr.classList.add('show');
   calc()}
 function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc()}
 function onTypeChange(s){if(matched[s])return;const type=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[type];const label=TYPE_LABELS[type]||type;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,type);calc()}
 
 // ━━ BENEFITS ━━
-function renderBen(s){const list=benS[s];if(!list?.length){document.getElementById(s==='a'?'blA':'blB').innerHTML='';document.getElementById(s==='a'?'bcA':'bcB').textContent='';return}const grouped={};list.forEach((b,i)=>{if(!grouped[b.cat])grouped[b.cat]=[];grouped[b.cat].push({...b,idx:i})});let h='';for(const[cat,items]of Object.entries(grouped)){h+=`<div class="bg"><div class="bg-label">${CAT_LABELS[cat]||cat}</div>`;items.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('${s}',${b.idx},this.checked)"><span class="bi-n">${b.name}${b.note?`<span class="bi-note">${b.note}</span>`:''}</span><span class="bi-badge ${b.badge==='auto'?'b-auto':'b-est'}">${b.badge==='auto'?'DB':'추정'}</span><input type="number" class="bi-v" value="${b.val}" onchange="setBenV('${s}',${b.idx},this.value)"><span class="bi-u">만</span></div>`});h+='</div>'}const isPreset=!matched[s]&&list.length>0;if(isPreset){const type=document.getElementById(s==='a'?'tA':'tB').value;h+=`<div class="ben-note-preset">모든 금액은 <strong>${TYPE_LABELS[type]||type} 평균 추정치</strong>입니다. 실제 금액을 아는 항목만 수정하세요. 체크 해제 항목은 합산 제외.</div>`}document.getElementById(s==='a'?'blA':'blB').innerHTML=h;const ac=list.filter(b=>b.checked&&b.val>0).length;document.getElementById(s==='a'?'bcA':'bcB').textContent=isPreset?`(${ac}/${list.length}개 · 평균 추정)`:`(${ac}개 항목)`}
+function renderBen(s){const list=benS[s];if(!list?.length){document.getElementById(s==='a'?'blA':'blB').innerHTML='';document.getElementById(s==='a'?'bcA':'bcB').textContent='';return}const grouped={};list.forEach((b,i)=>{if(!grouped[b.cat])grouped[b.cat]=[];grouped[b.cat].push({...b,idx:i})});let h='';for(const[cat,items]of Object.entries(grouped)){h+=`<div class="bg"><div class="bg-label">${CAT_LABELS[cat]||cat}</div>`;items.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('${s}',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}${b.note?`<span class="bi-note">${esc(b.note)}</span>`:''}</span><span class="bi-badge ${b.badge==='auto'?'b-auto':'b-est'}">${b.badge==='auto'?'DB':'추정'}</span><input type="number" class="bi-v" value="${b.val}" onchange="setBenV('${s}',${b.idx},this.value)"><span class="bi-u">만</span></div>`});h+='</div>'}const isPreset=!matched[s]&&list.length>0;if(isPreset){const type=document.getElementById(s==='a'?'tA':'tB').value;h+=`<div class="ben-note-preset">모든 금액은 <strong>${TYPE_LABELS[type]||type} 평균 추정치</strong>입니다. 실제 금액을 아는 항목만 수정하세요. 체크 해제 항목은 합산 제외.</div>`}document.getElementById(s==='a'?'blA':'blB').innerHTML=h;const ac=list.filter(b=>b.checked&&b.val>0).length;document.getElementById(s==='a'?'bcA':'bcB').textContent=isPreset?`(${ac}/${list.length}개 · 평균 추정)`:`(${ac}개 항목)`}
 function togBen(s,i,c){benS[s][i].checked=c;calc()}
 function setBenV(s,i,v){benS[s][i].val=Number(v)||0;calc()}
 function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.val;if(!b.qual)net+=b.val}});return{ben,net}}
@@ -1565,16 +1568,17 @@ function renderPopular(data){
   const grid=document.getElementById('popGrid');if(!grid)return;
   const filtered=(_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter)).slice(0,10);
   const tagMap={company:'🏢 회사 직접 비교',scenario:'🔀 시나리오'};
-  grid.innerHTML=filtered.map(c=>{
+  grid.innerHTML=filtered.map((c,i)=>{
     const tag=tagMap[c.case_type]||'비교';
-    const pts=(c.points||[]).map(p=>`<div class="pc-point">• ${p}</div>`).join('');
+    const pts=(c.points||[]).map(p=>{const s=esc(String(p));return`<div class="pc-point">• ${s.replace(/&lt;strong&gt;/g,'<strong>').replace(/&lt;\/strong&gt;/g,'</strong>')}</div>`}).join('');
     const views=c.view_count?'📊 '+(c.view_count).toLocaleString()+'회':'';
-    const safeJson=JSON.stringify(c).replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    return `<div class="pop-card type-${c.case_type}" onclick='startFromCase(${safeJson})'>
+    const ctype=esc(c.case_type);
+    return `<div class="pop-card type-${ctype}" data-pop-idx="${i}">
       <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
-      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${c.title_a}</span><span class="pc-sub">${c.sub_a||''}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${c.title_b}</span><span class="pc-sub">${c.sub_b||''}</span></div></div>
+      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.title_a)}</span><span class="pc-sub">${esc(c.sub_a||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.title_b)}</span><span class="pc-sub">${esc(c.sub_b||'')}</span></div></div>
       <div class="pc-points">${pts}</div>
     </div>`}).join('');
+  grid.onclick=e=>{const card=e.target.closest('[data-pop-idx]');if(!card)return;startFromCase(filtered[Number(card.dataset.popIdx)])};
 }
 
 function filterPop(type,btn){
@@ -1587,13 +1591,13 @@ function filterPop(type,btn){
 function renderFeed(data){
   const el=document.getElementById('feedList');if(!el)return;
   el.innerHTML=data.slice(0,10).map(f=>{
-    const emoji=f.emoji||'💼',job=f.job_name||'',a=f.company_a_display,b=f.company_b_display;
-    const raw=f.headline||`${a} vs ${b}`;
+    const emoji=esc(f.emoji||'💼'),job=esc(f.job_name||''),a=esc(f.company_a_display||''),b=esc(f.company_b_display||'');
+    const raw=esc(f.headline||`${f.company_a_display||''} vs ${f.company_b_display||''}`);
     const dashIdx=raw.indexOf(' — ');
     let vsTitle=(dashIdx>=0?raw.slice(0,dashIdx):raw).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
     let desc=dashIdx>=0?raw.slice(dashIdx+3):'';
     desc=desc.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
-    const summary=f.summary||'',pv=f.pct_val||f.metric_val||'',pl=f.pct_label||f.metric_label||'',pt=f.pct_type||f.metric_type||'neu';
+    const summary=esc(f.summary||''),pv=esc(f.pct_val||f.metric_val||''),pl=esc(f.pct_label||f.metric_label||''),pt=/^(up|down|neu)$/.test(f.pct_type||f.metric_type||'')?f.pct_type||f.metric_type:'neu';
     return `<div class="result-item">
       <div class="ri-avatar">${emoji}</div>
       <div class="ri-body">
