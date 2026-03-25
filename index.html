@@ -755,11 +755,11 @@ async function saveComparison(){
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
   if(!tA||!tB)return;
   const payload={
-    company_a_name:matched.a?.name||null,type_a:tA,
+    company_a_name:matched.a?.name||document.getElementById('sA')?.value?.trim()||null,type_a:tA,
     salary_a_min:getSalRange().min,salary_a_max:getSalRange().max,
     commute_a:parseInt(document.getElementById('comA')?.value)||0,
     work_style_a:wsState.a,benefits_a:benS.a.filter(b=>b.checked),
-    company_b_name:matched.b?.name||null,type_b:tB,
+    company_b_name:matched.b?.name||document.getElementById('sB')?.value?.trim()||null,type_b:tB,
     salary_rate:selectedRate,
     commute_b:parseInt(document.getElementById('comB')?.value)||0,
     work_style_b:wsState.b,benefits_b:benS.b.filter(b=>b.checked),
@@ -1591,13 +1591,13 @@ function filterPop(type,btn){
 function renderFeed(data){
   const el=document.getElementById('feedList');if(!el)return;
   el.innerHTML=data.slice(0,10).map(f=>{
-    const emoji=esc(f.emoji||'💼'),job=esc(f.job_name||''),a=esc(f.company_a_display||''),b=esc(f.company_b_display||'');
+    const emoji=esc(f.emoji||'💼'),job=esc(f.job_name||f.job_category||''),a=esc(f.company_a_display||''),b=esc(f.company_b_display||'');
     const raw=esc(f.headline||`${f.company_a_display||''} vs ${f.company_b_display||''}`);
     const dashIdx=raw.indexOf(' — ');
     let vsTitle=(dashIdx>=0?raw.slice(0,dashIdx):raw).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
     let desc=dashIdx>=0?raw.slice(dashIdx+3):'';
     desc=desc.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
-    const summary=esc(f.summary||''),pv=esc(f.pct_val||f.metric_val||''),pl=esc(f.pct_label||f.metric_label||''),pt=/^(up|down|neu)$/.test(f.pct_type||f.metric_type||'')?f.pct_type||f.metric_type:'neu';
+    const summary=esc(f.summary||f.detail||''),pv=esc(f.pct_val||f.metric_val||''),pl=esc(f.pct_label||f.metric_label||''),pt=/^(up|down|neu)$/.test(f.pct_type||f.metric_type||'')?f.pct_type||f.metric_type:'neu';
     return `<div class="result-item">
       <div class="ri-avatar">${emoji}</div>
       <div class="ri-body">
