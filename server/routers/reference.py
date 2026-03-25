@@ -25,47 +25,60 @@ async def get_all():
         r["checked"] = bool(r["checked"])
         ben_presets.setdefault(tid, []).append(r)
 
-    # Companies (brief)
+    # Companies — single query
     companies = await database.fetch_all(
         "SELECT id, name, type_id AS type, industry, logo, work_style FROM companies"
     )
     for c in companies:
         if isinstance(c.get("work_style"), str):
             c["work_style"] = json.loads(c["work_style"])
-        # load aliases
-        aliases = await database.fetch_all(
-            "SELECT alias FROM company_aliases WHERE company_id=%s", (c["id"],)
-        )
-        c["aliases"] = [a["alias"] for a in aliases]
-        # load benefits
-        bens = await database.fetch_all(
-            """SELECT ben_key AS `key`, name, val, category AS cat, badge,
-                      note, is_qualitative AS qual, qual_text AS qualText
-               FROM company_benefits WHERE company_id=%s ORDER BY sort_order""",
-            (c["id"],),
-        )
-        c["benefits"] = bens
 
-    # Profiles
+    # Aliases — batch (1 query instead of N)
+    all_aliases = await database.fetch_all("SELECT company_id, alias FROM company_aliases")
+    alias_map = {}
+    for a in all_aliases:
+        alias_map.setdefault(a["company_id"], []).append(a["alias"])
+
+    # Benefits — batch (1 query instead of N)
+    all_bens = await database.fetch_all(
+        """SELECT company_id, ben_key AS `key`, name, val, category AS cat, badge,
+                  note, is_qualitative AS qual, qual_text AS qualText
+           FROM company_benefits ORDER BY sort_order"""
+    )
+    ben_map = {}
+    for b in all_bens:
+        cid = b.pop("company_id")
+        ben_map.setdefault(cid, []).append(b)
+
+    for c in companies:
+        c["aliases"] = alias_map.get(c["id"], [])
+        c["benefits"] = ben_map.get(c["id"], [])
+
+    # Profiles — single query
     profiles = await database.fetch_all("SELECT * FROM profiles")
     for p in profiles:
         if isinstance(p.get("vec"), str):
             p["vec"] = json.loads(p["vec"])
-        # load job fits
-        fits = await database.fetch_all(
-            "SELECT scenario, fit, caution FROM profile_job_fits WHERE profile_id=%s", (p["id"],)
-        )
-        p["jobFit"] = {f["scenario"]: {"fit": f["fit"], "caution": f["caution"]} for f in fits}
 
-    # Job groups
+    # Profile job fits — batch (1 query instead of 8)
+    all_fits = await database.fetch_all("SELECT profile_id, scenario, fit, caution FROM profile_job_fits")
+    fit_map = {}
+    for f in all_fits:
+        fit_map.setdefault(f["profile_id"], {})[f["scenario"]] = {"fit": f["fit"], "caution": f["caution"]}
+    for p in profiles:
+        p["jobFit"] = fit_map.get(p["id"], {})
+
+    # Job groups + jobs — batch (1 query instead of 5)
     groups = await database.fetch_all("SELECT * FROM job_groups ORDER BY sort_order")
+    all_jobs = await database.fetch_all("SELECT id, group_id, label, icon, scenario FROM jobs ORDER BY sort_order")
+    job_map = {}
+    for j in all_jobs:
+        gid = j.pop("group_id")
+        job_map.setdefault(gid, []).append(j)
     for g in groups:
-        jobs = await database.fetch_all(
-            "SELECT id, label, icon, scenario FROM jobs WHERE group_id=%s ORDER BY sort_order", (g["id"],)
-        )
-        g["jobs"] = jobs
+        g["jobs"] = job_map.get(g["id"], [])
 
-    # Profiler questions
+    # Profiler questions — single query
     questions = await database.fetch_all("SELECT * FROM profiler_questions ORDER BY id")
     for q in questions:
         if isinstance(q.get("option_a_fx"), str):
@@ -73,7 +86,7 @@ async def get_all():
         if isinstance(q.get("option_b_fx"), str):
             q["option_b_fx"] = json.loads(q["option_b_fx"])
 
-    # Question scenario descriptions
+    # Question scenario descriptions — single query
     q_desc_rows = await database.fetch_all("SELECT * FROM question_scenarios ORDER BY question_id")
     q_desc = {}
     for r in q_desc_rows:
