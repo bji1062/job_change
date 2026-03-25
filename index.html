@@ -706,12 +706,13 @@ async function apiFetch(path,opts={}){
     const h={'Content-Type':'application/json'};
     if(AUTH_TOKEN)h['Authorization']='Bearer '+AUTH_TOKEN;
     const r=await fetch(API_BASE+'/api/v1'+path,{...opts,headers:h});
-    if(!r.ok){console.error('[apiFetch]',opts.method||'GET',path,'→',r.status);try{const b=await r.text();if(b)console.error('[apiFetch body]',b.slice(0,500))}catch{};return null}
+    if(r.status===401){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();return null}
+    if(!r.ok)return null;
     return await r.json();
-  }catch(e){console.error('[apiFetch error]',path,e);return null}
+  }catch{return null}
 }
 function openAuth(){document.getElementById('authOverlay').classList.add('open');document.getElementById('authErr').textContent=''}
-function closeAuth(){document.getElementById('authOverlay').classList.remove('open')}
+function closeAuth(){document.getElementById('authOverlay').classList.remove('open');if(window._saveRetry){window._saveRetry();window._saveRetry=null}}
 function toggleAuthMode(){
   authIsRegister=!authIsRegister;
   document.getElementById('authTitle').textContent=authIsRegister?'회원가입':'로그인';
@@ -741,6 +742,7 @@ async function submitAuth(){
   AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name};
   localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
   updateAuthUI();closeAuth();
+  if(window._saveRetry){window._saveRetry();window._saveRetry=null}
 }
 function logout(){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI()}
 function toggleUserDrop(){const d=document.getElementById('userDrop');d.classList.toggle('open')}
@@ -751,7 +753,7 @@ function updateAuthUI(){
 }
 document.addEventListener('click',function(e){const d=document.getElementById('userDrop');if(d&&!e.target.closest('.l-user')&&!e.target.closest('.u-drop'))d.classList.remove('open')})
 async function saveComparison(){
-  if(!AUTH_TOKEN||!API_BASE)throw new Error('로그인 필요 (token='+(!!AUTH_TOKEN)+', api='+(!!API_BASE)+')');
+  if(!AUTH_TOKEN||!API_BASE)throw new Error('로그인이 필요합니다');
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
   if(!tA||!tB)throw new Error('기업 유형 미선택');
   const payload={
@@ -766,11 +768,29 @@ async function saveComparison(){
     priority_key:curPri,sacrifice_key:curSacrifice
   };
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
-  const h={'Content-Type':'application/json','Authorization':'Bearer '+AUTH_TOKEN};
-  const resp=await fetch(API_BASE+'/api/v1/comparisons',{method:'POST',headers:h,body:JSON.stringify(payload)});
-  if(!resp.ok){const body=await resp.text().catch(()=>'');throw new Error('HTTP '+resp.status+': '+body.slice(0,200))}
-  const r=await resp.json();
-  if(!r||r.error)throw new Error('서버 오류: '+JSON.stringify(r));
+  const body=JSON.stringify(payload);
+  const doSave=async()=>{
+    const h={'Content-Type':'application/json','Authorization':'Bearer '+AUTH_TOKEN};
+    const resp=await fetch(API_BASE+'/api/v1/comparisons',{method:'POST',headers:h,body});
+    if(resp.status===401){
+      AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();
+      throw new Error('TOKEN_EXPIRED');
+    }
+    if(!resp.ok){const b=await resp.text().catch(()=>'');throw new Error('HTTP '+resp.status+': '+b.slice(0,200))}
+    return await resp.json();
+  };
+  try{
+    const r=await doSave();
+    if(!r||r.error)throw new Error('서버 오류: '+JSON.stringify(r));
+  }catch(e){
+    if(e.message==='TOKEN_EXPIRED'){
+      // 토큰 만료 → 재로그인 후 자동 재시도
+      await new Promise(resolve=>{window._saveRetry=resolve;openAuth()});
+      if(!AUTH_TOKEN)throw new Error('로그인이 취소되었습니다');
+      const r=await doSave();
+      if(!r||r.error)throw new Error('서버 오류: '+JSON.stringify(r));
+    } else throw e;
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
