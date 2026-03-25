@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS company_benefits (
   is_qualitative BOOLEAN DEFAULT FALSE COMMENT '정성적 복지 여부 (TRUE: 금액 환산 불가)',
   qual_text VARCHAR(500) COMMENT '정성적 복지 상세 텍스트',
   sort_order SMALLINT DEFAULT 0 COMMENT '표시 정렬 순서',
-  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_company_ben (company_id, ben_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS benefit_presets (
