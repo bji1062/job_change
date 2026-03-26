@@ -6,7 +6,9 @@
 # ━━ KOSPI TOP 100 (우선주/중복 제외) ━━
 
 server/tools/.venv/bin/python server/tools/scrape_benefits.py "삼성전자" --url "https://www.samsung-dxrecruit.com/benefit" --raw-only
-server/tools/.venv/bin/python server/tools/scrape_benefits.py "SK하이닉스" --url "https://recruit.skhynix.com/servlet/reco_welfare.view" --raw-only
+# SK하이닉스: talent.skhynix.com 타임아웃 시 아래 대체 URL 사용
+# 대체: server/tools/.venv/bin/python server/tools/scrape_benefits.py "SK하이닉스" --url "https://recruit.skhynix.com/servlet/reco_welfare.view" --raw-only
+server/tools/.venv/bin/python server/tools/scrape_benefits.py "SK하이닉스" --url "https://talent.skhynix.com/hub/ko/culture/welfare" --raw-only
 server/tools/.venv/bin/python server/tools/scrape_benefits.py "LG에너지솔루션" --url "https://www.lgensol.com/kr/career-recruit" --raw-only
 server/tools/.venv/bin/python server/tools/scrape_benefits.py "삼성바이오로직스" --url "https://samsungbiologics.com/careers/apply/how-to-apply" --raw-only
 server/tools/.venv/bin/python server/tools/scrape_benefits.py "현대자동차" --url "https://talent.hyundai.com/" --raw-only
