@@ -80,44 +80,6 @@ async def increment_view(case_id: int):
     cache.delete("landing_popular")
     return {"view_count": int(row["view_count"]) if row else 0}
 
-@router.get("/popular/debug")
-async def debug_popular():
-    """Diagnostic endpoint — check popular_cases table status"""
-    result = {}
-    # 1. Count rows
-    try:
-        row = await database.fetch_one("SELECT COUNT(*) AS cnt FROM popular_cases")
-        result["total_rows"] = int(row["cnt"]) if row else 0
-    except Exception as e:
-        result["total_rows_error"] = str(e)
-    # 2. Show all rows (basic info)
-    try:
-        rows = await database.fetch_all(
-            "SELECT id, title_a, title_b, view_count, comparison_count, is_active FROM popular_cases ORDER BY id DESC LIMIT 20"
-        )
-        result["rows"] = rows
-    except Exception as e:
-        result["rows_error"] = str(e)
-    # 3. Test INSERT + DELETE
-    try:
-        test_points = json.dumps(["test"], ensure_ascii=False)
-        tid = await database.execute(
-            """INSERT INTO popular_cases
-               (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
-                points, view_count, comparison_count)
-               VALUES ('company',%s,%s,%s,%s,%s,%s,%s,0,1)""",
-            ("__TEST_A__", "large", "테스트", "__TEST_B__", "startup", "테스트", test_points))
-        result["test_insert"] = {"success": True, "id": tid}
-        await database.execute("DELETE FROM popular_cases WHERE id=%s", (tid,))
-        result["test_cleanup"] = True
-    except Exception as e:
-        result["test_insert_error"] = str(e)
-    # 4. Cache status
-    cached = cache.get("landing_popular")
-    result["cache_status"] = "hit" if cached is not None else "miss"
-    result["cache_data_len"] = len(cached) if cached else 0
-    return result
-
 @router.post("/ping")
 async def ping(req: PingReq):
     _active_visitors[req.client_id] = time.time()
