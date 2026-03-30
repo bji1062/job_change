@@ -261,3 +261,10 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 데이터 수집: /batch-benefits → /parse-benefits 또는 /research-benefits (반복)
 배포 전: /test → /audit full → /deploy
 ```
+
+### Hooks (자동 협업)
+
+- **SessionStart**: 세션 시작 시 `<project-status>` 태그로 프로젝트 상태 자동 주입 (브랜치, 최근 커밋, 복지 데이터 진행률)
+- **PostToolUse(Edit|Write)**: 파일 수정 후 `<next-step>` 태그로 다음 단계 자동 제안
+
+Hooks가 `<next-step>` 태그를 주입하면, 해당 제안을 사용자에게 안내한다.

@@ -10,7 +10,33 @@ user-invocable: true
 
 ## 실행 단계
 
-### 1단계: 작업 유형 판별
+### 1단계: 모드 판별
+
+| 호출 | 동작 |
+|------|------|
+| `/deploy` | 인프라 전체 현황 리포트 |
+| `/deploy {작업}` | 해당 작업 수행 |
+
+### 2단계a: 현황 리포트 (`/deploy` — 인자 없음)
+
+다음을 **병렬**로 읽습니다:
+1. `Glob "infra/*.tf"` → Terraform 파일 목록
+2. `Read server/deploy/nginx.conf` → Nginx 설정
+3. `Read server/deploy/jobchoice.service` → systemd 설정
+4. `Read server/deploy/my.cnf` → MySQL 설정
+
+리포트 형식:
+```
+## 인프라 현황
+| 컴포넌트 | 상태 | 설정 |
+|----------|------|------|
+| Terraform | ✅ | ARM 2 OCPU, 12GB, 춘천 |
+| Nginx | ⚠️ | SSL 있음, 보안 헤더 없음 |
+| systemd | ✅ | 자동 재시작 설정됨 |
+| MySQL | ✅ | 6GB RAM 최적화 |
+```
+
+### 2단계b: 작업 수행 (`/deploy {작업}`)
 
 | 유형 | 키워드 | 대상 파일 |
 |------|--------|----------|
@@ -20,13 +46,7 @@ user-invocable: true
 | MySQL | DB 설정, 튜닝, 백업 | `server/deploy/my.cnf` |
 | 환경변수 | env, 설정 | `server/.env.example` |
 
-### 2단계: 현재 설정 읽기
-
 변경 대상 파일을 **반드시** Read한 뒤 수정합니다.
-
-### 3단계: 구현
-
-각 유형에 맞는 수정 수행.
 
 ### 4단계: 완료 출력
 
