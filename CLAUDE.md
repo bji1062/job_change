@@ -262,6 +262,10 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 배포 전: /test → /audit full → /deploy
 ```
 
+CLAUDE.md의 Agent Team 테이블은 사용자 안내용입니다. 실제 구현은:
+- **Agents** (`.claude/agents/*.md`): `fe`, `be`, `test`, `audit`, `team-status`, `deploy` — 자율 실행, 독립 컨텍스트
+- **Skills** (`.claude/skills/*/SKILL.md`): `batch-benefits`, `research-benefits`, `parse-benefits` — 사용자 확인 필요
+
 ### Hooks (자동 협업)
 
 - **SessionStart**: 세션 시작 시 `<project-status>` 태그로 프로젝트 상태 자동 주입 (브랜치, 최근 커밋, 복지 데이터 진행률)
