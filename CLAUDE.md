@@ -237,3 +237,27 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 - Company type (`large`, `startup`, `mid`, `foreign`, `public`, `freelance`) affects stability scores, growth rates, benefit presets
 - Backend SQL uses `%s` placeholders (aiomysql) — never use f-strings for queries
 - JWT token stored in `localStorage` as `jc_token` — frontend reads on init
+
+## Agent Team
+
+프로젝트 전용 에이전트 팀 (`.claude/skills/`). 각 스킬은 `/명령어`로 호출합니다.
+
+| 스킬 | 역할 | 호출 예시 |
+|------|------|----------|
+| `/team-status` | 프로젝트 현황 + 다음 작업 추천 | `/team-status` |
+| `/fe` | 프론트엔드 (index.html) 개발 | `/fe OT 계산 UI 구현` |
+| `/be` | 백엔드 (FastAPI) + DB (MySQL) | `/be 비밀번호 재설정 API` |
+| `/test` | 테스트 작성 + 실행 | `/test auth` |
+| `/audit` | 코드 리뷰 + 보안 점검 | `/audit` 또는 `/audit full` |
+| `/batch-benefits` | 복지 데이터 배치 현황 | `/batch-benefits` |
+| `/deploy` | 인프라 + 배포 관리 | `/deploy nginx 보안 헤더` |
+| `/research-benefits` | 회사 복지 웹 조사 → DB | `/research-benefits 카카오` |
+| `/parse-benefits` | 복지 텍스트 → SQL 변환 | `/parse-benefits SK하이닉스` |
+
+### 권장 워크플로우
+
+```
+기능 개발: /be {API} → /fe {UI} → /test → /audit
+데이터 수집: /batch-benefits → /parse-benefits 또는 /research-benefits (반복)
+배포 전: /test → /audit full → /deploy
+```
