@@ -251,20 +251,23 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 | `/audit` | 코드 리뷰 + 보안 점검 | `/audit` 또는 `/audit full` |
 | `/batch-benefits` | 복지 데이터 배치 현황 | `/batch-benefits` |
 | `/deploy` | 인프라 + 배포 관리 | `/deploy nginx 보안 헤더` |
+| `/debug` | 체계적 디버깅 (4단계 프로세스) | `/debug` |
+| `/verify` | 완료 전 검증 게이트 | `/verify` |
 | `/research-benefits` | 회사 복지 웹 조사 → DB | `/research-benefits 카카오` |
 | `/parse-benefits` | 복지 텍스트 → SQL 변환 | `/parse-benefits SK하이닉스` |
 
 ### 권장 워크플로우
 
 ```
-기능 개발: /be {API} → /fe {UI} → /test → /audit
+기능 개발: /be {API} → /fe {UI} → /verify → /test → /audit
+버그 수정: /debug → 수정 → /verify → /audit
 데이터 수집: /batch-benefits → /parse-benefits 또는 /research-benefits (반복)
-배포 전: /test → /audit full → /deploy
+배포 전: /test → /audit full → /verify → /deploy
 ```
 
 CLAUDE.md의 Agent Team 테이블은 사용자 안내용입니다. 실제 구현은:
 - **Agents** (`.claude/agents/*.md`): `fe`, `be`, `test`, `audit`, `team-status`, `deploy` — 자율 실행, 독립 컨텍스트
-- **Skills** (`.claude/skills/*/SKILL.md`): `batch-benefits`, `research-benefits`, `parse-benefits` — 사용자 확인 필요
+- **Skills** (`.claude/skills/*/SKILL.md`): `debug`, `verify`, `batch-benefits`, `research-benefits`, `parse-benefits` — 사용자 확인 필요
 
 ### Hooks (자동 협업)
 
