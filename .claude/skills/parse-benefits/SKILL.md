@@ -26,8 +26,8 @@ server/tools/.venv/bin/python server/tools/scrape_benefits.py "{회사명}" --ur
 
 다음 파일들을 **병렬**로 읽습니다:
 - `server/seed/benefit/삼성전자.sql` — SQL 출력 포맷 참조 (gold standard)
-- `server/tools/scrape_benefits.py` 26-42행 — `KNOWN_IDS` (회사명→id 매핑)
-- `server/tools/scrape_benefits.py` 46-82행 — `BENEFIT_KEYWORDS` (ben_key 목록)
+- `server/tools/scrape_benefits.py` 26-228행 — `KNOWN_IDS` (회사명→id 매핑, KOSPI/KOSDAQ 200개사 포함)
+- `server/tools/scrape_benefits.py` 234-272행 — `BENEFIT_KEYWORDS` (ben_key 목록)
 
 `company_id`는 다음 우선순위로 결정:
 1. `--id` 인자가 있으면 사용
