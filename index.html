@@ -405,6 +405,42 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .ben-compare .td-name{color:var(--t2)}
 .td-diff{font-size:.65rem;font-weight:600}
 .td-diff.pos{color:var(--green)}.td-diff.neg{color:var(--red)}.td-diff.eq{color:var(--t4)}
+/* Benefit Category Comparison */
+.ben-cat-wrap{display:flex;flex-direction:column;gap:8px}
+.ben-cat-card{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:border-color .15s}
+.ben-cat-card.open{border-color:var(--bh)}
+.ben-cat-header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.ben-cat-header:hover{background:rgba(255,255,255,.02)}
+.ben-cat-icon{font-size:1rem;flex-shrink:0}
+.ben-cat-name{font-size:.82rem;font-weight:600;color:var(--t1);white-space:nowrap}
+.ben-cat-badge{font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.ben-cat-badge.a-win{background:var(--blue-d);color:var(--blue)}
+.ben-cat-badge.b-win{background:var(--amber-d);color:var(--amber)}
+.ben-cat-badge.even{background:rgba(255,255,255,.05);color:var(--t3)}
+.ben-cat-counts{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:.72rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+.ben-cat-cnt-a{color:var(--blue)}.ben-cat-cnt-b{color:var(--amber)}
+.ben-cat-bars{flex:1;display:flex;align-items:center;gap:2px;max-width:180px;height:14px}
+.ben-cat-bar{height:100%;border-radius:3px;min-width:4px;transition:width .3s ease}
+.ben-cat-bar.a{background:var(--blue);opacity:.5;border-radius:3px 0 0 3px}
+.ben-cat-bar.b{background:var(--green);opacity:.6;border-radius:0 3px 3px 0}
+.ben-cat-chevron{color:var(--t4);font-size:.65rem;flex-shrink:0;transition:transform .2s;margin-left:4px}
+.ben-cat-card.open .ben-cat-chevron{transform:rotate(180deg)}
+.ben-cat-detail{display:none;padding:0 14px 12px;border-top:1px solid var(--border)}
+.ben-cat-card.open .ben-cat-detail{display:block}
+.ben-cat-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px}
+.ben-cat-col-title{font-size:.62rem;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.ben-cat-col-title.col-a{color:var(--blue)}.ben-cat-col-title.col-b{color:var(--amber)}
+.ben-cat-item{display:flex;align-items:center;gap:5px;padding:3px 0;font-size:.75rem;color:var(--t2)}
+.ben-cat-item::before{content:'•';color:var(--t4);flex-shrink:0}
+.ben-cat-item .only-tag{font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:auto;flex-shrink:0}
+.ben-cat-item .only-tag.tag-a{background:var(--blue-d);color:var(--blue)}
+.ben-cat-item .only-tag.tag-b{background:var(--amber-d);color:var(--amber)}
+.ben-cat-total{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);font-size:.78rem;font-weight:600;color:var(--t2)}
+.ben-cat-total .total-val{font-family:'JetBrains Mono',monospace;font-weight:700}
+.ben-cat-total .total-val.val-a{color:var(--blue)}.ben-cat-total .total-val.val-b{color:var(--amber)}
+.ben-cat-total .total-diff{font-size:.7rem;font-weight:700}
+.ben-cat-total .total-diff.pos{color:var(--green)}.ben-cat-total .total-diff.neg{color:var(--red)}.ben-cat-total .total-diff.eq{color:var(--t4)}
+@media(max-width:480px){.ben-cat-bars{max-width:100px}.ben-cat-header{padding:10px 12px;gap:6px}.ben-cat-cols{gap:8px}}
 .qual-item{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid rgba(42,46,58,.3);font-size:.8rem;color:var(--t2)}
 .qual-item:last-child{border-bottom:none}
 .qual-side{font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;margin-top:2px}
@@ -1278,6 +1314,65 @@ function calc(){const salA=getSalRange(),salB=getOfferRange();const bA=getBenTot
 function fW(v){return Math.abs(v)>=10000?(v/10000).toFixed(1)+'억원':Math.round(v).toLocaleString()+'만원'}
 function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.cat===cat)t+=b.val});return t}
 
+function renderBenCatCompare(nA,nB){
+  const listA=(benS.a||[]).filter(b=>b.checked&&!b.qual),listB=(benS.b||[]).filter(b=>b.checked&&!b.qual);
+  if(!listA.length&&!listB.length)return'';
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.filter(b=>b.cat===cat),bItems=listB.filter(b=>b.cat===cat);
+    if(!aItems.length&&!bItems.length)return;
+    const aKeys=new Set(aItems.map(b=>b.key)),bKeys=new Set(bItems.map(b=>b.key));
+    const allKeys=[...new Set([...aKeys,...bKeys])];
+    const details=allKeys.map(k=>{
+      const a=aItems.find(b=>b.key===k),b_=bItems.find(b=>b.key===k);
+      return{name:a?.name||b_?.name||k,inA:!!a,inB:!!b_,valA:a?.val||0,valB:b_?.val||0};
+    });
+    catData.push({cat,icon:CAT_LABELS[cat].charAt(0),label:CAT_LABELS[cat].slice(2),cntA:aItems.length,cntB:bItems.length,sumA:aItems.reduce((s,b)=>s+b.val,0),sumB:bItems.reduce((s,b)=>s+b.val,0),details});
+  });
+  if(!catData.length)return'';
+  const maxCnt=Math.max(...catData.map(d=>Math.max(d.cntA,d.cntB)),1);
+  let h='<div class="ben-cat-wrap">';
+  catData.forEach((d,idx)=>{
+    const diff=d.cntA-d.cntB;
+    let badge='';
+    if(diff>0)badge=`<span class="ben-cat-badge a-win">${nA} +${diff}개</span>`;
+    else if(diff<0)badge=`<span class="ben-cat-badge b-win">${nB} +${Math.abs(diff)}개</span>`;
+    else badge=`<span class="ben-cat-badge even">동일</span>`;
+    const barA=Math.max(8,d.cntA/maxCnt*100),barB=Math.max(8,d.cntB/maxCnt*100);
+    h+=`<div class="ben-cat-card" onclick="this.classList.toggle('open')">`;
+    h+=`<div class="ben-cat-header">`;
+    h+=`<span class="ben-cat-cnt-a">${d.cntA}개</span>`;
+    h+=`<div class="ben-cat-bars"><div class="ben-cat-bar a" style="width:${barA}%"></div><div class="ben-cat-bar b" style="width:${barB}%"></div></div>`;
+    h+=`<span class="ben-cat-cnt-b">${d.cntB}개</span>`;
+    h+=`</div>`;
+    h+=`<div style="display:flex;align-items:center;gap:6px;padding:0 14px 10px">`;
+    h+=`<span class="ben-cat-icon">${CAT_LABELS[d.cat].charAt(0)}</span>`;
+    h+=`<span class="ben-cat-name">${d.label}</span>`;
+    h+=badge;
+    h+=`<span class="ben-cat-chevron">▼</span>`;
+    h+=`</div>`;
+    h+=`<div class="ben-cat-detail"><div class="ben-cat-cols">`;
+    h+=`<div><div class="ben-cat-col-title col-a">${nA}</div>`;
+    d.details.filter(x=>x.inA).forEach(x=>{
+      const only=!x.inB?`<span class="only-tag tag-a">${nA}만</span>`:'';
+      h+=`<div class="ben-cat-item">${esc(x.name)}${only}</div>`;
+    });
+    if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">해당 없음</div>`;
+    h+=`</div><div><div class="ben-cat-col-title col-b">${nB}</div>`;
+    d.details.filter(x=>x.inB).forEach(x=>{
+      const only=!x.inA?`<span class="only-tag tag-b">${nB}만</span>`:'';
+      h+=`<div class="ben-cat-item">${esc(x.name)}${only}</div>`;
+    });
+    if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">해당 없음</div>`;
+    h+=`</div></div></div></div>`;
+  });
+  const totA=listA.reduce((s,b)=>s+b.val,0),totB=listB.reduce((s,b)=>s+b.val,0),totD=totB-totA;
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a">${totA.toLocaleString()}만</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</span><span class="total-val val-b">${totB.toLocaleString()}만</span></div>`;
+  h+='</div>';
+  return h;
+}
+
 function validateForm(){
   let ok=true;
   document.querySelectorAll('.has-error').forEach(el=>el.classList.remove('has-error'));
@@ -1504,7 +1599,7 @@ function compare(){
     html+=`</div></div>`;
   }
 
-  if(curPri==='benefits'){const listA=benS.a||[],listB=benS.b||[];if(listA.length||listB.length){const allKeys=new Set();listA.forEach(b=>allKeys.add(b.key));listB.forEach(b=>allKeys.add(b.key));let rows='';allKeys.forEach(k=>{const a=listA.find(b=>b.key===k),b_=listB.find(b=>b.key===k);const vA=a?.checked?a.val:0,vB=b_?.checked?b_.val:0;const nm=a?.name||b_?.name||k;const df=vB-vA;rows+=`<tr><td class="td-name">${nm}</td><td class="td-a">${vA?vA.toLocaleString()+'만':'—'}</td><td class="td-b">${vB?vB.toLocaleString()+'만':'—'}</td><td class="td-diff ${df>0?'pos':df<0?'neg':'eq'}">${df!==0?(df>0?'+':'')+df.toLocaleString()+'만':'—'}</td></tr>`});const totA=listA.reduce((s,b)=>s+(b.checked?b.val:0),0),totB=listB.reduce((s,b)=>s+(b.checked?b.val:0),0),totD=totB-totA;html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 항목별 비교</div><div class="cmp-body"><table class="ben-compare"><thead><tr><th>항목</th><th>${nA}</th><th>${nB}</th><th>차이</th></tr></thead><tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="font-weight:700;color:var(--t1)">합계</td><td class="td-a" style="font-weight:700">${totA.toLocaleString()}만</td><td class="td-b" style="font-weight:700">${totB.toLocaleString()}만</td><td class="td-diff ${totD>0?'pos':totD<0?'neg':'eq'}" style="font-weight:700">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</td></tr></tbody></table></div></div>`}}
+  if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 카테고리별 비교</div><div class="cmp-body">${catHtml}</div></div>`}
   if(curPri==='brand'){html+=`<div class="cmp"><div class="cmp-head">🏢 브랜드 가치</div><div class="cmp-body"><div class="callout info"><span class="callout-icon">💡</span><span>회사 브랜드는 <strong>"다음 이직"의 연봉 협상력</strong>으로 전환됩니다. 3년 후 이력서에 더 빛날 이름을 선택하세요.</span></div></div></div>`}
 
   // Qualitative benefits
