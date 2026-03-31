@@ -224,16 +224,28 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .ba-title{font-size:.7rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
 .bg{margin-bottom:6px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:border-color .15s}
 .bg.bg-open{border-color:var(--bh)}
-.bg-header{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;user-select:none}
+.bg-header{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:0;padding:10px 12px;cursor:pointer;user-select:none}
 .bg-header:hover{background:rgba(255,255,255,.02)}
-.bg-label{font-size:.75rem;font-weight:600;color:var(--t2);margin-bottom:0;flex:1}
-.bg-count{font-size:.65rem;font-weight:700;color:var(--t3);font-family:'JetBrains Mono',monospace}
-.bg-sum{font-size:.65rem;font-weight:700;color:var(--purple);font-family:'JetBrains Mono',monospace}
-.bg-chevron{color:var(--t4);font-size:.55rem;transition:transform .2s;flex-shrink:0}
+.bg-cnt{font-size:.82rem;font-weight:800;font-family:'JetBrains Mono',monospace;min-width:32px}
+.bg-cnt.cnt-a{color:var(--blue);text-align:right;padding-right:6px}
+.bg-cnt.cnt-b{color:var(--amber);text-align:left;padding-left:6px}
+.bg-bar-wrap{height:10px;display:flex;align-items:center}
+.bg-bar-wrap.bar-a{justify-content:flex-end}
+.bg-bar-wrap.bar-b{justify-content:flex-start}
+.bg-bar{height:100%;border-radius:3px;min-width:0;transition:width .3s ease}
+.bg-bar.bar-a{background:var(--blue);opacity:.5;border-radius:3px}
+.bg-bar.bar-b{background:var(--green);opacity:.6;border-radius:3px}
+.bg-center{display:flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;white-space:nowrap}
+.bg-label{font-size:.72rem;font-weight:600;color:var(--t2);margin-bottom:0}
+.bg-chevron{color:var(--t4);font-size:.5rem;transition:transform .2s;flex-shrink:0}
 .bg.bg-open .bg-chevron{transform:rotate(180deg)}
-.bg-items{display:none;padding:0 12px 8px;border-top:1px solid var(--border)}
+.bg-items{display:none;padding:0 12px 10px;border-top:1px solid var(--border)}
 .bg.bg-open .bg-items{display:block}
-.bi{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(42,46,58,.3);font-size:.8rem}
+.bg-cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.bg-col{padding:8px 6px 4px}
+.bg-col-title{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(42,46,58,.3)}
+.bg-col-title.col-a{color:var(--blue)}.bg-col-title.col-b{color:var(--amber)}
+.bi{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.78rem}
 .bi:last-child{border-bottom:none}
 .bi-ck{width:15px;height:15px;accent-color:var(--purple);cursor:pointer;flex-shrink:0}
 .bi-n{flex:1;color:var(--t2)}.bi-n .bi-note{display:block;font-size:.65rem;color:var(--t4);line-height:1.3;margin-top:1px}
@@ -710,15 +722,14 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
   </div>
   </div><!-- /.cards-row -->
 
-  <!-- ━━ 복리후생 (현직 / 이직처) ━━ -->
-  <div class="cards-row">
-  <div class="cc a">
-    <div class="ba show" id="baA" style="display:block;border-top:none;margin-top:0;padding-top:0"><div class="ba-title">🏢 복리후생 <span id="bcA"></span></div><div id="blA"></div></div>
+  <!-- ━━ 복리후생 (버터플라이 비교) ━━ -->
+  <div class="ba show" id="baCompare" style="display:block;border-top:none;margin-top:0;padding-top:0">
+    <div class="ba-title">🏢 복리후생 비교 <span id="bcCompare"></span></div>
+    <div id="blCompare"></div>
   </div>
-  <div class="cc b">
-    <div class="ba show" id="baB" style="display:block;border-top:none;margin-top:0;padding-top:0"><div class="ba-title">🏢 복리후생 <span id="bcB"></span></div><div id="blB"></div></div>
-  </div>
-  </div><!-- /.cards-row -->
+  <!-- hidden containers for backward compat -->
+  <div id="blA" style="display:none"></div><div id="blB" style="display:none"></div>
+  <span id="bcA" style="display:none"></span><span id="bcB" style="display:none"></span>
 
   <div class="diff"><span class="diff-l">실질 보상 차이</span><span class="diff-v" id="diffV">—</span></div>
   <button class="cta" onclick="compare()">회사 비교<span class="sub">나의 기준 맞춤 비교 리포트</span></button>
@@ -1098,7 +1109,7 @@ async function restoreDraft(){
     if(d.comB)document.getElementById('comB').value=d.comB;
     if(d.selectedRate!==null&&d.selectedRate!==undefined)setRate(d.selectedRate);
     if(d.wsState){wsState=d.wsState;['a','b'].forEach(s=>['ot','wage','remote','flex'].forEach(f=>{const v=wsState[s][f];if(v){const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.toggle('on',b.dataset.v===v))}}))}
-    if(d.benS&&(d.benS.a?.length||d.benS.b?.length)){benS=d.benS;renderBen('a');renderBen('b')}
+    if(d.benS&&(d.benS.a?.length||d.benS.b?.length)){benS=d.benS;renderBenCompare()}
     if(d.curPri)setPri(d.curPri);
     if(d.curSacrifice)setSacrifice(d.curSacrifice);
     if(d.pfResult)pfResult=d.pfResult;
@@ -1306,10 +1317,65 @@ function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').cl
 function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const type=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[type];const label=TYPE_LABELS[type]||type;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,type);calc();saveDraft()}
 
 // ━━ BENEFITS ━━
-function renderBen(s){const list=benS[s];if(!list?.length){document.getElementById(s==='a'?'blA':'blB').innerHTML='';document.getElementById(s==='a'?'bcA':'bcB').textContent='';return}const grouped={};list.forEach((b,i)=>{if(!grouped[b.cat])grouped[b.cat]=[];grouped[b.cat].push({...b,idx:i})});let h='';for(const[cat,items]of Object.entries(grouped)){const checkedItems=items.filter(b=>b.checked);const catSum=checkedItems.reduce((t,b)=>t+b.val,0);h+=`<div class="bg bg-open" id="bg_${s}_${cat}"><div class="bg-header" onclick="this.parentElement.classList.toggle('bg-open')"><div class="bg-label">${CAT_LABELS[cat]||cat}</div><span class="bg-count">${checkedItems.length}/${items.length}개</span><span class="bg-sum">${catSum>0?catSum.toLocaleString()+'만':''}</span><span class="bg-chevron">▼</span></div><div class="bg-items">`;items.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('${s}',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}${b.note?`<span class="bi-note">${esc(b.note)}</span>`:''}</span><span class="bi-badge ${b.badge==='auto'?'b-auto':'b-est'}">${b.badge==='auto'?'DB':'추정'}</span><input type="number" class="bi-v" value="${b.val}" onchange="setBenV('${s}',${b.idx},this.value)"><span class="bi-u">만</span></div>`});h+='</div></div>'}const isPreset=!matched[s]&&list.length>0;if(isPreset){const type=document.getElementById(s==='a'?'tA':'tB').value;h+=`<div class="ben-note-preset">모든 금액은 <strong>${TYPE_LABELS[type]||type} 평균 추정치</strong>입니다. 실제 금액을 아는 항목만 수정하세요. 체크 해제 항목은 합산 제외.</div>`}document.getElementById(s==='a'?'blA':'blB').innerHTML=h;const ac=list.filter(b=>b.checked&&b.val>0).length;document.getElementById(s==='a'?'bcA':'bcB').textContent=isPreset?`(${ac}/${list.length}개 · 평균 추정)`:`(${ac}개 항목)`}
-function togBen(s,i,c){benS[s][i].checked=c;updBenCat(s,benS[s][i].cat);calc();saveDraft()}
-function setBenV(s,i,v){benS[s][i].val=Number(v)||0;updBenCat(s,benS[s][i].cat);calc();saveDraft()}
-function updBenCat(s,cat){const el=document.getElementById('bg_'+s+'_'+cat);if(!el)return;const list=benS[s].filter(b=>b.cat===cat);const checked=list.filter(b=>b.checked);const sum=checked.reduce((t,b)=>t+b.val,0);const cntEl=el.querySelector('.bg-count');const sumEl=el.querySelector('.bg-sum');if(cntEl)cntEl.textContent=checked.length+'/'+list.length+'개';if(sumEl)sumEl.textContent=sum>0?sum.toLocaleString()+'만':''}
+function renderBen(s){renderBenCompare()}
+function renderBenCompare(){
+  const listA=benS.a||[],listB=benS.b||[];
+  const el=document.getElementById('blCompare');
+  if(!el)return;
+  if(!listA.length&&!listB.length){el.innerHTML='';const bc=document.getElementById('bcCompare');if(bc)bc.textContent='';return}
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.map((b,i)=>({...b,idx:i})).filter(b=>b.cat===cat);
+    const bItems=listB.map((b,i)=>({...b,idx:i})).filter(b=>b.cat===cat);
+    if(!aItems.length&&!bItems.length)return;
+    const aCk=aItems.filter(b=>b.checked).length,bCk=bItems.filter(b=>b.checked).length;
+    catData.push({cat,aItems,bItems,aCk,bCk});
+  });
+  if(!catData.length){el.innerHTML='';return}
+  const maxCnt=Math.max(...catData.map(d=>Math.max(d.aCk,d.bCk)),1);
+  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
+  let h='';
+  catData.forEach(d=>{
+    const barA=d.aCk>0?Math.max(10,d.aCk/maxCnt*100):0;
+    const barB=d.bCk>0?Math.max(10,d.bCk/maxCnt*100):0;
+    h+=`<div class="bg" id="bgc_${d.cat}">`;
+    h+=`<div class="bg-header" onclick="this.parentElement.classList.toggle('bg-open')">`;
+    h+=`<span class="bg-cnt cnt-a" id="bgCntA_${d.cat}">${d.aCk}개</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="bgBarA_${d.cat}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span><span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="bgBarB_${d.cat}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="bgCntB_${d.cat}">${d.bCk}개</span>`;
+    h+=`</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
+    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}</span></div>`});
+    if(!d.aItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
+    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}</span></div>`});
+    if(!d.bItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div></div></div></div>`;
+  });
+  el.innerHTML=h;
+  const totalA=listA.filter(b=>b.checked).length,totalB=listB.filter(b=>b.checked).length;
+  const bc=document.getElementById('bcCompare');
+  if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
+}
+function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].cat);calc();saveDraft()}
+function setBenV(s,i,v){benS[s][i].val=Number(v)||0;calc();saveDraft()}
+function updBenCatBfly(cat){
+  const aCk=(benS.a||[]).filter(b=>b.cat===cat&&b.checked).length;
+  const bCk=(benS.b||[]).filter(b=>b.cat===cat&&b.checked).length;
+  const maxCnt=Math.max(aCk,bCk,1);
+  const cntA=document.getElementById('bgCntA_'+cat),cntB=document.getElementById('bgCntB_'+cat);
+  const barA=document.getElementById('bgBarA_'+cat),barB=document.getElementById('bgBarB_'+cat);
+  if(cntA)cntA.textContent=aCk+'개';if(cntB)cntB.textContent=bCk+'개';
+  if(barA)barA.style.width=(aCk>0?Math.max(10,aCk/maxCnt*100):0)+'%';
+  if(barB)barB.style.width=(bCk>0?Math.max(10,bCk/maxCnt*100):0)+'%';
+  const totalA=(benS.a||[]).filter(b=>b.checked).length,totalB=(benS.b||[]).filter(b=>b.checked).length;
+  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
+  const bc=document.getElementById('bcCompare');if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
+}
 function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.val;if(!b.qual)net+=b.val}});return{ben,net}}
 
 // ━━ Salary helpers ━━
