@@ -348,7 +348,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .ot-total .v{font-family:'JetBrains Mono',monospace;color:var(--green)}
 
 /* ━━ REPORT ━━ */
-.report{display:none;margin-top:2rem}.report.visible{display:block;animation:fadeUp .4s ease}
+.report{margin-top:0}.report.visible{display:block;animation:fadeUp .4s ease}
 .rp-div{text-align:center;margin-bottom:1.5rem;position:relative}
 .rp-div::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border)}
 .rp-div span{position:relative;background:var(--bg-0);padding:0 12px;font-size:.72rem;font-weight:600;color:var(--t4);text-transform:uppercase;letter-spacing:.1em}
@@ -722,7 +722,14 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 
   <div class="diff"><span class="diff-l">실질 보상 차이</span><span class="diff-v" id="diffV">—</span></div>
   <button class="cta" onclick="compare()">회사 비교<span class="sub">나의 기준 맞춤 비교 리포트</span></button>
-  <div class="report" id="report"></div>
+</div>
+</div>
+
+<!-- ━━ REPORT ━━ -->
+<div class="screen" id="s-report">
+<div class="wrap">
+  <button class="back" onclick="go('s-input')">← 비교 수정</button>
+  <div class="report visible" id="report"></div>
 </div>
 </div>
 
@@ -1712,7 +1719,8 @@ function compare(){
   html+=`<div id="saveStatus" style="text-align:center;padding:.5rem;margin-top:.5rem;font-size:.75rem;color:var(--t4)">비교 결과 저장 중...</div>`;
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
-  document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'});
+  go('s-report');
+  window.scrollTo({top:0,behavior:'smooth'});
   saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
 }
 
