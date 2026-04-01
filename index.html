@@ -797,7 +797,7 @@ function toggleAuthMode(){
 }
 function populateAuthJobs(){
   const sel=document.getElementById('authJob');if(sel.options.length>1)return;
-  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.groupLabel;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.label;o.textContent=j.icon+' '+j.label;og.appendChild(o)});sel.appendChild(og)});
+  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.groupLabel;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.id;o.textContent=j.icon+' '+j.label;og.appendChild(o)});sel.appendChild(og)});
 }
 async function submitAuth(){
   const email=document.getElementById('authEmail').value.trim();
@@ -805,10 +805,10 @@ async function submitAuth(){
   const errEl=document.getElementById('authErr');
   if(!email||!pass){errEl.textContent='이메일과 비밀번호를 입력하세요.';return}
   if(pass.length<8){errEl.textContent='비밀번호는 8자 이상이어야 합니다.';return}
-  const jobNm=document.getElementById('authJob').value;
-  if(authIsRegister&&!jobNm){errEl.textContent='직군을 선택하세요.';return}
+  const jobId=document.getElementById('authJob').value;
+  if(authIsRegister&&!jobId){errEl.textContent='직군을 선택하세요.';return}
   const path=authIsRegister?'/auth/register':'/auth/login';
-  const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email,password:pass};
+  const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_id:jobId}:{email,password:pass};
   const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
   if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
   AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name};

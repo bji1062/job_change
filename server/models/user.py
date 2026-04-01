@@ -4,7 +4,7 @@ class RegisterReq(BaseModel):
     email: EmailStr
     password: str
     name: str | None = None
-    job_nm: str
+    job_id: str
 
 class LoginReq(BaseModel):
     email: EmailStr

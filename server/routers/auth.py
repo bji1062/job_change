@@ -12,8 +12,8 @@ async def register(req: RegisterReq):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     pw_hash = hash_password(req.password)
     user_id = await database.execute(
-        "INSERT INTO users (email, password_hash, name, job_nm) VALUES (%s, %s, %s, %s)",
-        (req.email, pw_hash, req.name, req.job_nm),
+        "INSERT INTO users (email, password_hash, name, job_id) VALUES (%s, %s, %s, %s)",
+        (req.email, pw_hash, req.name, req.job_id),
     )
     token = create_token(user_id)
     return TokenResp(access_token=token, user_id=user_id, name=req.name)
