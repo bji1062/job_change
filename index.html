@@ -1807,7 +1807,7 @@ function compare(){
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
   go('s-report');
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior:'instant'});
   updateCompareCount();
   saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
 }
