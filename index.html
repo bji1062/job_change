@@ -254,6 +254,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .bi-u{font-size:.62rem;color:var(--t4);width:16px;flex-shrink:0}
 .bi-badge{font-size:.55rem;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0}
 .b-auto{background:var(--purple-d);color:var(--purple)}.b-est{background:var(--amber-d);color:var(--amber)}
+.bg-val{font-size:.65rem;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--t3);margin-left:auto;flex-shrink:0}
+.bg-diff{font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.bg-diff.pos{background:var(--green-d);color:var(--green)}.bg-diff.neg{background:var(--red-d);color:var(--red)}.bg-diff.eq{background:rgba(255,255,255,.05);color:var(--t4)}
 .tc{display:flex;align-items:center;gap:0;margin-top:1rem;padding:10px 14px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.82rem;flex-wrap:wrap}
 .tc-b{color:var(--t2)}.tc-p{color:var(--t4);padding:0 6px;font-size:.75rem}
 .tc-bn{font-weight:600;font-size:.75rem}
@@ -1411,47 +1414,45 @@ function renderBenCatCompare(nA,nB){
       const a=aItems.find(b=>b.key===k),b_=bItems.find(b=>b.key===k);
       return{name:a?.name||b_?.name||k,inA:!!a,inB:!!b_,valA:a?.val||0,valB:b_?.val||0};
     });
-    catData.push({cat,icon:CAT_LABELS[cat].charAt(0),label:CAT_LABELS[cat].slice(2),cntA:aItems.length,cntB:bItems.length,sumA:aItems.reduce((s,b)=>s+b.val,0),sumB:bItems.reduce((s,b)=>s+b.val,0),details});
+    catData.push({cat,sumA:aItems.reduce((s,b)=>s+b.val,0),sumB:bItems.reduce((s,b)=>s+b.val,0),details});
   });
   if(!catData.length)return'';
-  const maxCnt=Math.max(...catData.map(d=>Math.max(d.cntA,d.cntB)),1);
-  let h='<div class="ben-cat-wrap">';
-  catData.forEach((d,idx)=>{
-    const diff=d.cntA-d.cntB;
-    let badge='';
-    if(diff>0)badge=`<span class="ben-cat-badge a-win">${nA} +${diff}개</span>`;
-    else if(diff<0)badge=`<span class="ben-cat-badge b-win">${nB} +${Math.abs(diff)}개</span>`;
-    else badge=`<span class="ben-cat-badge even">동일</span>`;
-    const barA=Math.max(8,d.cntA/maxCnt*100),barB=Math.max(8,d.cntB/maxCnt*100);
-    h+=`<div class="ben-cat-card" onclick="this.classList.toggle('open')">`;
-    h+=`<div class="ben-cat-header">`;
-    h+=`<span class="ben-cat-cnt-a">${d.cntA}개</span>`;
-    h+=`<div class="ben-cat-bars"><div class="ben-cat-bar a" style="width:${barA}%"></div><div class="ben-cat-bar b" style="width:${barB}%"></div></div>`;
-    h+=`<span class="ben-cat-cnt-b">${d.cntB}개</span>`;
+  const maxSum=Math.max(...catData.map(d=>Math.max(d.sumA,d.sumB)),1);
+  const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
+  let h='<div style="display:flex;flex-direction:column;gap:6px">';
+  catData.forEach(d=>{
+    const barA=d.sumA>0?Math.max(10,d.sumA/maxSum*100):0;
+    const barB=d.sumB>0?Math.max(10,d.sumB/maxSum*100):0;
+    const diff=d.sumB-d.sumA;
+    let diffBadge='';
+    if(diff>0)diffBadge=`<span class="bg-diff pos">+${fV(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg">${fV(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq">동일</span>`;
+    h+=`<div class="bg" onclick="this.classList.toggle('bg-open')">`;
+    h+=`<div class="bg-header">`;
+    h+=`<span class="bg-cnt cnt-a">${d.sumA>0?fV(d.sumA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b">${d.sumB>0?fV(d.sumB):'-'}</span>`;
     h+=`</div>`;
-    h+=`<div style="display:flex;align-items:center;gap:6px;padding:0 14px 10px">`;
-    h+=`<span class="ben-cat-icon">${CAT_LABELS[d.cat].charAt(0)}</span>`;
-    h+=`<span class="ben-cat-name">${d.label}</span>`;
-    h+=badge;
-    h+=`<span class="ben-cat-chevron">▼</span>`;
-    h+=`</div>`;
-    h+=`<div class="ben-cat-detail"><div class="ben-cat-cols">`;
-    h+=`<div><div class="ben-cat-col-title col-a">${nA}</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
     d.details.filter(x=>x.inA).forEach(x=>{
       const only=!x.inB?`<span class="only-tag tag-a">${nA}만</span>`:'';
-      h+=`<div class="ben-cat-item">${esc(x.name)}${only}</div>`;
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><span class="bg-val">${x.valA>0?x.valA.toLocaleString()+'만':''}</span>${only}</div>`;
     });
-    if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">해당 없음</div>`;
-    h+=`</div><div><div class="ben-cat-col-title col-b">${nB}</div>`;
+    if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
     d.details.filter(x=>x.inB).forEach(x=>{
       const only=!x.inA?`<span class="only-tag tag-b">${nB}만</span>`:'';
-      h+=`<div class="ben-cat-item">${esc(x.name)}${only}</div>`;
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><span class="bg-val">${x.valB>0?x.valB.toLocaleString()+'만':''}</span>${only}</div>`;
     });
-    if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">해당 없음</div>`;
+    if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
   const totA=listA.reduce((s,b)=>s+b.val,0),totB=listB.reduce((s,b)=>s+b.val,0),totD=totB-totA;
-  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a">${totA.toLocaleString()}만</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</span><span class="total-val val-b">${totB.toLocaleString()}만</span></div>`;
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b">${fV(totB)}</span></div>`;
   h+='</div>';
   return h;
 }
