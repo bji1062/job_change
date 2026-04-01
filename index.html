@@ -1400,6 +1400,7 @@ function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.ca
 function renderBenCatCompare(nA,nB){
   const listA=(benS.a||[]).filter(b=>b.checked&&!b.qual),listB=(benS.b||[]).filter(b=>b.checked&&!b.qual);
   if(!listA.length&&!listB.length)return'';
+  const idxMapA={},idxMapB={};(benS.a||[]).forEach((b,i)=>{idxMapA[b.key]=i});(benS.b||[]).forEach((b,i)=>{idxMapB[b.key]=i});
   const cats=Object.keys(CAT_LABELS);
   const catData=[];
   cats.forEach(cat=>{
@@ -1409,49 +1410,78 @@ function renderBenCatCompare(nA,nB){
     const allKeys=[...new Set([...aKeys,...bKeys])];
     const details=allKeys.map(k=>{
       const a=aItems.find(b=>b.key===k),b_=bItems.find(b=>b.key===k);
-      return{name:a?.name||b_?.name||k,inA:!!a,inB:!!b_,valA:a?.val||0,valB:b_?.val||0};
+      return{key:k,name:a?.name||b_?.name||k,inA:!!a,inB:!!b_,valA:a?.val||0,valB:b_?.val||0,idxA:idxMapA[k]??-1,idxB:idxMapB[k]??-1};
     });
     catData.push({cat,sumA:aItems.reduce((s,b)=>s+b.val,0),sumB:bItems.reduce((s,b)=>s+b.val,0),details});
   });
   if(!catData.length)return'';
   const maxSum=Math.max(...catData.map(d=>Math.max(d.sumA,d.sumB)),1);
   const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
-  let h='<div style="display:flex;flex-direction:column;gap:6px">';
+  let h='<div id="rptBenWrap" style="display:flex;flex-direction:column;gap:6px">';
   catData.forEach(d=>{
     const barA=d.sumA>0?Math.max(10,d.sumA/maxSum*100):0;
     const barB=d.sumB>0?Math.max(10,d.sumB/maxSum*100):0;
     const diff=d.sumB-d.sumA;
     let diffBadge='';
-    if(diff>0)diffBadge=`<span class="bg-diff pos">+${fV(diff)}</span>`;
-    else if(diff<0)diffBadge=`<span class="bg-diff neg">${fV(diff)}</span>`;
-    else diffBadge=`<span class="bg-diff eq">동일</span>`;
-    h+=`<div class="bg" onclick="this.classList.toggle('bg-open')">`;
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptDiff_${d.cat}">+${fV(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptDiff_${d.cat}">${fV(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptDiff_${d.cat}">동일</span>`;
+    h+=`<div class="bg" onclick="if(event.target.tagName!==\'INPUT\')this.classList.toggle('bg-open')">`;
     h+=`<div class="bg-header">`;
-    h+=`<span class="bg-cnt cnt-a">${d.sumA>0?fV(d.sumA):'-'}</span>`;
-    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" style="width:${barA}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-a" id="rptSumA_${d.cat}">${d.sumA>0?fV(d.sumA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptBarA_${d.cat}" style="width:${barA}%"></div></div>`;
     h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
-    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" style="width:${barB}%"></div></div>`;
-    h+=`<span class="bg-cnt cnt-b">${d.sumB>0?fV(d.sumB):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptBarB_${d.cat}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptSumB_${d.cat}">${d.sumB>0?fV(d.sumB):'-'}</span>`;
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
     d.details.filter(x=>x.inA).forEach(x=>{
       const only=!x.inB?`<span class="only-tag tag-a">${nA}만</span>`:'';
-      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><span class="bg-val">${x.valA>0?x.valA.toLocaleString()+'만':''}</span>${only}</div>`;
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)"><span class="bi-u">만</span>${only}</div>`;
     });
     if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
     d.details.filter(x=>x.inB).forEach(x=>{
       const only=!x.inA?`<span class="only-tag tag-b">${nB}만</span>`:'';
-      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><span class="bg-val">${x.valB>0?x.valB.toLocaleString()+'만':''}</span>${only}</div>`;
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valB}" onchange="updRptBenVal('b',${x.idxB},this.value)"><span class="bi-u">만</span>${only}</div>`;
     });
     if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
   const totA=listA.reduce((s,b)=>s+b.val,0),totB=listB.reduce((s,b)=>s+b.val,0),totD=totB-totA;
-  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b">${fV(totB)}</span></div>`;
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptTotA">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptTotDiff">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b" id="rptTotB">${fV(totB)}</span></div>`;
   h+='</div>';
   return h;
+}
+function updRptBenVal(s,idx,v){
+  if(idx<0)return;benS[s][idx].val=Number(v)||0;
+  const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
+  const cats=Object.keys(CAT_LABELS);
+  let maxSum=0;
+  cats.forEach(cat=>{
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    if(sA>maxSum)maxSum=sA;if(sB>maxSum)maxSum=sB;
+  });
+  if(!maxSum)maxSum=1;
+  cats.forEach(cat=>{
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    const elSA=document.getElementById('rptSumA_'+cat),elSB=document.getElementById('rptSumB_'+cat);
+    const elBA=document.getElementById('rptBarA_'+cat),elBB=document.getElementById('rptBarB_'+cat);
+    const elD=document.getElementById('rptDiff_'+cat);
+    if(elSA)elSA.textContent=sA>0?fV(sA):'-';if(elSB)elSB.textContent=sB>0?fV(sB):'-';
+    if(elBA)elBA.style.width=(sA>0?Math.max(10,sA/maxSum*100):0)+'%';
+    if(elBB)elBB.style.width=(sB>0?Math.max(10,sB/maxSum*100):0)+'%';
+    if(elD){const d=sB-sA;elD.textContent=d===0?'동일':d>0?'+'+fV(d):fV(d);elD.className='bg-diff '+(d>0?'pos':d<0?'neg':'eq')}
+  });
+  const totA=(benS.a||[]).filter(b=>b.checked&&!b.qual).reduce((t,b)=>t+b.val,0);
+  const totB=(benS.b||[]).filter(b=>b.checked&&!b.qual).reduce((t,b)=>t+b.val,0);
+  const totD=totB-totA;
+  const elTA=document.getElementById('rptTotA'),elTB=document.getElementById('rptTotB'),elTD=document.getElementById('rptTotDiff');
+  if(elTA)elTA.textContent=fV(totA);if(elTB)elTB.textContent=fV(totB);
+  if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
 }
 
 function validateForm(){
