@@ -734,7 +734,6 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
   <div id="blA" style="display:none"></div><div id="blB" style="display:none"></div>
   <span id="bcA" style="display:none"></span><span id="bcB" style="display:none"></span>
 
-  <div class="diff"><span class="diff-l">실질 보상 차이</span><span class="diff-v" id="diffV">—</span></div>
   <button class="cta" onclick="compare()">회사 비교<span class="sub">나의 기준 맞춤 비교 리포트</span></button>
 </div>
 </div>
@@ -1389,7 +1388,6 @@ function fR(range){if(!range||!range.min)return'—';const f=v=>v>=10000?(v/1000
 function calc(){const salA=getSalRange(),salB=getOfferRange();const bA=getBenTotal('a'),bB=getBenTotal('b');
   if(salA.min){const tAmin=salA.min+bA.net,tAmax=salA.max+bA.net;document.getElementById('tcbA').textContent=`${salA.min.toLocaleString()}~${salA.max.toLocaleString()}`;document.getElementById('tcnA').textContent=`복지 ${bA.net>=0?'+':''}${bA.net.toLocaleString()}만`;document.getElementById('tctA').textContent=`${tAmin.toLocaleString()}~${tAmax.toLocaleString()}만`}else{document.getElementById('tcbA').textContent='—';document.getElementById('tcnA').textContent='복지 0만';document.getElementById('tctA').textContent='—'}
   if(salB.min){const tBmin=salB.min+bB.net,tBmax=salB.max+bB.net;document.getElementById('tcbB').textContent=`${salB.min.toLocaleString()}~${salB.max.toLocaleString()}`;document.getElementById('tcnB').textContent=`복지 ${bB.net>=0?'+':''}${bB.net.toLocaleString()}만`;document.getElementById('tctB').textContent=`${tBmin.toLocaleString()}~${tBmax.toLocaleString()}만`}else{document.getElementById('tcbB').textContent='—';document.getElementById('tcnB').textContent='복지 0만';document.getElementById('tctB').textContent='—'}
-  const el=document.getElementById('diffV');if(salA.min&&salB.min){const dMin=(salB.min+bB.net)-(salA.min+bA.net),dMax=(salB.max+bB.net)-(salA.max+bA.net);const dStr=dMin===dMax?`${dMin>0?'+':''}${dMin.toLocaleString()}만원`:`${dMin>0?'+':''}${dMin.toLocaleString()} ~ ${dMax>0?'+':''}${dMax.toLocaleString()}만원`;if(dMin===0&&dMax===0){el.textContent='동일';el.style.color='var(--t2)'}else if(dMin>0){el.textContent=`이직처 ${dStr}`;el.style.color='var(--green)'}else if(dMax<0){el.textContent=`현직 +${Math.abs(dMax).toLocaleString()}${dMin!==dMax?' ~ +'+Math.abs(dMin).toLocaleString():''}만원`;el.style.color='var(--red)'}else{el.textContent=dStr;el.style.color='var(--t2)'}}else{el.textContent='—';el.style.color='var(--t2)'}
   updateRateResult()}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
