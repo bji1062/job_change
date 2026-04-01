@@ -448,8 +448,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .auth-box{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:2rem;width:90%;max-width:360px;animation:fadeUp .3s ease}
 .auth-box h3{font-size:1.1rem;font-weight:700;margin-bottom:1.25rem;text-align:center}
 .auth-box .fd{margin-bottom:.85rem}
-.auth-box input{width:100%;padding:10px 12px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r);color:var(--t1);font-family:inherit;font-size:.85rem}
-.auth-box input:focus{outline:none;border-color:var(--blue)}
+.auth-box input,.auth-box select{width:100%;padding:10px 12px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r);color:var(--t1);font-family:inherit;font-size:.85rem}
+.auth-box input:focus,.auth-box select:focus{outline:none;border-color:var(--blue)}
 .auth-box .fl{font-size:.75rem;font-weight:600;color:var(--t3);margin-bottom:4px}
 .auth-btn{width:100%;padding:12px;background:var(--t1);color:var(--bg-0);border:none;border-radius:var(--r);font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:.5rem}
 .auth-btn:hover{opacity:.9}
@@ -590,6 +590,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     <div class="fd" id="authNameField" style="display:none"><div class="fl">이름</div><input id="authName" placeholder="홍길동"></div>
     <div class="fd"><div class="fl">이메일</div><input id="authEmail" type="email" placeholder="email@example.com"></div>
     <div class="fd"><div class="fl">비밀번호</div><input id="authPass" type="password" placeholder="8자 이상"></div>
+    <div class="fd" id="authJobField" style="display:none"><div class="fl">직군 <span style="color:var(--red)">*</span></div><select id="authJob"><option value="">직군을 선택하세요</option></select></div>
     <button class="auth-btn" id="authSubmit" onclick="submitAuth()">로그인</button>
     <div class="auth-toggle" id="authToggle">계정이 없으신가요? <a onclick="toggleAuthMode()">회원가입</a></div>
     <div class="auth-err" id="authErr"></div>
@@ -620,8 +621,14 @@ function toggleAuthMode(){
   document.getElementById('authTitle').textContent=authIsRegister?'회원가입':'로그인';
   document.getElementById('authSubmit').textContent=authIsRegister?'가입하기':'로그인';
   document.getElementById('authNameField').style.display=authIsRegister?'block':'none';
+  document.getElementById('authJobField').style.display=authIsRegister?'block':'none';
+  if(authIsRegister)populateAuthJobs();
   document.getElementById('authToggle').innerHTML=authIsRegister?'이미 계정이 있으신가요? <a onclick="toggleAuthMode()">로그인</a>':'계정이 없으신가요? <a onclick="toggleAuthMode()">회원가입</a>';
   document.getElementById('authErr').textContent='';
+}
+function populateAuthJobs(){
+  const sel=document.getElementById('authJob');if(sel.options.length>1)return;
+  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.groupLabel;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.label;o.textContent=j.icon+' '+j.label;og.appendChild(o)});sel.appendChild(og)});
 }
 async function submitAuth(){
   const email=document.getElementById('authEmail').value.trim();
@@ -629,8 +636,10 @@ async function submitAuth(){
   const errEl=document.getElementById('authErr');
   if(!email||!pass){errEl.textContent='이메일과 비밀번호를 입력하세요.';return}
   if(pass.length<8){errEl.textContent='비밀번호는 8자 이상이어야 합니다.';return}
+  const jobNm=document.getElementById('authJob').value;
+  if(authIsRegister&&!jobNm){errEl.textContent='직군을 선택하세요.';return}
   const path=authIsRegister?'/auth/register':'/auth/login';
-  const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null}:{email,password:pass};
+  const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email,password:pass};
   const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
   if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
   AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name};
