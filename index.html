@@ -1807,6 +1807,7 @@ function compare(){
   document.getElementById('report').classList.add('visible');
   go('s-report');
   window.scrollTo({top:0,behavior:'smooth'});
+  updateCompareCount();
   saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
 }
 
@@ -1844,7 +1845,9 @@ async function loadLanding(){
   _popData=pop&&pop.length?pop:FALLBACK_POP;
   renderPopular(_popData);
   renderFeed(feed&&feed.length?feed:FALLBACK_FEED);
-  renderStats(stats);
+  renderStats(stats||{});
+  const lc=parseInt(localStorage.getItem('jc_compare_count'))||0;
+  if(lc){const c=document.getElementById('lsCompares');if(c)c.textContent=Math.max(parseInt(c.textContent)||0,lc)}
   startPing();
 }
 
@@ -1899,8 +1902,17 @@ function renderFeed(data){
 function renderStats(s){
   if(!s)return;
   const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
-  if(v)v.textContent=s.active_visitors||0;
-  if(c)c.textContent=s.total_comparisons||0;
+  if(v&&s.active_visitors!=null)v.textContent=s.active_visitors;
+  if(c&&s.total_comparisons!=null){
+    const local=parseInt(localStorage.getItem('jc_compare_count'))||0;
+    c.textContent=Math.max(s.total_comparisons,local);
+  }
+}
+function updateCompareCount(){
+  const n=(parseInt(localStorage.getItem('jc_compare_count'))||0)+1;
+  localStorage.setItem('jc_compare_count',n);
+  const c=document.getElementById('lsCompares');
+  if(c)c.textContent=Math.max(n,parseInt(c.textContent)||0);
 }
 
 async function startFromCase(c){

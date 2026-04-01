@@ -87,4 +87,8 @@ async def increment_view(case_id: int):
 @router.post("/ping")
 async def ping(req: PingReq):
     _active_visitors[req.client_id] = time.time()
-    return {"active_visitors": _get_active_count()}
+    total_row = await database.fetch_one(
+        "SELECT COUNT(*) AS cnt FROM comparisons"
+    )
+    total = int(total_row["cnt"]) if total_row else 0
+    return {"active_visitors": _get_active_count(), "total_comparisons": total}
