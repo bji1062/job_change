@@ -46,8 +46,12 @@ async def get_stats():
     row = await database.fetch_one(
         "SELECT comparison_count FROM daily_stats WHERE stat_date = CURDATE()"
     )
+    total_row = await database.fetch_one(
+        "SELECT COUNT(*) AS cnt FROM comparisons"
+    )
     today = int(row["comparison_count"]) if row else 0
-    return {"today_comparisons": today, "active_visitors": _get_active_count()}
+    total = int(total_row["cnt"]) if total_row else 0
+    return {"today_comparisons": today, "total_comparisons": total, "active_visitors": _get_active_count()}
 
 @router.get("/popular")
 async def get_popular():

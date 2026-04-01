@@ -607,7 +607,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
     </div>
     <div class="l-stats-bar" id="landingStats">
       <div class="l-stat"><div class="l-stat-dot"></div> 지금 <strong id="lsVisitors">0</strong>명 보는 중</div>
-      <div class="l-stat">오늘 <strong id="lsCompares">0</strong>건 비교됨</div>
+      <div class="l-stat">총 <strong id="lsCompares">0</strong>건 비교됨</div>
     </div>
   </div>
   <div class="l-scroll-hint">스크롤하여 사례 보기 ↓</div>
@@ -1900,7 +1900,7 @@ function renderStats(s){
   if(!s)return;
   const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
   if(v)v.textContent=s.active_visitors||0;
-  if(c)c.textContent=s.today_comparisons||0;
+  if(c)c.textContent=s.total_comparisons||0;
 }
 
 async function startFromCase(c){

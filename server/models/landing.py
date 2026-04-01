@@ -20,6 +20,7 @@ class PingReq(BaseModel):
 
 class LandingStats(BaseModel):
     today_comparisons: int = 0
+    total_comparisons: int = 0
     active_visitors: int = 0
 
 class PopularCase(BaseModel):
