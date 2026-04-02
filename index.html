@@ -1956,7 +1956,7 @@ async function admEditCompany(id){
   let co={name:'',type_id:'',industry:'',logo:'',work_style:'',careers_benefit_url:'',aliases:[]};
   if(id){
     const d=await apiFetch('/admin/companies/'+id+'/benefits');
-    const detail=await apiFetch('/api/v1/companies/'+id);
+    const detail=await apiFetch('/companies/'+id);
     if(detail){co={...co,...detail};co.aliases=detail.aliases||[]}
   }
   let h=`<h3>${id?'회사 편집':'회사 추가'}</h3>`;

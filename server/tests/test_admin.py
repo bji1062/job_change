@@ -564,6 +564,20 @@ def test_popular_case_missing_required():
     assert r.status_code == 422
 
 
+# ━━ FRONTEND PATH VALIDATION ━━
+
+def test_no_double_api_prefix_in_frontend():
+    """apiFetch() 호출에 /api/v1/ prefix가 포함되면 이중 prefix 버그.
+    apiFetch()가 자동으로 /api/v1을 붙이므로 경로에 /api/v1/을 넣으면
+    실제 요청이 /api/v1/api/v1/... 로 가서 404 발생."""
+    import re, os
+    html_path = os.path.join(os.path.dirname(__file__), "..", "..", "index.html")
+    with open(html_path) as f:
+        content = f.read()
+    matches = re.findall(r"apiFetch\s*\(\s*['\"]\/api\/v1\/", content)
+    assert len(matches) == 0, f"이중 prefix 버그 {len(matches)}건: {matches}"
+
+
 # ━━ RUNNER ━━
 
 if __name__ == "__main__":
