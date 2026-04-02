@@ -1483,6 +1483,50 @@ function updRptBenVal(s,idx,v){
   if(elTA)elTA.textContent=fV(totA);if(elTB)elTB.textContent=fV(totB);
   if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
 }
+function renderQualCompare(nA,nB){
+  const listA=(benS.a||[]).filter(b=>b.qual),listB=(benS.b||[]).filter(b=>b.qual);
+  if(!listA.length&&!listB.length)return'';
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.filter(b=>b.cat===cat),bItems=listB.filter(b=>b.cat===cat);
+    if(!aItems.length&&!bItems.length)return;
+    catData.push({cat,cntA:aItems.length,cntB:bItems.length,itemsA:aItems,itemsB:bItems});
+  });
+  if(!catData.length)return'';
+  const maxCnt=Math.max(...catData.map(d=>Math.max(d.cntA,d.cntB)),1);
+  const fC=v=>v+'건';
+  let h='<div id="rptQualWrap" style="display:flex;flex-direction:column;gap:6px">';
+  catData.forEach(d=>{
+    const barA=d.cntA>0?Math.max(10,d.cntA/maxCnt*100):0;
+    const barB=d.cntB>0?Math.max(10,d.cntB/maxCnt*100):0;
+    const diff=d.cntB-d.cntA;
+    let diffBadge='';
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptQ_diff_${d.cat}">+${fC(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptQ_diff_${d.cat}">${fC(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptQ_diff_${d.cat}">동일</span>`;
+    h+=`<div class="bg" onclick="this.classList.toggle('bg-open')">`;
+    h+=`<div class="bg-header">`;
+    h+=`<span class="bg-cnt cnt-a" id="rptQ_sA_${d.cat}">${d.cntA>0?fC(d.cntA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptQ_bA_${d.cat}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptQ_bB_${d.cat}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptQ_sB_${d.cat}">${d.cntB>0?fC(d.cntB):'-'}</span>`;
+    h+=`</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
+    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qualText||b.name)}</span></div>`})}
+    else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
+    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qualText||b.name)}</span></div>`})}
+    else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
+    h+=`</div></div></div></div>`;
+  });
+  const totA=listA.length,totB=listB.length,totD=totB-totA;
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptQ_totA">${fC(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptQ_totDiff">${totD===0?'동일':(totD>0?'+':'')+fC(totD)}</span><span class="total-val val-b" id="rptQ_totB">${fC(totB)}</span></div>`;
+  h+='</div>';
+  return h;
+}
 
 function validateForm(){
   let ok=true;
@@ -1707,10 +1751,10 @@ function compare(){
     html+=`</div></div>`;
   }
 
-  if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 카테고리별 비교</div><div class="cmp-body">${catHtml}</div></div>`}
+  if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 금전 환산 가능 복지</div><div class="cmp-body">${catHtml}</div></div>`}
   // Qualitative benefits
   const qualA=(benS.a||[]).filter(b=>b.qual),qualB=(benS.b||[]).filter(b=>b.qual);
-  if(qualA.length||qualB.length){html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">`;qualA.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-a">${nA}</span><span>${b.qualText||b.name}</span></div>`});qualB.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-b">${nB}</span><span>${b.qualText||b.name}</span></div>`});html+=`</div></div>`}
+  if(qualA.length||qualB.length){const qualHtml=renderQualCompare(nA,nB);if(qualHtml)html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">${qualHtml}</div></div>`}
 
   // [FIX] 3년 투영 — 변수 섀도잉 수정 (barWA/barWB)
   const grA=GROWTH_RATES[typeAVal]||0.04,grB=GROWTH_RATES[typeBVal]||0.04;
