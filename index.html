@@ -1814,7 +1814,8 @@ function compare(){
 
 // ━━ APP (navigation + init) ━━
 
-function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding()}
+function go(id,skipHistory){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(!skipHistory)history.pushState({screen:id},'')}
+window.addEventListener('popstate',e=>{const id=e.state&&e.state.screen||'s-landing';go(id,true)})
 
 document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.getElementById(s==='a'?'sA':'sB').parentElement;if(!w.contains(e.target))document.getElementById(s==='a'?'rA':'rB').classList.remove('open')})});
 
@@ -1953,6 +1954,7 @@ initPri();calc();
 restoreDraft();
 updateAuthUI();
 loadLanding();
+history.replaceState({screen:'s-landing'},'');
 
 </script>
 </body>
