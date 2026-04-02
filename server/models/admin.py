@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Literal
 
 class DashboardStats(BaseModel):
     total_users: int
@@ -37,6 +37,17 @@ class CompanyUpdate(BaseModel):
 class AliasUpdate(BaseModel):
     aliases: list[str]
 
+class BenefitItem(BaseModel):
+    ben_key: str
+    name: str
+    val: int = 0
+    category: str = "financial"
+    badge: str = "est"
+    note: str | None = None
+    is_qualitative: bool = False
+    qual_text: str | None = None
+    sort_order: int = 0
+
 class PopularCaseReq(BaseModel):
     case_type: str
     title_a: str
@@ -49,7 +60,7 @@ class PopularCaseReq(BaseModel):
     is_active: bool = True
 
 class UserRoleUpdate(BaseModel):
-    role: str
+    role: Literal["user", "admin"]
 
 class PagedResponse(BaseModel):
     items: list[Any]

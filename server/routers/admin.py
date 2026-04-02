@@ -5,7 +5,7 @@ import database
 from services import cache
 from middleware.auth_middleware import get_admin_user
 from models.admin import (
-    DashboardStats, CompanyCreate, CompanyUpdate,
+    DashboardStats, CompanyCreate, CompanyUpdate, BenefitItem,
     AliasUpdate, PopularCaseReq, UserRoleUpdate, PagedResponse,
 )
 
@@ -211,7 +211,7 @@ async def get_company_benefits(company_id: str, admin_id: int = Depends(get_admi
 @router.put("/companies/{company_id}/benefits")
 async def save_company_benefits(
     company_id: str,
-    benefits: list[dict],
+    benefits: list[BenefitItem],
     admin_id: int = Depends(get_admin_user),
 ):
     existing = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
@@ -223,9 +223,9 @@ async def save_company_benefits(
             """INSERT INTO company_benefits
                (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (company_id, b.get("ben_key", ""), b.get("name", ""), b.get("val", 0),
-             b.get("category", "financial"), b.get("badge", "est"), b.get("note"),
-             b.get("is_qualitative", False), b.get("qual_text"), b.get("sort_order", i)),
+            (company_id, b.ben_key, b.name, b.val,
+             b.category, b.badge, b.note,
+             b.is_qualitative, b.qual_text, b.sort_order or i),
         )
     cache.delete("reference_all")
     return {"ok": True, "count": len(benefits)}
