@@ -1981,7 +1981,7 @@ async function admLoadCompanies(page,q,type){
   h+='</div><button class="adm-btn primary" onclick="admEditCompany(null)">+ 회사 추가</button></div>';
   h+='<table class="adm-tbl"><thead><tr><th>회사명</th><th>유형</th><th>산업</th><th>복지</th><th>별명</th><th>작업</th></tr></thead><tbody>';
   if(d.items&&d.items.length){
-    h+=d.items.map(co=>`<tr><td><strong>${esc(co.name)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.type]||co.type||'-')}</td><td>${esc(co.industry||'-')}</td><td>${co.benefit_count??0}건</td><td>${co.alias_count??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany(${co.id})">편집</button> <button class="adm-btn" onclick="admEditBenefits(${co.id},'${esc(co.name)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany(${co.id},'${esc(co.name)}')">삭제</button></td></tr>`).join('');
+    h+=d.items.map(co=>`<tr><td><strong>${esc(co.name)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.type]||co.type||'-')}</td><td>${esc(co.industry||'-')}</td><td>${co.benefit_count??0}건</td><td>${co.alias_count??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany('${co.id}')">편집</button> <button class="adm-btn" onclick="admEditBenefits('${co.id}','${esc(co.name)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany('${co.id}','${esc(co.name)}')">삭제</button></td></tr>`).join('');
   }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:2rem">회사가 없습니다.</td></tr>';
   h+='</tbody></table>';
   h+=admPagination(d.total,d.page,d.page_size,'admLoadCompanies');
@@ -2011,7 +2011,7 @@ async function admEditCompany(id){
   h+=`<div class="adm-fd"><label>근무 형태</label><input id="admCoWS" value="${esc(co.work_style||'')}" placeholder="hybrid, remote, onsite"></div>`;
   h+=`<div class="adm-fd"><label>채용/복지 URL</label><input id="admCoURL" value="${esc(co.careers_benefit_url||'')}"></div>`;
   h+=`<div class="adm-fd"><label>별명 (쉼표 구분)</label><input id="admCoAlias" value="${esc((co.aliases||[]).join(', '))}"></div>`;
-  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCompany(${id||'null'})">저장</button></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCompany(${id?("'"+id+"'"):'null'})">저장</button></div>`;
   b.innerHTML=h;m.classList.add('open');
 }
 
@@ -2053,7 +2053,7 @@ function admRenderBenModal(id,name,bens){
     h+=bens.map((bn,i)=>`<tr id="admBR${i}"><td><input style="width:80px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.key||'')}" data-f="key" data-i="${i}"></td><td><input style="width:100px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.name||'')}" data-f="name" data-i="${i}"></td><td><input type="number" style="width:70px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${bn.val||0}" data-f="val" data-i="${i}"></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="cat" data-i="${i}">${ADM_CAT_OPTS.map(([k,l])=>`<option value="${k}"${bn.cat===k?' selected':''}>${l}</option>`).join('')}</select></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="badge" data-i="${i}"><option value="">-</option>${ADM_BADGE_OPTS.map(([k,l])=>`<option value="${k}"${bn.badge===k?' selected':''}>${l}</option>`).join('')}</select></td><td style="text-align:center"><input type="checkbox" data-f="qual" data-i="${i}"${bn.qual?' checked':''}></td><td><button class="adm-btn danger" onclick="admRemoveBenRow(${i})" style="padding:2px 8px">×</button></td></tr>`).join('');
   }else h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:1rem">복지 항목이 없습니다.</td></tr>';
   h+='</tbody></table></div>';
-  h+=`<div style="display:flex;gap:8px;justify-content:space-between;margin-top:1rem"><button class="adm-btn" onclick="admAddBenRow()">+ 항목 추가</button><div style="display:flex;gap:8px"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveBenefits(${id})">일괄 저장</button></div></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:space-between;margin-top:1rem"><button class="adm-btn" onclick="admAddBenRow()">+ 항목 추가</button><div style="display:flex;gap:8px"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveBenefits('${id}')">일괄 저장</button></div></div>`;
   b.innerHTML=h;
 }
 
