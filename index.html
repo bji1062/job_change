@@ -1503,7 +1503,7 @@ function renderBenCatCompare(nA,nB){
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
     d.details.filter(x=>x.inA).forEach(x=>{
       const only='';
-      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)">${only}</div>`;
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)"><span class="bi-u">만</span>${only}</div>`;
     });
     if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
