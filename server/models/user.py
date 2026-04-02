@@ -15,3 +15,4 @@ class TokenResp(BaseModel):
     token_type: str = "bearer"
     user_id: int
     name: str | None = None
+    role: str = "user"

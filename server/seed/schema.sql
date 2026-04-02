@@ -11,6 +11,13 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- [MIGRATION] users 테이블에 role 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT ''user'' COMMENT ''사용자 역할 (user, admin)''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- ━━ REFERENCE DATA ━━
 
 CREATE TABLE IF NOT EXISTS company_types (

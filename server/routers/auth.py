@@ -16,12 +16,15 @@ async def register(req: RegisterReq):
         (req.email, pw_hash, req.name, req.job_nm),
     )
     token = create_token(user_id)
-    return TokenResp(access_token=token, user_id=user_id, name=req.name)
+    return TokenResp(access_token=token, user_id=user_id, name=req.name, role="user")
 
 @router.post("/login", response_model=TokenResp)
 async def login(req: LoginReq):
-    user = await database.fetch_one("SELECT id, password_hash, name FROM users WHERE email=%s", (req.email,))
+    user = await database.fetch_one(
+        "SELECT id, password_hash, name, role FROM users WHERE email=%s", (req.email,)
+    )
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = create_token(user["id"])
-    return TokenResp(access_token=token, user_id=user["id"], name=user["name"])
+    role = user.get("role") or "user"
+    token = create_token(user["id"], role)
+    return TokenResp(access_token=token, user_id=user["id"], name=user["name"], role=role)
