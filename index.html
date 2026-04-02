@@ -1484,7 +1484,7 @@ function updRptBenVal(s,idx,v){
   if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
 }
 function renderQualCompare(nA,nB){
-  const listA=(benS.a||[]).filter(b=>b.qual),listB=(benS.b||[]).filter(b=>b.qual);
+  const listA=(benS.a||[]).filter(b=>b.checked&&b.qual),listB=(benS.b||[]).filter(b=>b.checked&&b.qual);
   if(!listA.length&&!listB.length)return'';
   const cats=Object.keys(CAT_LABELS);
   const catData=[];
@@ -1753,7 +1753,7 @@ function compare(){
 
   if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 금전 환산 가능 복지</div><div class="cmp-body">${catHtml}</div></div>`}
   // Qualitative benefits
-  const qualA=(benS.a||[]).filter(b=>b.qual),qualB=(benS.b||[]).filter(b=>b.qual);
+  const qualA=(benS.a||[]).filter(b=>b.checked&&b.qual),qualB=(benS.b||[]).filter(b=>b.checked&&b.qual);
   if(qualA.length||qualB.length){const qualHtml=renderQualCompare(nA,nB);if(qualHtml)html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">${qualHtml}</div></div>`}
 
   // [FIX] 3년 투영 — 변수 섀도잉 수정 (barWA/barWB)
