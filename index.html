@@ -873,7 +873,7 @@ async function submitAuth(){
   const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email,password:pass};
   const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
   if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
-  AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name};
+  AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name,role:r.role||'user'};
   localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
   updateAuthUI();closeAuth();
   if(window._saveRetry){window._saveRetry();window._saveRetry=null}
@@ -1874,6 +1874,357 @@ function compare(){
   window.scrollTo({top:0,behavior:'instant'});
   updateCompareCount();
   saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
+}
+
+// ━━ ADMIN ━━
+let admTab='dashboard',admPage={companies:1,users:1,cases:1,feed:1},admData={},admCompQ='',admCompType='',admUserQ='',admContentSub='cases',admStatsDays=30;
+const ADM_TABS=[['dashboard','대시보드'],['companies','회사 관리'],['users','사용자'],['content','콘텐츠'],['stats','통계']];
+const ADM_TYPE_LABELS={large:'대기업',mid:'중견기업',public:'공기업',startup:'스타트업',foreign:'외국계',freelance:'프리랜서'};
+const ADM_CAT_OPTS=[['financial','보상·금전'],['work_env','근무환경'],['wellness','건강·의료'],['time','시간·휴가'],['growth','성장·커리어'],['family','가족'],['life','라이프스타일']];
+const ADM_BADGE_OPTS=[['confirmed','확인됨'],['est','추정'],['premium','프리미엄'],['unique','고유']];
+
+function admInit(){
+  document.getElementById('admTabs').innerHTML=ADM_TABS.map(([k,l])=>`<button class="adm-tab${admTab===k?' active':''}" onclick="admGoTab('${k}')">${esc(l)}</button>`).join('');
+  admGoTab(admTab);
+}
+function admGoTab(t){
+  admTab=t;
+  document.querySelectorAll('.adm-tab').forEach(el=>el.classList.toggle('active',el.textContent===ADM_TABS.find(x=>x[0]===t)?.[1]));
+  if(t==='dashboard')admLoadDash();
+  else if(t==='companies')admLoadCompanies();
+  else if(t==='users')admLoadUsers();
+  else if(t==='content')admLoadContent();
+  else if(t==='stats')admLoadStats();
+}
+
+async function admLoadDash(){
+  const c=document.getElementById('admContent');c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">로딩 중...</div>';
+  const d=await apiFetch('/api/v1/admin/dashboard');
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">데이터를 불러올 수 없습니다.</div>';return}
+  admData.dash=d;
+  const cards=[
+    ['총 사용자',d.total_users,d.today_users?'+'+d.today_users+' 오늘':'','up'],
+    ['오늘 가입',d.today_users??0,'',''],
+    ['총 비교',d.total_comparisons,d.today_comparisons?'+'+d.today_comparisons+' 오늘':'','up'],
+    ['오늘 비교',d.today_comparisons??0,'',''],
+    ['등록 회사',d.total_companies,'',''],
+    ['복지 보유',d.companies_with_benefits,'',''],
+    ['활성 방문',d.active_visitors??0,'','']
+  ];
+  let h='<div class="adm-section"><h4>대시보드</h4><div class="adm-cards">';
+  h+=cards.map(([lb,v,delta,dir])=>`<div class="adm-card"><div class="adm-val">${v!=null?Number(v).toLocaleString():'-'}</div><div class="adm-label">${esc(lb)}</div>${delta?`<div class="adm-delta ${dir}">${esc(delta)}</div>`:''}</div>`).join('');
+  h+='</div><div class="adm-quick"><button class="adm-btn primary" onclick="admClearCache()">캐시 초기화</button><button class="adm-btn" onclick="admGoTab(\'companies\')">회사 관리 →</button><button class="adm-btn" onclick="admGoTab(\'stats\')">통계 보기 →</button></div></div>';
+  c.innerHTML=h;
+}
+
+async function admClearCache(){
+  const r=await apiFetch('/api/v1/admin/cache/clear',{method:'POST'});
+  alert(r?'캐시가 초기화되었습니다.':'오류가 발생했습니다.');
+}
+
+// ━━ ADMIN: COMPANIES ━━
+async function admLoadCompanies(page,q,type){
+  if(page!=null)admPage.companies=page;if(q!=null)admCompQ=q;if(type!=null)admCompType=type;
+  const c=document.getElementById('admContent');
+  const params=new URLSearchParams({page:admPage.companies});
+  if(admCompQ)params.set('q',admCompQ);if(admCompType)params.set('type',admCompType);
+  const d=await apiFetch('/api/v1/admin/companies?'+params);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>회사 관리</h4>';
+  h+='<div class="adm-toolbar"><input class="adm-search" placeholder="회사명 검색..." value="'+esc(admCompQ)+'" onkeydown="if(event.key===\'Enter\')admLoadCompanies(1,this.value)">';
+  h+='<div class="adm-filter-btns"><button class="adm-filter'+(!admCompType?' active':'')+'" onclick="admLoadCompanies(1,null,\'\')">전체</button>';
+  h+=Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<button class="adm-filter${admCompType===k?' active':''}" onclick="admLoadCompanies(1,null,'${k}')">${esc(l)}</button>`).join('');
+  h+='</div><button class="adm-btn primary" onclick="admEditCompany(null)">+ 회사 추가</button></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>회사명</th><th>유형</th><th>산업</th><th>복지</th><th>별명</th><th>작업</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(co=>`<tr><td><strong>${esc(co.name)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.type]||co.type||'-')}</td><td>${esc(co.industry||'-')}</td><td>${co.benefit_count??0}건</td><td>${co.alias_count??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany(${co.id})">편집</button> <button class="adm-btn" onclick="admEditBenefits(${co.id},'${esc(co.name)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany(${co.id},'${esc(co.name)}')">삭제</button></td></tr>`).join('');
+  }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:2rem">회사가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadCompanies');
+  h+='</div>';
+  c.innerHTML=h;
+}
+
+async function admDelCompany(id,name){
+  if(!confirm(name+' 회사를 삭제하시겠습니까?'))return;
+  await apiFetch('/api/v1/admin/companies/'+id,{method:'DELETE'});
+  admLoadCompanies();
+}
+
+async function admEditCompany(id){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  let co={name:'',type_id:'',industry:'',logo:'',work_style:'',careers_benefit_url:'',aliases:[]};
+  if(id){
+    const d=await apiFetch('/api/v1/admin/companies/'+id+'/benefits');
+    const detail=await apiFetch('/api/v1/companies/'+id);
+    if(detail){co={...co,...detail};co.aliases=detail.aliases||[]}
+  }
+  let h=`<h3>${id?'회사 편집':'회사 추가'}</h3>`;
+  h+=`<div class="adm-fd"><label>회사명</label><input id="admCoName" value="${esc(co.name)}"></div>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCoType"><option value="">선택</option>${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${co.type===k||co.type_id===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+  h+=`<div class="adm-fd"><label>산업</label><input id="admCoInd" value="${esc(co.industry||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>로고 URL</label><input id="admCoLogo" value="${esc(co.logo||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>근무 형태</label><input id="admCoWS" value="${esc(co.work_style||'')}" placeholder="hybrid, remote, onsite"></div>`;
+  h+=`<div class="adm-fd"><label>채용/복지 URL</label><input id="admCoURL" value="${esc(co.careers_benefit_url||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>별명 (쉼표 구분)</label><input id="admCoAlias" value="${esc((co.aliases||[]).join(', '))}"></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCompany(${id||'null'})">저장</button></div>`;
+  b.innerHTML=h;m.classList.add('open');
+}
+
+async function admSaveCompany(id){
+  const name=document.getElementById('admCoName').value.trim();
+  const type_id=document.getElementById('admCoType').value;
+  const industry=document.getElementById('admCoInd').value.trim();
+  const logo=document.getElementById('admCoLogo').value.trim();
+  const work_style=document.getElementById('admCoWS').value.trim();
+  const careers_benefit_url=document.getElementById('admCoURL').value.trim();
+  const aliasStr=document.getElementById('admCoAlias').value.trim();
+  const aliases=aliasStr?aliasStr.split(',').map(a=>a.trim()).filter(Boolean):[];
+  if(!name){alert('회사명을 입력하세요.');return}
+  const body={name,type_id,industry,logo,work_style,careers_benefit_url};
+  if(id){
+    await apiFetch('/api/v1/admin/companies/'+id,{method:'PUT',body:JSON.stringify(body)});
+    if(aliases.length||aliasStr==='')await apiFetch('/api/v1/admin/companies/'+id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+  }else{
+    const r=await apiFetch('/api/v1/admin/companies',{method:'POST',body:JSON.stringify(body)});
+    if(r&&r.id&&aliases.length)await apiFetch('/api/v1/admin/companies/'+r.id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+  }
+  admCloseModal();admLoadCompanies();
+}
+
+// ━━ ADMIN: BENEFITS ━━
+async function admEditBenefits(id,name){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  b.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">복지 로딩 중...</div>';m.classList.add('open');
+  const bens=await apiFetch('/api/v1/admin/companies/'+id+'/benefits')||[];
+  admData.editBens=bens;admData.editBenId=id;
+  admRenderBenModal(id,name,bens);
+}
+
+function admRenderBenModal(id,name,bens){
+  const b=document.getElementById('admModalBox');
+  let h=`<h3>${esc(name)} — 복지 편집</h3>`;
+  h+='<div style="overflow-x:auto"><table class="adm-tbl"><thead><tr><th>key</th><th>이름</th><th>금액(만원)</th><th>카테고리</th><th>뱃지</th><th>자격조건</th><th>삭제</th></tr></thead><tbody id="admBenRows">';
+  if(bens.length){
+    h+=bens.map((bn,i)=>`<tr id="admBR${i}"><td><input style="width:80px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.key||'')}" data-f="key" data-i="${i}"></td><td><input style="width:100px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.name||'')}" data-f="name" data-i="${i}"></td><td><input type="number" style="width:70px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${bn.val||0}" data-f="val" data-i="${i}"></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="cat" data-i="${i}">${ADM_CAT_OPTS.map(([k,l])=>`<option value="${k}"${bn.cat===k?' selected':''}>${l}</option>`).join('')}</select></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="badge" data-i="${i}"><option value="">-</option>${ADM_BADGE_OPTS.map(([k,l])=>`<option value="${k}"${bn.badge===k?' selected':''}>${l}</option>`).join('')}</select></td><td style="text-align:center"><input type="checkbox" data-f="qual" data-i="${i}"${bn.qual?' checked':''}></td><td><button class="adm-btn danger" onclick="admRemoveBenRow(${i})" style="padding:2px 8px">×</button></td></tr>`).join('');
+  }else h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:1rem">복지 항목이 없습니다.</td></tr>';
+  h+='</tbody></table></div>';
+  h+=`<div style="display:flex;gap:8px;justify-content:space-between;margin-top:1rem"><button class="adm-btn" onclick="admAddBenRow()">+ 항목 추가</button><div style="display:flex;gap:8px"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveBenefits(${id})">일괄 저장</button></div></div>`;
+  b.innerHTML=h;
+}
+
+function admAddBenRow(){
+  admData.editBens.push({key:'',name:'',val:0,cat:'financial',badge:'',qual:false,qualText:'',note:'',sort_order:0});
+  admRenderBenModal(admData.editBenId,'',admData.editBens);
+}
+
+function admRemoveBenRow(i){
+  admData.editBens.splice(i,1);
+  admRenderBenModal(admData.editBenId,'',admData.editBens);
+}
+
+function admCollectBens(){
+  const rows=document.querySelectorAll('#admBenRows tr[id^="admBR"]');
+  const result=[];
+  rows.forEach((tr,i)=>{
+    const g=f=>tr.querySelector(`[data-f="${f}"][data-i="${i}"]`);
+    result.push({key:g('key')?.value||'',name:g('name')?.value||'',val:parseFloat(g('val')?.value)||0,cat:g('cat')?.value||'financial',badge:g('badge')?.value||'',qual:g('qual')?.checked||false,qualText:'',note:'',sort_order:i});
+  });
+  return result;
+}
+
+async function admSaveBenefits(id){
+  const bens=admCollectBens();
+  await apiFetch('/api/v1/admin/companies/'+id+'/benefits',{method:'PUT',body:JSON.stringify(bens)});
+  admCloseModal();admLoadCompanies();
+}
+
+function admCloseModal(){document.getElementById('admModal').classList.remove('open')}
+
+// ━━ ADMIN: USERS ━━
+async function admLoadUsers(page,q){
+  if(page!=null)admPage.users=page;if(q!=null)admUserQ=q;
+  const c=document.getElementById('admContent');
+  const params=new URLSearchParams({page:admPage.users});
+  if(admUserQ)params.set('q',admUserQ);
+  const d=await apiFetch('/api/v1/admin/users?'+params);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>사용자 관리</h4>';
+  h+='<div class="adm-toolbar"><input class="adm-search" placeholder="이메일 또는 이름 검색..." value="'+esc(admUserQ)+'" onkeydown="if(event.key===\'Enter\')admLoadUsers(1,this.value)"></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>이메일</th><th>이름</th><th>직군</th><th>역할</th><th>가입일</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(u=>{
+      const dt=u.created_at?new Date(u.created_at).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${esc(u.email)}</td><td>${esc(u.name||'-')}</td><td>${esc(u.job_name||'-')}</td><td><select style="font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" onchange="admChangeRole(${u.id},this.value)"><option value="user"${u.role==='user'?' selected':''}>user</option><option value="admin"${u.role==='admin'?' selected':''}>admin</option></select></td><td>${esc(dt)}</td></tr>`;
+    }).join('');
+  }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:2rem">사용자가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadUsers');
+  h+='</div>';
+  c.innerHTML=h;
+}
+
+async function admChangeRole(id,role){
+  const r=await apiFetch('/api/v1/admin/users/'+id+'/role',{method:'PUT',body:JSON.stringify({role})});
+  if(!r)alert('역할 변경 실패');
+}
+
+// ━━ ADMIN: CONTENT ━━
+async function admLoadContent(sub){
+  if(sub)admContentSub=sub;
+  const c=document.getElementById('admContent');
+  let h='<div class="adm-section"><h4>콘텐츠 관리</h4>';
+  h+='<div class="adm-subtabs"><button class="adm-subtab'+( admContentSub==='cases'?' active':'')+'" onclick="admLoadContent(\'cases\')">인기사례</button><button class="adm-subtab'+(admContentSub==='feed'?' active':'')+'" onclick="admLoadContent(\'feed\')">비교피드</button></div>';
+  h+='<div id="admContentInner"></div></div>';
+  c.innerHTML=h;
+  if(admContentSub==='cases')admLoadCases();else admLoadFeed();
+}
+
+async function admLoadCases(){
+  const el=document.getElementById('admContentInner');
+  const d=await apiFetch('/api/v1/admin/popular-cases');
+  if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
+  let h='<div style="margin-bottom:.75rem"><button class="adm-btn primary" onclick="admEditCase(null)">+ 인기사례 추가</button></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>A</th><th>B</th><th>유형</th><th>활성</th><th>작업</th></tr></thead><tbody>';
+  const items=Array.isArray(d)?d:(d.items||[]);
+  if(items.length){
+    h+=items.map(cs=>`<tr><td>${esc(cs.title_a)}</td><td>${esc(cs.title_b)}</td><td>${esc(cs.case_type||'-')}</td><td>${cs.is_active?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
+  }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:1rem">인기사례가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+
+async function admEditCase(id){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  let cs={case_type:'company',title_a:'',type_a:'large',sub_a:'',title_b:'',type_b:'large',sub_b:'',points:[],is_active:true};
+  if(id){
+    const all=await apiFetch('/api/v1/admin/popular-cases');
+    const items=Array.isArray(all)?all:(all?.items||[]);
+    const found=items.find(x=>x.id===id);if(found)cs={...cs,...found};
+  }
+  const pts=(cs.points||[]).join('\n');
+  let h=`<h3>${id?'인기사례 편집':'인기사례 추가'}</h3>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCsType"><option value="company"${cs.case_type==='company'?' selected':''}>company</option><option value="situation"${cs.case_type==='situation'?' selected':''}>situation</option></select></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>A 제목</label><input id="admCsTA" value="${esc(cs.title_a)}"></div><div class="adm-fd" style="flex:1"><label>A 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.type_a===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>A 서브</label><input id="admCsSA" value="${esc(cs.sub_a||'')}"></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>B 제목</label><input id="admCsTB" value="${esc(cs.title_b)}"></div><div class="adm-fd" style="flex:1"><label>B 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.type_b===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>B 서브</label><input id="admCsSB" value="${esc(cs.sub_b||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>포인트 (줄바꿈 구분)</label><textarea id="admCsPts" rows="4" style="resize:vertical">${esc(pts)}</textarea></div>`;
+  h+=`<div class="adm-fd"><label><input type="checkbox" id="admCsAct"${cs.is_active?' checked':''}> 활성</label></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCase(${id||'null'})">저장</button></div>`;
+  b.innerHTML=h;m.classList.add('open');
+}
+
+async function admSaveCase(id){
+  const body={
+    case_type:document.getElementById('admCsType').value,
+    title_a:document.getElementById('admCsTA').value.trim(),
+    type_a:document.getElementById('admCsTyA').value,
+    sub_a:document.getElementById('admCsSA').value.trim(),
+    title_b:document.getElementById('admCsTB').value.trim(),
+    type_b:document.getElementById('admCsTyB').value,
+    sub_b:document.getElementById('admCsSB').value.trim(),
+    points:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
+    is_active:document.getElementById('admCsAct').checked
+  };
+  if(id)await apiFetch('/api/v1/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
+  else await apiFetch('/api/v1/admin/popular-cases',{method:'POST',body:JSON.stringify(body)});
+  admCloseModal();admLoadCases();
+}
+
+async function admDelCase(id){
+  if(!confirm('이 인기사례를 삭제하시겠습니까?'))return;
+  await apiFetch('/api/v1/admin/popular-cases/'+id,{method:'DELETE'});
+  admLoadCases();
+}
+
+async function admLoadFeed(){
+  const el=document.getElementById('admContentInner');
+  const d=await apiFetch('/api/v1/admin/feed?page='+admPage.feed);
+  if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
+  let h='<table class="adm-tbl"><thead><tr><th>ID</th><th>A</th><th>B</th><th>요약</th><th>날짜</th><th>삭제</th></tr></thead><tbody>';
+  const items=d.items||[];
+  if(items.length){
+    h+=items.map(f=>{
+      const dt=f.created_at?new Date(f.created_at).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${f.id}</td><td>${esc(f.company_a_display||f.company_a_name||'-')}</td><td>${esc(f.company_b_display||f.company_b_name||'-')}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((f.headline||f.summary||'').slice(0,50))}</td><td>${esc(dt)}</td><td><button class="adm-btn danger" onclick="admDelFeed(${f.id})">삭제</button></td></tr>`;
+    }).join('');
+  }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:1rem">피드가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  if(d.total)h+=admPagination(d.total,d.page,d.page_size,'admFeedPage');
+  el.innerHTML=h;
+}
+
+function admFeedPage(page){admPage.feed=page;admLoadFeed()}
+
+async function admDelFeed(id){
+  if(!confirm('이 비교 피드를 삭제하시겠습니까?'))return;
+  await apiFetch('/api/v1/admin/feed/'+id,{method:'DELETE'});
+  admLoadFeed();
+}
+
+// ━━ ADMIN: STATS ━━
+async function admLoadStats(days){
+  if(days)admStatsDays=days;
+  const c=document.getElementById('admContent');
+  c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">통계 로딩 중...</div>';
+  const [cmpStats,coStats,userStats]=await Promise.all([
+    apiFetch('/api/v1/admin/stats/comparisons?days='+admStatsDays),
+    apiFetch('/api/v1/admin/stats/companies'),
+    apiFetch('/api/v1/admin/stats/users?days='+admStatsDays)
+  ]);
+  let h='<div class="adm-section"><h4>통계</h4>';
+  h+='<div class="adm-subtabs" style="margin-bottom:1.25rem"><button class="adm-subtab'+(admStatsDays===7?' active':'')+'" onclick="admLoadStats(7)">7일</button><button class="adm-subtab'+(admStatsDays===30?' active':'')+'" onclick="admLoadStats(30)">30일</button><button class="adm-subtab'+(admStatsDays===90?' active':'')+'" onclick="admLoadStats(90)">90일</button></div>';
+
+  // 일별 비교 건수
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">일별 비교 건수</h4>';
+  if(cmpStats&&cmpStats.length){
+    const maxC=Math.max(...cmpStats.map(x=>x.comparison_count||0),1);
+    h+=cmpStats.map(x=>{
+      const dt=(x.stat_date||x.date||'').slice(5);
+      const pct=Math.round(((x.comparison_count||0)/maxC)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--blue)"></div><span class="adm-bar-val">${x.comparison_count||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div>';
+
+  // 인기 회사 TOP 10
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">인기 회사 TOP 10</h4>';
+  if(coStats&&coStats.length){
+    const maxCo=Math.max(...coStats.map(x=>x.count||0),1);
+    h+=coStats.slice(0,10).map(x=>{
+      const pct=Math.round(((x.count||0)/maxCo)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(x.company_name||'-')}</span><div class="adm-bar" style="width:${pct}%;background:var(--amber)"></div><span class="adm-bar-val">${x.count||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div>';
+
+  // 일별 가입 추이
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">일별 신규 가입</h4>';
+  if(userStats&&userStats.length){
+    const maxU=Math.max(...userStats.map(x=>x.count||0),1);
+    h+=userStats.map(x=>{
+      const dt=(x.date||'').slice(5);
+      const pct=Math.round(((x.count||0)/maxU)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--green)"></div><span class="adm-bar-val">${x.count||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div></div>';
+  c.innerHTML=h;
+}
+
+// ━━ ADMIN: PAGINATION ━━
+function admPagination(total,page,pageSize,callback){
+  if(!total||!pageSize)return'';
+  const pages=Math.ceil(total/pageSize);if(pages<=1)return'';
+  let h='<div class="adm-pagination">';
+  if(page>1)h+=`<button class="adm-pg" onclick="${callback}(${page-1})">‹</button>`;
+  for(let i=1;i<=pages;i++){
+    if(pages>7&&Math.abs(i-page)>2&&i!==1&&i!==pages){if(i===2||i===pages-1)h+='<span style="color:var(--t3);padding:0 4px">...</span>';continue}
+    h+=`<button class="adm-pg${i===page?' active':''}" onclick="${callback}(${i})">${i}</button>`;
+  }
+  if(page<pages)h+=`<button class="adm-pg" onclick="${callback}(${page+1})">›</button>`;
+  h+='</div>';return h;
 }
 
 // ━━ APP (navigation + init) ━━
