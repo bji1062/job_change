@@ -4,7 +4,7 @@ class RegisterReq(BaseModel):
     email: EmailStr
     password: str
     name: str | None = None
-    job_id: str
+    job_nm: str
 
 class LoginReq(BaseModel):
     email: EmailStr
@@ -15,3 +15,4 @@ class TokenResp(BaseModel):
     token_type: str = "bearer"
     user_id: int
     name: str | None = None
+    role: str = "user"

@@ -3,6 +3,21 @@
 SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
+-- [FIX] 운영 DB에 job_nm 컬럼이 없는 경우 추가 (기존 job_id → job_nm 전환)
+-- 이미 컬럼이 있으면 무시됨
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'job_nm');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN job_nm VARCHAR(50) COMMENT ''선택한 직군명 (백엔드 개발, PM 등)''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- [MIGRATION] users 테이블에 role 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT ''user'' COMMENT ''사용자 역할 (user, admin)''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- ━━ REFERENCE DATA ━━
 
 CREATE TABLE IF NOT EXISTS company_types (
@@ -126,7 +141,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL COMMENT '이메일 (로그인 ID)',
   password_hash VARCHAR(255) NOT NULL COMMENT 'bcrypt 해시된 비밀번호',
   name VARCHAR(50) COMMENT '사용자 표시 이름',
-  job_id VARCHAR(30) COMMENT '선택한 직군 코드 (dev, pm, uxui 등)',
+  job_nm VARCHAR(50) COMMENT '선택한 직군명 (백엔드 개발, PM 등)',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '가입 시각',
   INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
