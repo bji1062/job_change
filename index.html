@@ -590,6 +590,56 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .u-drop.open{display:block}
 .u-drop-item{display:block;width:100%;padding:10px 14px;background:none;border:none;color:var(--t2);font-size:.8rem;font-family:inherit;cursor:pointer;text-align:left}
 .u-drop-item:hover{background:var(--bg-3)}
+
+/* ━━ ADMIN ━━ */
+.adm-layout{max-width:1200px;margin:0 auto;padding:2rem 1.25rem 4rem;width:100%}
+.adm-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);padding-bottom:0;margin-bottom:1.5rem;overflow-x:auto}
+.adm-tab{font-size:.8rem;padding:10px 18px;background:none;border:none;border-bottom:2px solid transparent;color:var(--t3);cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+.adm-tab:hover{color:var(--t2)}
+.adm-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.adm-cards{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.adm-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;flex:1;min-width:140px}
+.adm-val{font-size:1.5rem;font-weight:800;color:var(--t1);line-height:1.2}
+.adm-label{font-size:.72rem;color:var(--t3);margin-top:2px}
+.adm-delta{font-size:.7rem;margin-top:4px}
+.adm-delta.up{color:var(--green)}.adm-delta.down{color:var(--red)}
+.adm-tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.adm-tbl th{background:var(--bg-3);color:var(--t3);font-size:.72rem;font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+.adm-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--t2);vertical-align:middle}
+.adm-tbl tr:hover td{background:var(--bg-3)}
+.adm-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:flex-start;justify-content:center;padding-top:5vh;overflow-y:auto}
+.adm-modal.open{display:flex}
+.adm-modal-box{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.75rem;width:90%;max-width:600px;animation:fadeUp .3s ease;margin-bottom:4rem;max-height:85vh;overflow-y:auto}
+.adm-modal-box h3{font-size:1rem;font-weight:700;margin-bottom:1rem}
+.adm-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.75rem}
+.adm-bar-label{width:70px;text-align:right;color:var(--t3);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-bar{height:20px;background:var(--blue);border-radius:4px;transition:width .4s ease;min-width:2px}
+.adm-bar-val{color:var(--t2);min-width:30px}
+.adm-pagination{display:flex;gap:4px;justify-content:center;margin-top:1rem}
+.adm-pg{font-size:.78rem;padding:6px 12px;border:1px solid var(--border);background:none;color:var(--t3);border-radius:6px;cursor:pointer;font-family:inherit}
+.adm-pg:hover{border-color:var(--t3);color:var(--t2)}
+.adm-pg.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.adm-btn{font-size:.75rem;padding:5px 12px;border:1px solid var(--border);background:none;color:var(--t2);border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
+.adm-btn:hover{border-color:var(--t3);color:var(--t1)}
+.adm-btn.danger{border-color:var(--red);color:var(--red)}.adm-btn.danger:hover{background:var(--red-d)}
+.adm-btn.primary{border-color:var(--blue);color:var(--blue)}.adm-btn.primary:hover{background:var(--blue-d)}
+.adm-search{font-size:.82rem;padding:8px 14px;background:var(--bg-1);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-family:inherit;width:100%;max-width:300px}
+.adm-search:focus{outline:none;border-color:var(--blue)}
+.adm-filter-btns{display:flex;gap:4px;flex-wrap:wrap}
+.adm-filter{font-size:.72rem;padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:inherit;transition:all .15s}
+.adm-filter.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.adm-filter:hover{border-color:var(--t3);color:var(--t2)}
+.adm-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.adm-fd{margin-bottom:.75rem}.adm-fd label{display:block;font-size:.75rem;color:var(--t3);margin-bottom:4px}
+.adm-fd input,.adm-fd select,.adm-fd textarea{width:100%;font-size:.82rem;padding:8px 10px;background:var(--bg-1);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-family:inherit}
+.adm-fd input:focus,.adm-fd select:focus,.adm-fd textarea:focus{outline:none;border-color:var(--blue)}
+.adm-subtabs{display:flex;gap:4px;margin-bottom:1rem}
+.adm-subtab{font-size:.75rem;padding:6px 14px;border-radius:16px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:inherit;transition:all .15s}
+.adm-subtab.active{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.adm-quick{display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap}
+.adm-section{margin-bottom:2rem}
+.adm-section h4{font-size:.88rem;font-weight:700;margin-bottom:.75rem;color:var(--t1)}
+@media(max-width:768px){.adm-cards{gap:.5rem}.adm-card{min-width:calc(50% - .5rem)}.adm-tbl{display:block;overflow-x:auto}.adm-toolbar{flex-direction:column;align-items:stretch}.adm-search{max-width:100%}}
 </style>
 </head>
 <body>
@@ -747,6 +797,17 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 </div>
 
 
+<!-- ━━ ADMIN ━━ -->
+<div id="s-admin" class="screen">
+<div class="adm-layout">
+  <button class="back" onclick="go('s-landing')">← 돌아가기</button>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem"><h2 style="font-size:1.15rem;font-weight:800">관리자</h2></div>
+  <div class="adm-tabs" id="admTabs"></div>
+  <div class="adm-content" id="admContent"></div>
+</div>
+</div>
+<div class="adm-modal" id="admModal"><div class="adm-modal-box" id="admModalBox"></div></div>
+
 <!-- ━━ AUTH MODAL ━━ -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box" style="position:relative" id="authBox">
@@ -821,8 +882,11 @@ function logout(){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_tok
 function toggleUserDrop(){const d=document.getElementById('userDrop');d.classList.toggle('open')}
 function updateAuthUI(){
   const btn=document.getElementById('authNavBtn');const drop=document.getElementById('userDrop');
-  if(AUTH_USER){btn.textContent=(AUTH_USER.name||'사용자')+'님';btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop}
-  else{btn.textContent='로그인';btn.classList.remove('l-user');btn.classList.add('l-login');btn.onclick=openAuth;drop.classList.remove('open')}
+  if(AUTH_USER){btn.textContent=(AUTH_USER.name||'사용자')+'님';btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
+    let admHtml='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>';
+    if(AUTH_USER.role==='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();go(\'s-admin\')">관리자</button>'+admHtml;
+    drop.innerHTML=admHtml}
+  else{btn.textContent='로그인';btn.classList.remove('l-user');btn.classList.add('l-login');btn.onclick=openAuth;drop.classList.remove('open');drop.innerHTML='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>'}
 }
 document.addEventListener('click',function(e){const d=document.getElementById('userDrop');if(d&&!e.target.closest('.l-user')&&!e.target.closest('.u-drop'))d.classList.remove('open')})
 async function saveComparison(){
@@ -1814,7 +1878,7 @@ function compare(){
 
 // ━━ APP (navigation + init) ━━
 
-function go(id,skipHistory){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(!skipHistory)history.pushState({screen:id},'')}
+function go(id,skipHistory){if(id==='s-admin'&&AUTH_USER?.role!=='admin'){go('s-landing');return}document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(id==='s-admin')admInit();if(!skipHistory)history.pushState({screen:id},'')}
 window.addEventListener('popstate',e=>{const id=e.state&&e.state.screen||'s-landing';go(id,true)})
 
 document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.getElementById(s==='a'?'sA':'sB').parentElement;if(!w.contains(e.target))document.getElementById(s==='a'?'rA':'rB').classList.remove('open')})});
