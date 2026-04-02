@@ -1899,7 +1899,7 @@ function admGoTab(t){
 
 async function admLoadDash(){
   const c=document.getElementById('admContent');c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">로딩 중...</div>';
-  const d=await apiFetch('/api/v1/admin/dashboard');
+  const d=await apiFetch('/admin/dashboard');
   if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">데이터를 불러올 수 없습니다.</div>';return}
   admData.dash=d;
   const cards=[
@@ -1918,7 +1918,7 @@ async function admLoadDash(){
 }
 
 async function admClearCache(){
-  const r=await apiFetch('/api/v1/admin/cache/clear',{method:'POST'});
+  const r=await apiFetch('/admin/cache/clear',{method:'POST'});
   alert(r?'캐시가 초기화되었습니다.':'오류가 발생했습니다.');
 }
 
@@ -1928,7 +1928,7 @@ async function admLoadCompanies(page,q,type){
   const c=document.getElementById('admContent');
   const params=new URLSearchParams({page:admPage.companies});
   if(admCompQ)params.set('q',admCompQ);if(admCompType)params.set('type',admCompType);
-  const d=await apiFetch('/api/v1/admin/companies?'+params);
+  const d=await apiFetch('/admin/companies?'+params);
   if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
   let h='<div class="adm-section"><h4>회사 관리</h4>';
   h+='<div class="adm-toolbar"><input class="adm-search" placeholder="회사명 검색..." value="'+esc(admCompQ)+'" onkeydown="if(event.key===\'Enter\')admLoadCompanies(1,this.value)">';
@@ -1947,7 +1947,7 @@ async function admLoadCompanies(page,q,type){
 
 async function admDelCompany(id,name){
   if(!confirm(name+' 회사를 삭제하시겠습니까?'))return;
-  await apiFetch('/api/v1/admin/companies/'+id,{method:'DELETE'});
+  await apiFetch('/admin/companies/'+id,{method:'DELETE'});
   admLoadCompanies();
 }
 
@@ -1955,7 +1955,7 @@ async function admEditCompany(id){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
   let co={name:'',type_id:'',industry:'',logo:'',work_style:'',careers_benefit_url:'',aliases:[]};
   if(id){
-    const d=await apiFetch('/api/v1/admin/companies/'+id+'/benefits');
+    const d=await apiFetch('/admin/companies/'+id+'/benefits');
     const detail=await apiFetch('/api/v1/companies/'+id);
     if(detail){co={...co,...detail};co.aliases=detail.aliases||[]}
   }
@@ -1983,11 +1983,11 @@ async function admSaveCompany(id){
   if(!name){alert('회사명을 입력하세요.');return}
   const body={name,type_id,industry,logo,work_style,careers_benefit_url};
   if(id){
-    await apiFetch('/api/v1/admin/companies/'+id,{method:'PUT',body:JSON.stringify(body)});
-    if(aliases.length||aliasStr==='')await apiFetch('/api/v1/admin/companies/'+id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+    await apiFetch('/admin/companies/'+id,{method:'PUT',body:JSON.stringify(body)});
+    if(aliases.length||aliasStr==='')await apiFetch('/admin/companies/'+id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
   }else{
-    const r=await apiFetch('/api/v1/admin/companies',{method:'POST',body:JSON.stringify(body)});
-    if(r&&r.id&&aliases.length)await apiFetch('/api/v1/admin/companies/'+r.id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+    const r=await apiFetch('/admin/companies',{method:'POST',body:JSON.stringify(body)});
+    if(r&&r.id&&aliases.length)await apiFetch('/admin/companies/'+r.id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
   }
   admCloseModal();admLoadCompanies();
 }
@@ -1996,7 +1996,7 @@ async function admSaveCompany(id){
 async function admEditBenefits(id,name){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
   b.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">복지 로딩 중...</div>';m.classList.add('open');
-  const bens=await apiFetch('/api/v1/admin/companies/'+id+'/benefits')||[];
+  const bens=await apiFetch('/admin/companies/'+id+'/benefits')||[];
   admData.editBens=bens;admData.editBenId=id;
   admRenderBenModal(id,name,bens);
 }
@@ -2035,7 +2035,7 @@ function admCollectBens(){
 
 async function admSaveBenefits(id){
   const bens=admCollectBens();
-  await apiFetch('/api/v1/admin/companies/'+id+'/benefits',{method:'PUT',body:JSON.stringify(bens)});
+  await apiFetch('/admin/companies/'+id+'/benefits',{method:'PUT',body:JSON.stringify(bens)});
   admCloseModal();admLoadCompanies();
 }
 
@@ -2047,7 +2047,7 @@ async function admLoadUsers(page,q){
   const c=document.getElementById('admContent');
   const params=new URLSearchParams({page:admPage.users});
   if(admUserQ)params.set('q',admUserQ);
-  const d=await apiFetch('/api/v1/admin/users?'+params);
+  const d=await apiFetch('/admin/users?'+params);
   if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
   let h='<div class="adm-section"><h4>사용자 관리</h4>';
   h+='<div class="adm-toolbar"><input class="adm-search" placeholder="이메일 또는 이름 검색..." value="'+esc(admUserQ)+'" onkeydown="if(event.key===\'Enter\')admLoadUsers(1,this.value)"></div>';
@@ -2065,7 +2065,7 @@ async function admLoadUsers(page,q){
 }
 
 async function admChangeRole(id,role){
-  const r=await apiFetch('/api/v1/admin/users/'+id+'/role',{method:'PUT',body:JSON.stringify({role})});
+  const r=await apiFetch('/admin/users/'+id+'/role',{method:'PUT',body:JSON.stringify({role})});
   if(!r)alert('역할 변경 실패');
 }
 
@@ -2082,7 +2082,7 @@ async function admLoadContent(sub){
 
 async function admLoadCases(){
   const el=document.getElementById('admContentInner');
-  const d=await apiFetch('/api/v1/admin/popular-cases');
+  const d=await apiFetch('/admin/popular-cases');
   if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
   let h='<div style="margin-bottom:.75rem"><button class="adm-btn primary" onclick="admEditCase(null)">+ 인기사례 추가</button></div>';
   h+='<table class="adm-tbl"><thead><tr><th>A</th><th>B</th><th>유형</th><th>활성</th><th>작업</th></tr></thead><tbody>';
@@ -2098,7 +2098,7 @@ async function admEditCase(id){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
   let cs={case_type:'company',title_a:'',type_a:'large',sub_a:'',title_b:'',type_b:'large',sub_b:'',points:[],is_active:true};
   if(id){
-    const all=await apiFetch('/api/v1/admin/popular-cases');
+    const all=await apiFetch('/admin/popular-cases');
     const items=Array.isArray(all)?all:(all?.items||[]);
     const found=items.find(x=>x.id===id);if(found)cs={...cs,...found};
   }
@@ -2127,20 +2127,20 @@ async function admSaveCase(id){
     points:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
     is_active:document.getElementById('admCsAct').checked
   };
-  if(id)await apiFetch('/api/v1/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
-  else await apiFetch('/api/v1/admin/popular-cases',{method:'POST',body:JSON.stringify(body)});
+  if(id)await apiFetch('/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
+  else await apiFetch('/admin/popular-cases',{method:'POST',body:JSON.stringify(body)});
   admCloseModal();admLoadCases();
 }
 
 async function admDelCase(id){
   if(!confirm('이 인기사례를 삭제하시겠습니까?'))return;
-  await apiFetch('/api/v1/admin/popular-cases/'+id,{method:'DELETE'});
+  await apiFetch('/admin/popular-cases/'+id,{method:'DELETE'});
   admLoadCases();
 }
 
 async function admLoadFeed(){
   const el=document.getElementById('admContentInner');
-  const d=await apiFetch('/api/v1/admin/feed?page='+admPage.feed);
+  const d=await apiFetch('/admin/feed?page='+admPage.feed);
   if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
   let h='<table class="adm-tbl"><thead><tr><th>ID</th><th>A</th><th>B</th><th>요약</th><th>날짜</th><th>삭제</th></tr></thead><tbody>';
   const items=d.items||[];
@@ -2159,7 +2159,7 @@ function admFeedPage(page){admPage.feed=page;admLoadFeed()}
 
 async function admDelFeed(id){
   if(!confirm('이 비교 피드를 삭제하시겠습니까?'))return;
-  await apiFetch('/api/v1/admin/feed/'+id,{method:'DELETE'});
+  await apiFetch('/admin/feed/'+id,{method:'DELETE'});
   admLoadFeed();
 }
 
@@ -2169,9 +2169,9 @@ async function admLoadStats(days){
   const c=document.getElementById('admContent');
   c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">통계 로딩 중...</div>';
   const [cmpStats,coStats,userStats]=await Promise.all([
-    apiFetch('/api/v1/admin/stats/comparisons?days='+admStatsDays),
-    apiFetch('/api/v1/admin/stats/companies'),
-    apiFetch('/api/v1/admin/stats/users?days='+admStatsDays)
+    apiFetch('/admin/stats/comparisons?days='+admStatsDays),
+    apiFetch('/admin/stats/companies'),
+    apiFetch('/admin/stats/users?days='+admStatsDays)
   ]);
   let h='<div class="adm-section"><h4>통계</h4>';
   h+='<div class="adm-subtabs" style="margin-bottom:1.25rem"><button class="adm-subtab'+(admStatsDays===7?' active':'')+'" onclick="admLoadStats(7)">7일</button><button class="adm-subtab'+(admStatsDays===30?' active':'')+'" onclick="admLoadStats(30)">30일</button><button class="adm-subtab'+(admStatsDays===90?' active':'')+'" onclick="admLoadStats(90)">90일</button></div>';
