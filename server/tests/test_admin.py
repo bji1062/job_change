@@ -542,6 +542,17 @@ def test_save_aliases_invalid_body():
     assert r.status_code == 422
 
 
+def test_update_role_invalid_value():
+    """PUT /admin/users/{id}/role with invalid role value returns 422."""
+    c = _client()
+    r = c.put(
+        "/api/v1/admin/users/2/role",
+        json={"role": "superadmin"},
+        headers=_admin_token(user_id=1),
+    )
+    assert r.status_code == 422
+
+
 def test_popular_case_missing_required():
     """POST /admin/popular-cases missing required fields returns 422."""
     c = _client()
