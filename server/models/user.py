@@ -16,3 +16,4 @@ class TokenResp(BaseModel):
     user_id: int
     name: str | None = None
     role: str = "user"
+    company_email_verified: bool = False

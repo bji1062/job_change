@@ -10,6 +10,16 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(bearer))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return user_id
 
+async def get_verified_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> int:
+    """회사 이메일 인증이 완료된 사용자만 허용 (admin은 면제)"""
+    payload = decode_token_full(cred.credentials)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if payload.get("role") != "admin" and not payload.get("cev"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="회사 이메일 인증이 필요합니다")
+    return int(payload["sub"])
+
+
 async def get_admin_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> int:
     payload = decode_token_full(cred.credentials)
     if payload is None:

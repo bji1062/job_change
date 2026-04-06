@@ -18,6 +18,30 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- [MIGRATION] users 테이블에 auth_provider 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'auth_provider');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) DEFAULT ''local'' COMMENT ''인증 제공자 (local, kakao, naver, google)''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- [MIGRATION] users 테이블에 company_email 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'company_email');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN company_email VARCHAR(255) COMMENT ''인증된 회사 이메일''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- [MIGRATION] users 테이블에 company_email_verified 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'company_email_verified');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN company_email_verified BOOLEAN DEFAULT FALSE COMMENT ''회사 이메일 인증 여부''', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- [MIGRATION] users.password_hash를 NULL 허용으로 변경 (소셜 로그인 지원)
+ALTER TABLE users MODIFY COLUMN password_hash VARCHAR(255) COMMENT 'bcrypt 해시된 비밀번호 (소셜 로그인 시 NULL)';
+
 -- ━━ REFERENCE DATA ━━
 
 CREATE TABLE IF NOT EXISTS company_types (
@@ -139,9 +163,12 @@ CREATE TABLE IF NOT EXISTS question_scenarios (
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '사용자 PK',
   email VARCHAR(255) UNIQUE NOT NULL COMMENT '이메일 (로그인 ID)',
-  password_hash VARCHAR(255) NOT NULL COMMENT 'bcrypt 해시된 비밀번호',
+  password_hash VARCHAR(255) COMMENT 'bcrypt 해시된 비밀번호 (소셜 로그인 시 NULL)',
   name VARCHAR(50) COMMENT '사용자 표시 이름',
   job_nm VARCHAR(50) COMMENT '선택한 직군명 (백엔드 개발, PM 등)',
+  auth_provider VARCHAR(20) DEFAULT 'local' COMMENT '인증 제공자 (local, kakao, naver, google)',
+  company_email VARCHAR(255) COMMENT '인증된 회사 이메일',
+  company_email_verified BOOLEAN DEFAULT FALSE COMMENT '회사 이메일 인증 여부',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '가입 시각',
   INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -180,6 +207,32 @@ CREATE TABLE IF NOT EXISTS comparisons (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '비교 생성 시각',
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_user_created (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ━━ SOCIAL AUTH & EMAIL VERIFICATION ━━
+
+CREATE TABLE IF NOT EXISTS social_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY COMMENT '소셜 계정 PK',
+  user_id BIGINT NOT NULL COMMENT '사용자 FK (users.id)',
+  provider VARCHAR(20) NOT NULL COMMENT '소셜 제공자 (kakao, naver, google)',
+  provider_id VARCHAR(255) NOT NULL COMMENT '제공자 고유 ID',
+  email VARCHAR(255) COMMENT '소셜 계정 이메일',
+  name VARCHAR(100) COMMENT '소셜 계정 이름',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '연동 일시',
+  UNIQUE KEY uk_provider (provider, provider_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'PK',
+  user_id BIGINT NOT NULL COMMENT '사용자 FK (users.id)',
+  email VARCHAR(255) NOT NULL COMMENT '인증 대상 이메일',
+  token VARCHAR(255) NOT NULL COMMENT '인증 토큰',
+  expires_at DATETIME NOT NULL COMMENT '만료 일시 (24시간)',
+  verified_at DATETIME COMMENT '인증 완료 일시',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '생성 일시',
+  UNIQUE KEY uk_token (token),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ━━ LANDING FEED DATA ━━

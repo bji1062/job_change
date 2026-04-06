@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, Depends, Query
 import database
 from models.company import BenefitUpsert
-from middleware.auth_middleware import get_current_user
+from middleware.auth_middleware import get_current_user, get_verified_user
 
 router = APIRouter()
 
@@ -50,7 +50,7 @@ async def detail(company_id: str):
     }
 
 @router.put("/{company_id}/benefits")
-async def upsert_benefits(company_id: str, items: list[BenefitUpsert], user_id: int = Depends(get_current_user)):
+async def upsert_benefits(company_id: str, items: list[BenefitUpsert], user_id: int = Depends(get_verified_user)):
     comp = await database.fetch_one(
         "SELECT id FROM companies WHERE id=%s", (company_id,)
     )

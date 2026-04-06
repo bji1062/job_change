@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import config
 import database
-from routers import auth, companies, reference, profiler, comparisons, landing, admin
+from routers import auth, companies, reference, profiler, comparisons, landing, admin, oauth
 from middleware.rate_limiter import RateLimitMiddleware
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.include_router(profiler.router, prefix="/api/v1/profiler", tags=["profiler"]
 app.include_router(comparisons.router, prefix="/api/v1/comparisons", tags=["comparisons"])
 app.include_router(landing.router, prefix="/api/v1/landing", tags=["landing"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 
 @app.get("/api/v1/health")
 async def health():
