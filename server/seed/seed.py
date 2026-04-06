@@ -20,7 +20,7 @@ COMPANY_TYPES = [
 # ━━ BENEFIT PRESETS ━━
 BEN_PRESETS = {
     "large": [
-        {"key": "meal", "name": "식대 지원", "val": 180, "cat": "work_env", "badge": "est", "checked": True},
+        {"key": "meal", "name": "식대 지원 (3식)", "val": 360, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "transport", "name": "교통비/주차비", "val": 120, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "welfare", "name": "복지포인트/선택복지", "val": 200, "cat": "financial", "badge": "est", "checked": True},
         {"key": "bonus", "name": "성과급/인센티브", "val": 300, "cat": "financial", "badge": "est", "checked": False},
@@ -30,13 +30,13 @@ BEN_PRESETS = {
         {"key": "event", "name": "경조사 지원", "val": 50, "cat": "financial", "badge": "est", "checked": True},
     ],
     "mid": [
-        {"key": "meal", "name": "식대 지원", "val": 150, "cat": "work_env", "badge": "est", "checked": True},
+        {"key": "meal", "name": "식대 지원", "val": 300, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "transport", "name": "교통비", "val": 60, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "health", "name": "건강검진", "val": 50, "cat": "wellness", "badge": "est", "checked": True},
         {"key": "event", "name": "경조사 지원", "val": 30, "cat": "financial", "badge": "est", "checked": True},
     ],
     "public": [
-        {"key": "meal", "name": "식대 지원", "val": 180, "cat": "work_env", "badge": "est", "checked": True},
+        {"key": "meal", "name": "식대 지원 (3식)", "val": 360, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "transport", "name": "교통비", "val": 120, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "welfare", "name": "복지포인트/선택복지", "val": 250, "cat": "financial", "badge": "est", "checked": True},
         {"key": "health", "name": "건강검진", "val": 80, "cat": "wellness", "badge": "est", "checked": True},
@@ -46,11 +46,11 @@ BEN_PRESETS = {
         {"key": "event", "name": "경조사 지원", "val": 50, "cat": "financial", "badge": "est", "checked": True},
     ],
     "startup": [
-        {"key": "meal", "name": "식대 지원", "val": 180, "cat": "work_env", "badge": "est", "checked": True},
+        {"key": "meal", "name": "식대 지원 (3식)", "val": 360, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "stock", "name": "스톡옵션/RSU 기대값", "val": 500, "cat": "financial", "badge": "est", "checked": False},
     ],
     "foreign": [
-        {"key": "meal", "name": "식대 지원", "val": 180, "cat": "work_env", "badge": "est", "checked": True},
+        {"key": "meal", "name": "식대 지원 (3식)", "val": 360, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "transport", "name": "교통비", "val": 100, "cat": "work_env", "badge": "est", "checked": True},
         {"key": "welfare", "name": "복지포인트", "val": 150, "cat": "financial", "badge": "est", "checked": True},
         {"key": "bonus", "name": "성과급/인센티브", "val": 500, "cat": "financial", "badge": "est", "checked": False},
@@ -68,7 +68,7 @@ COMPANIES = [
         "type": "large", "industry": "식품/유통/엔터", "logo": "CJ",
         "careersUrl": "https://recruit.cj.net/recruit/culture/welfare",
         "benefits": [
-            {"key": "meal", "name": "구내식당 (아침·점심·저녁 100%)", "val": 432, "cat": "work_env", "badge": "auto", "note": "일 18,000원 × 240일"},
+            {"key": "meal", "name": "구내식당 (아침·점심·저녁 100%)", "val": 720, "cat": "work_env", "badge": "auto", "note": "일 30,000원 × 240일 (한끼 10,000원 × 3끼)"},
             {"key": "cafe_point", "name": "카페테리아 포인트", "val": 200, "cat": "financial", "badge": "auto"},
             {"key": "commute_sup", "name": "출퇴근 셔틀 + 야근택시", "val": 120, "cat": "work_env", "badge": "est"},
             {"key": "event", "name": "경조사 지원", "val": 50, "cat": "financial", "badge": "est"},
@@ -95,7 +95,7 @@ COMPANIES = [
         "type": "startup", "industry": "핀테크", "logo": "T",
         "careersUrl": "https://toss.im/career/culture",
         "benefits": [
-            {"key": "meal", "name": "법인카드 식사 (점심+저녁 100%)", "val": 432, "cat": "work_env", "badge": "auto", "note": "일 18,000원 × 240일"},
+            {"key": "meal", "name": "법인카드 식사 (점심+저녁 100%)", "val": 720, "cat": "work_env", "badge": "auto", "note": "일 30,000원 × 240일 (한끼 10,000원 × 3끼)"},
             {"key": "fitness_comm", "name": "체력단련비+통신비 (매월)", "val": 120, "cat": "financial", "badge": "auto"},
             {"key": "insurance", "name": "직장 단체보험 (가족 포함)", "val": 150, "cat": "wellness", "badge": "auto"},
             {"key": "salon", "name": "사내 헤어살롱", "val": 30, "cat": "wellness", "badge": "est"},
