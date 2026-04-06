@@ -582,6 +582,15 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .auth-toggle{text-align:center;margin-top:1rem;font-size:.78rem;color:var(--t3)}
 .auth-toggle a{color:var(--blue);cursor:pointer;text-decoration:none}
 .auth-toggle a:hover{text-decoration:underline}
+.social-btns{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem}
+.social-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:none;border-radius:8px;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+.social-btn:hover{opacity:.85}
+.social-btn.kakao{background:#FEE500;color:#191919}
+.social-btn.naver{background:#03C75A;color:#fff}
+.social-btn.google{background:#fff;color:#333;border:1px solid #ddd}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:1rem 0;color:var(--t4);font-size:.75rem}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.cev-badge{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;color:var(--green);font-weight:600}
 .auth-err{color:var(--red);font-size:.75rem;text-align:center;margin-top:.5rem;min-height:1.2em}
 .auth-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--t3);font-size:1.2rem;cursor:pointer}
 .l-user{font-size:.78rem;color:var(--t2);background:none;border:1px solid var(--border);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;position:relative}
@@ -813,6 +822,12 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
   <div class="auth-box" style="position:relative" id="authBox">
     <button class="auth-close" onclick="closeAuth()">&times;</button>
     <h3 id="authTitle">로그인</h3>
+    <div class="social-btns" id="socialBtns">
+      <button class="social-btn kakao" onclick="socialLogin('kakao')">카카오로 시작하기</button>
+      <button class="social-btn naver" onclick="socialLogin('naver')">네이버로 시작하기</button>
+      <button class="social-btn google" onclick="socialLogin('google')">Google로 시작하기</button>
+    </div>
+    <div class="auth-divider"><span>또는</span></div>
     <div class="fd" id="authNameField" style="display:none"><div class="fl">이름</div><input id="authName" placeholder="홍길동"></div>
     <div class="fd"><div class="fl">이메일</div><input id="authEmail" type="email" placeholder="email@example.com" onkeydown="if(event.key==='Enter')submitAuth()"></div>
     <div class="fd"><div class="fl">비밀번호</div><input id="authPass" type="password" placeholder="8자 이상" onkeydown="if(event.key==='Enter')submitAuth()"></div>
@@ -832,6 +847,20 @@ const API_BASE=(location.protocol==='file:')?'':location.origin;
 let AUTH_TOKEN=localStorage.getItem('jc_token')||null;
 let AUTH_USER=JSON.parse(localStorage.getItem('jc_user')||'null');
 let authIsRegister=false;
+(function handleOAuthReturn(){
+  const params=new URLSearchParams(location.search);
+  const token=params.get('token');
+  if(token){
+    AUTH_TOKEN=token;
+    AUTH_USER={id:parseInt(params.get('uid')||'0'),name:decodeURIComponent(params.get('name')||'사용자'),role:params.get('role')||'user',company_email_verified:params.get('cev')==='1'};
+    localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
+    history.replaceState({},'','/');updateAuthUI();
+  }
+  if(params.get('email_verified')==='1'){
+    apiFetch('/oauth/me').then(u=>{if(u){AUTH_USER.company_email_verified=true;localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));updateAuthUI()}});
+    history.replaceState({},'','/');
+  }
+})();
 
 async function apiFetch(path,opts={}){
   if(!API_BASE)return null;
@@ -846,6 +875,14 @@ async function apiFetch(path,opts={}){
 }
 function openAuth(){document.getElementById('authOverlay').classList.add('open');document.getElementById('authErr').textContent=''}
 function closeAuth(){document.getElementById('authOverlay').classList.remove('open');if(window._saveRetry){window._saveRetry();window._saveRetry=null}}
+function socialLogin(provider){window.location.href=API_BASE+'/api/v1/oauth/'+provider+'/login'}
+async function requestCompanyEmail(){
+  const email=prompt('회사 이메일을 입력하세요 (개인 이메일 제외)');
+  if(!email)return;
+  const r=await apiFetch('/oauth/company-email/request',{method:'POST',body:JSON.stringify({email:email})});
+  if(r&&r.ok)alert('인증 이메일을 발송했습니다. 24시간 내에 인증해주세요.');
+  else alert(r?.message||'회사 이메일만 사용 가능합니다. (gmail, naver 등 제외)');
+}
 function toggleAuthMode(){
   authIsRegister=!authIsRegister;
   document.getElementById('authTitle').textContent=authIsRegister?'회원가입':'로그인';
@@ -873,7 +910,7 @@ async function submitAuth(){
   const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email,password:pass};
   const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
   if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
-  AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name,role:r.role||'user'};
+  AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name,role:r.role||'user',company_email_verified:r.company_email_verified||false};
   localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
   updateAuthUI();closeAuth();
   if(window._saveRetry){window._saveRetry();window._saveRetry=null}
@@ -882,9 +919,10 @@ function logout(){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_tok
 function toggleUserDrop(){const d=document.getElementById('userDrop');d.classList.toggle('open')}
 function updateAuthUI(){
   const btn=document.getElementById('authNavBtn');const drop=document.getElementById('userDrop');
-  if(AUTH_USER){btn.textContent=(AUTH_USER.name||'사용자')+'님';btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
+  if(AUTH_USER){btn.innerHTML=esc(AUTH_USER.name||'사용자')+'님'+(AUTH_USER.company_email_verified?' <span class="cev-badge">&#10003; 인증됨</span>':'');btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
     let admHtml='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>';
     if(AUTH_USER.role==='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();go(\'s-admin\')">관리자</button>'+admHtml;
+    if(!AUTH_USER.company_email_verified&&AUTH_USER.role!=='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();requestCompanyEmail()">회사 이메일 인증</button>'+admHtml;
     drop.innerHTML=admHtml}
   else{btn.textContent='로그인';btn.classList.remove('l-user');btn.classList.add('l-login');btn.onclick=openAuth;drop.classList.remove('open');drop.innerHTML='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>'}
 }
