@@ -44,7 +44,8 @@ def decode_token_full(token: str) -> dict | None:
 
 
 async def find_or_create_social_user(
-    provider: str, provider_id: str, email: str | None, name: str | None
+    provider: str, provider_id: str, email: str | None, name: str | None,
+    email_verified: bool = False
 ) -> dict:
     """소셜 로그인 사용자 조회 또는 생성. 반환: {id, email, name, role, company_email_verified}"""
     # 1. social_accounts에서 기존 연동 조회
@@ -66,8 +67,8 @@ async def find_or_create_social_user(
                 "company_email_verified": bool(user.get("company_email_verified")),
             }
 
-    # 2. 이메일로 기존 사용자 조회
-    if email:
+    # 2. 이메일로 기존 사용자 조회 (이메일이 검증된 경우만 자동 연동)
+    if email and email_verified:
         user = await database.fetch_one(
             "SELECT id, email, name, role, company_email_verified FROM users WHERE email=%s",
             (email,),

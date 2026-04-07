@@ -31,7 +31,9 @@ SMTP_PASS = os.getenv("SMTP_PASS", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "")
 
 PERSONAL_DOMAINS = {
-    "gmail.com", "naver.com", "kakao.com", "daum.net", "hanmail.net",
-    "yahoo.com", "hotmail.com", "outlook.com", "live.com",
-    "icloud.com", "protonmail.com", "proton.me", "me.com", "mac.com",
+    "gmail.com", "googlemail.com", "naver.com", "kakao.com", "daum.net", "hanmail.net",
+    "nate.com", "yahoo.com", "yahoo.co.kr", "ymail.com",
+    "hotmail.com", "outlook.com", "live.com", "msn.com",
+    "icloud.com", "me.com", "mac.com",
+    "protonmail.com", "proton.me",
 }

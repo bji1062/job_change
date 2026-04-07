@@ -64,25 +64,27 @@ def _cleanup_expired_states():
         _oauth_states.pop(s, None)
 
 
-def _parse_userinfo(provider: str, data: dict) -> tuple[str, str | None, str]:
-    """provider별 응답에서 (provider_id, email, name) 추출"""
+def _parse_userinfo(provider: str, data: dict) -> tuple[str, str | None, str, bool]:
+    """provider별 응답에서 (provider_id, email, name, email_verified) 추출"""
     if provider == "kakao":
         pid = str(data["id"])
         account = data.get("kakao_account", {})
         email = account.get("email")
+        ev = account.get("is_email_verified", False)
         name = account.get("profile", {}).get("nickname", "")
-        return pid, email, name
+        return pid, email, name, bool(ev)
     elif provider == "naver":
         resp = data["response"]
         pid = str(resp["id"])
         email = resp.get("email")
         name = resp.get("name", "")
-        return pid, email, name
+        return pid, email, name, True  # 네이버 이메일은 기본 검증됨
     elif provider == "google":
         pid = str(data["id"])
         email = data.get("email")
+        ev = data.get("verified_email", False)
         name = data.get("name", "")
-        return pid, email, name
+        return pid, email, name, bool(ev)
     raise ValueError(f"Unknown provider: {provider}")
 
 
@@ -158,10 +160,10 @@ async def oauth_callback(provider: str, code: str = Query(...), state: str = Que
             raise HTTPException(status_code=502, detail="사용자 정보 조회 실패")
         userinfo = info_resp.json()
 
-    provider_id, email, name = _parse_userinfo(provider, userinfo)
+    provider_id, email, name, email_verified = _parse_userinfo(provider, userinfo)
 
-    # 3. DB 사용자 조회/생성
-    user = await find_or_create_social_user(provider, provider_id, email, name)
+    # 3. DB 사용자 조회/생성 (이메일 미검증 시 자동 연동 차단)
+    user = await find_or_create_social_user(provider, provider_id, email, name, email_verified=email_verified)
 
     # 4. JWT 발급 후 프론트엔드로 리다이렉트
     cev = 1 if user["company_email_verified"] else 0
@@ -183,6 +185,11 @@ async def request_company_email(req: CompanyEmailReq, user_id: int = Depends(get
     if not is_company_email(req.email):
         raise HTTPException(status_code=400, detail="회사 이메일만 사용 가능합니다")
 
+    # 이전 미인증 토큰 무효화
+    await database.execute(
+        "UPDATE email_verifications SET verified_at=NOW() WHERE user_id=%s AND verified_at IS NULL",
+        (user_id,),
+    )
     token = secrets.token_urlsafe(48)
     await database.execute(
         "INSERT INTO email_verifications (user_id, email, token, expires_at) VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
