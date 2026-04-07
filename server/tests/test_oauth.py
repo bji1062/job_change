@@ -330,13 +330,15 @@ def test_parse_userinfo_kakao():
         "id": 12345,
         "kakao_account": {
             "email": "user@kakao.com",
+            "is_email_verified": True,
             "profile": {"nickname": "KakaoUser"},
         },
     }
-    pid, email, name = _parse_userinfo("kakao", data)
+    pid, email, name, ev = _parse_userinfo("kakao", data)
     assert pid == "12345"
     assert email == "user@kakao.com"
     assert name == "KakaoUser"
+    assert ev is True
 
 
 def test_parse_userinfo_naver():
@@ -349,10 +351,11 @@ def test_parse_userinfo_naver():
             "name": "NaverUser",
         },
     }
-    pid, email, name = _parse_userinfo("naver", data)
+    pid, email, name, ev = _parse_userinfo("naver", data)
     assert pid == "naver_abc"
     assert email == "user@naver.com"
     assert name == "NaverUser"
+    assert ev is True  # Naver emails are always verified
 
 
 def test_parse_userinfo_google():
@@ -361,12 +364,14 @@ def test_parse_userinfo_google():
     data = {
         "id": "google_xyz",
         "email": "user@gmail.com",
+        "verified_email": True,
         "name": "GoogleUser",
     }
-    pid, email, name = _parse_userinfo("google", data)
+    pid, email, name, ev = _parse_userinfo("google", data)
     assert pid == "google_xyz"
     assert email == "user@gmail.com"
     assert name == "GoogleUser"
+    assert ev is True
 
 
 # ━━ OAUTH ME: USER NOT FOUND ━━
@@ -435,14 +440,13 @@ def test_token_resp_includes_cev_field():
 
 # ━━ LOGIN: WRONG PASSWORD ━━
 
-@patch("database.fetch_one", new_callable=AsyncMock)
-def test_login_wrong_password_returns_401(mock_fetch):
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={
+    "id": 1, "password_hash": "$2b$12$somehash", "name": "User",
+    "role": "user", "company_email_verified": 0,
+})
+@patch("routers.auth.verify_password", return_value=False)
+def test_login_wrong_password_returns_401(mock_verify, mock_fetch):
     """POST /auth/login with wrong password returns 401."""
-    from services.auth_service import hash_password
-    mock_fetch.return_value = {
-        "id": 1, "password_hash": hash_password("real_password"),
-        "name": "User", "role": "user", "company_email_verified": 0,
-    }
     c = _client()
     r = c.post("/api/v1/auth/login", json={
         "email": "user@example.com",
