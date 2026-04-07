@@ -47,7 +47,7 @@ async def find_or_create_social_user(
     provider: str, provider_id: str, email: str | None, name: str | None,
     email_verified: bool = False
 ) -> dict:
-    """소셜 로그인 사용자 조회 또는 생성. 반환: {id, email, name, role, company_email_verified}"""
+    """소셜 로그인 사용자 조회 또는 생성. 반환: {id, email, name, role, company_email_verification_yn}"""
     # 1. social_accounts에서 기존 연동 조회
     sa = await database.fetch_one(
         "SELECT user_id FROM social_accounts WHERE provider=%s AND provider_id=%s",
@@ -55,7 +55,7 @@ async def find_or_create_social_user(
     )
     if sa:
         user = await database.fetch_one(
-            "SELECT id, email, name, role, company_email_verified FROM users WHERE id=%s",
+            "SELECT id, email, name, role, company_email_verification_yn FROM users WHERE id=%s",
             (sa["user_id"],),
         )
         if user:
@@ -64,13 +64,13 @@ async def find_or_create_social_user(
                 "email": user["email"],
                 "name": user["name"],
                 "role": user.get("role") or "user",
-                "company_email_verified": bool(user.get("company_email_verified")),
+                "company_email_verification_yn": user.get("company_email_verification_yn", "N"),
             }
 
     # 2. 이메일로 기존 사용자 조회 (이메일이 검증된 경우만 자동 연동)
     if email and email_verified:
         user = await database.fetch_one(
-            "SELECT id, email, name, role, company_email_verified FROM users WHERE email=%s",
+            "SELECT id, email, name, role, company_email_verification_yn FROM users WHERE email=%s",
             (email,),
         )
         if user:
@@ -84,13 +84,13 @@ async def find_or_create_social_user(
                 "email": user["email"],
                 "name": user["name"],
                 "role": user.get("role") or "user",
-                "company_email_verified": bool(user.get("company_email_verified")),
+                "company_email_verification_yn": user.get("company_email_verification_yn", "N"),
             }
 
     # 3. 신규 사용자 생성
     use_email = email or f"{provider}_{provider_id}@social.local"
     user_id = await database.execute(
-        "INSERT INTO users (email, password_hash, name, auth_provider) VALUES (%s, NULL, %s, %s)",
+        "INSERT INTO users (email, password_hash, name, login_auth_provider) VALUES (%s, NULL, %s, %s)",
         (use_email, name, provider),
     )
     await database.execute(
@@ -102,7 +102,7 @@ async def find_or_create_social_user(
         "email": use_email,
         "name": name,
         "role": "user",
-        "company_email_verified": False,
+        "company_email_verification_yn": "N",
     }
 
 

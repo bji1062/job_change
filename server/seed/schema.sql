@@ -18,9 +18,9 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- [MIGRATION] users 테이블에 auth_provider 컬럼 추가
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'auth_provider');
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) DEFAULT ''local'' COMMENT ''인증 제공자 (local, kakao, naver, google)''', 'SELECT 1');
+-- [MIGRATION] users 테이블에 login_auth_provider 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'login_auth_provider');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN login_auth_provider VARCHAR(20) DEFAULT ''local'' COMMENT ''인증 제공자 (local, kakao, naver, google)''', 'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
@@ -32,9 +32,9 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- [MIGRATION] users 테이블에 company_email_verified 컬럼 추가
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'company_email_verified');
-SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN company_email_verified BOOLEAN DEFAULT FALSE COMMENT ''회사 이메일 인증 여부''', 'SELECT 1');
+-- [MIGRATION] users 테이블에 company_email_verification_yn 컬럼 추가
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'company_email_verification_yn');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE users ADD COLUMN company_email_verification_yn VARCHAR(1) DEFAULT ''N'' COMMENT ''회사 이메일 인증 여부 (Y/N)''', 'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
@@ -166,9 +166,9 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) COMMENT 'bcrypt 해시된 비밀번호 (소셜 로그인 시 NULL)',
   name VARCHAR(50) COMMENT '사용자 표시 이름',
   job_nm VARCHAR(50) COMMENT '선택한 직군명 (백엔드 개발, PM 등)',
-  auth_provider VARCHAR(20) DEFAULT 'local' COMMENT '인증 제공자 (local, kakao, naver, google)',
+  login_auth_provider VARCHAR(20) DEFAULT 'local' COMMENT '인증 제공자 (local, kakao, naver, google)',
   company_email VARCHAR(255) COMMENT '인증된 회사 이메일',
-  company_email_verified BOOLEAN DEFAULT FALSE COMMENT '회사 이메일 인증 여부',
+  company_email_verification_yn VARCHAR(1) DEFAULT 'N' COMMENT '회사 이메일 인증 여부 (Y/N)',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '가입 시각',
   INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

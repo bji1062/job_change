@@ -166,7 +166,7 @@ async def oauth_callback(provider: str, code: str = Query(...), state: str = Que
     user = await find_or_create_social_user(provider, provider_id, email, name, email_verified=email_verified)
 
     # 4. JWT 발급 후 프론트엔드로 리다이렉트
-    cev = 1 if user["company_email_verified"] else 0
+    cev = 1 if user.get("company_email_verification_yn") == 'Y' else 0
     token = create_token(user["id"], user["role"], cev=bool(cev))
     redirect_params = urlencode({
         "token": token,
@@ -213,7 +213,7 @@ async def verify_company_email(token: str = Query(...)):
         (row["id"],),
     )
     await database.execute(
-        "UPDATE users SET company_email=%s, company_email_verified=1 WHERE id=%s",
+        "UPDATE users SET company_email=%s, company_email_verification_yn='Y' WHERE id=%s",
         (row["email"], row["user_id"]),
     )
     return RedirectResponse(url=f"{config.OAUTH_REDIRECT_BASE}/?email_verified=1")
@@ -224,7 +224,7 @@ async def verify_company_email(token: str = Query(...)):
 @router.get("/me")
 async def get_me(user_id: int = Depends(get_current_user)):
     user = await database.fetch_one(
-        "SELECT id, email, name, role, auth_provider, company_email, company_email_verified FROM users WHERE id=%s",
+        "SELECT id, email, name, role, login_auth_provider, company_email, company_email_verification_yn FROM users WHERE id=%s",
         (user_id,),
     )
     if not user:

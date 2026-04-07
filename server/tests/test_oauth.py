@@ -112,8 +112,8 @@ def test_oauth_me_invalid_token_returns_401():
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
     "id": 1, "email": "user@test.com", "name": "Tester",
-    "role": "user", "auth_provider": "kakao",
-    "company_email": None, "company_email_verified": 0,
+    "role": "user", "login_auth_provider": "kakao",
+    "company_email": None, "company_email_verification_yn": "N",
 })
 def test_oauth_me_with_valid_token(mock_fetch):
     """GET /oauth/me with valid token returns 200 and user info."""
@@ -269,7 +269,7 @@ def test_benefits_upsert_admin_succeeds(mock_one, mock_exec, mock_all):
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
     "id": 1, "password_hash": "$2b$12$test_hash", "name": "Tester",
-    "role": "user", "company_email_verified": 0,
+    "role": "user", "company_email_verification_yn": "N",
 })
 @patch("routers.auth.verify_password", return_value=True)
 def test_login_email_password_works(mock_verify, mock_fetch):
@@ -285,7 +285,7 @@ def test_login_email_password_works(mock_verify, mock_fetch):
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
     "id": 2, "password_hash": None, "name": "Social User",
-    "role": "user", "company_email_verified": 0,
+    "role": "user", "company_email_verification_yn": "N",
 })
 def test_login_social_account_no_password_returns_401(mock_fetch):
     """POST /auth/login for social account (password_hash=NULL) returns 401."""
@@ -297,7 +297,7 @@ def test_login_social_account_no_password_returns_401(mock_fetch):
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
     "id": 1, "password_hash": "$2b$12$test_hash", "name": "Verified",
-    "role": "user", "company_email_verified": 1,
+    "role": "user", "company_email_verification_yn": "Y",
 })
 @patch("routers.auth.verify_password", return_value=True)
 def test_login_returns_cev_true_when_verified(mock_verify, mock_fetch):
@@ -442,7 +442,7 @@ def test_token_resp_includes_cev_field():
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
     "id": 1, "password_hash": "$2b$12$somehash", "name": "User",
-    "role": "user", "company_email_verified": 0,
+    "role": "user", "company_email_verification_yn": "N",
 })
 @patch("routers.auth.verify_password", return_value=False)
 def test_login_wrong_password_returns_401(mock_verify, mock_fetch):
