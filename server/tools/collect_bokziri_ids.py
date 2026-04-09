@@ -1,85 +1,62 @@
 #!/usr/bin/env python3
 """
-복지리(bokziri.com)에서 회사별 UUID를 자동 수집하고,
-수집된 UUID로 scrape_benefits.py 명령어를 생성하는 스크립트.
+KRX 상장사 목록 수집 → 복지리(bokziri.com) UUID 매핑 → 스크래핑 명령어 생성
 
 Usage:
-  # 전체 실행 (UUID 수집 + 명령어 생성)
+  # 전체 실행 (KRX 목록 + 복지리 UUID 수집 + 명령어 생성)
   server/tools/.venv/bin/python server/tools/collect_bokziri_ids.py
 
   # 이미 수집된 JSON에서 명령어만 재생성
   server/tools/.venv/bin/python server/tools/collect_bokziri_ids.py --skip-collect
+
+  # KOSPI만 수집
+  server/tools/.venv/bin/python server/tools/collect_bokziri_ids.py --market kospi
+
+  # 중단 후 이어서 수집 (기존 JSON에 없는 회사만)
+  server/tools/.venv/bin/python server/tools/collect_bokziri_ids.py --resume
 """
 import argparse
 import asyncio
 import json
-import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
-
-# ━━ 회사 목록 (KOSPI + KOSDAQ 200개) ━━
-# scrape_commands 파일에서 사용하는 회사명 기준
-COMPANIES = [
-    # ── KOSPI 1~50 ──
-    "삼성전자", "SK하이닉스", "LG에너지솔루션", "삼성바이오로직스",
-    "현대자동차", "HD현대중공업", "SK스퀘어", "한화에어로스페이스",
-    "두산에너빌리티", "KB금융", "기아", "셀트리온",
-    "삼성물산", "NAVER", "신한지주", "한화오션",
-    "현대모비스", "삼성생명", "한국전력", "HD한국조선해양",
-    "HD현대일렉트릭", "카카오", "하나금융지주", "POSCO홀딩스",
-    "고려아연", "알테오젠", "LG화학", "삼성화재",
-    "삼성SDI", "삼성중공업", "우리금융지주", "현대로템",
-    "메리츠금융지주", "HMM", "삼성전기", "SK",
-    "SK이노베이션", "KT&G", "IBK기업은행", "포스코퓨처엠",
-    "효성중공업", "LG전자", "HD현대", "에코프로비엠",
-    "하이브", "LS ELECTRIC", "현대글로비스", "삼성SDS",
-    "KT", "미래에셋증권",
-    # ── KOSPI 51~100 ──
-    "두산", "LG", "에코프로", "한미반도체",
-    "크래프톤", "SK텔레콤", "한국항공우주산업", "에이비엘바이오",
-    "카카오뱅크", "한화시스템", "SK바이오팜", "S-Oil",
-    "DB손해보험", "삼양식품", "LIG넥스원", "레인보우로보틱스",
-    "현대오토에버", "코오롱티슈진", "유한양행", "이수페타시스",
-    "포스코인터내셔널", "HD현대마린솔루션", "에이피알", "대한항공",
-    "한진칼", "현대건설", "키움증권", "NH투자증권",
-    "한국타이어앤테크놀로지", "아모레퍼시픽", "삼성증권", "HLB",
-    "카카오페이", "삼성카드", "LG이노텍", "리가켐바이오",
-    "LS", "LG유플러스", "코웨이", "한화",
-    "LG씨엔에스", "펩트론", "LG디스플레이", "한미약품",
-    "두산밥캣", "삼천당제약", "한국금융지주", "삼성에피스홀딩스",
-    "현대제철", "롯데케미칼",
-    # ── KOSDAQ 1~50 ──
-    "케어젠", "리노공업", "디앤디파마텍", "보로노이",
-    "파마리서치", "원익IPS", "클래시스", "메지온",
-    "이오테크닉스", "로보티즈", "HPSP", "ISC",
-    "오스코텍", "한솔케미칼", "올릭스", "엘앤씨바이오",
-    "테크윙", "휴젤", "솔브레인", "유진테크",
-    "파크시스템스", "덕산네오룩스", "에이디테크놀로지", "티씨케이",
-    "피에스케이", "주성엔지니어링", "셀트리온제약", "심텍",
-    "HLB생명과학", "동국제약", "네패스", "씨젠",
-    "성일하이텍", "SM엔터테인먼트", "인터로조", "CJ ENM",
-    "비에이치", "JYP엔터테인먼트", "실리콘투",
-    # ── KOSDAQ 51~100 ──
-    "위메이드", "카카오게임즈", "HLB테라퓨틱스", "HLB이노베이션",
-    "컴투스", "펄어비스", "솔브레인홀딩스", "나노엔텍",
-    "다우데이타", "HLB제약", "엠씨넥스", "서울반도체",
-    "코미팜", "더블유게임즈", "에스티큐브", "네오위즈",
-    "피에스케이홀딩스", "제이엘케이", "나노신소재", "엠투아이",
-    "티에스이", "원익QnC", "케이엠더블유", "에코프로에이치엔",
-    "셀리드", "와이바이오로직스", "루닛", "엔켐",
-    "제넥신", "에임드바이오", "GC녹십자셀", "엘오티베큠",
-    "동화기업", "아이패밀리에스씨", "켐트로스", "선익시스템",
-    "앱클론", "지놈앤컴퍼니", "에스에프에이", "아이센스",
-    "텔레칩스", "바이넥스", "켐트로닉스", "매커스",
-    "리메드", "유비쿼스홀딩스", "원방테크", "코오롱인더스트리 FnC",
-    "현대무벡스", "노바텍",
-]
 
 # ━━ 출력 경로 ━━
 TOOLS_DIR = Path(__file__).resolve().parent
 OUTPUT_JSON = TOOLS_DIR / "bokziri_ids.json"
 OUTPUT_SCRAPE_SH = TOOLS_DIR / "scrape_commands_bokziri.sh"
+
+KRX_URL = "http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13&marketType={}"
+KRX_MARKETS = {"kospi": "stockMkt", "kosdaq": "kosdaqMkt"}
+
+
+def fetch_krx_companies(market: str | None = None) -> list[dict]:
+    """KRX에서 상장사 목록 수집 (pandas)"""
+    import pandas as pd
+
+    targets = {market: KRX_MARKETS[market]} if market else KRX_MARKETS
+    all_companies = []
+
+    for mkt_name, mkt_code in targets.items():
+        url = KRX_URL.format(mkt_code)
+        print(f"[INFO] KRX {mkt_name.upper()} 목록 다운로드 중...")
+        try:
+            df = pd.read_html(url, header=0, encoding="euc-kr")[0]
+        except Exception:
+            df = pd.read_html(url, header=0)[0]
+
+        for _, row in df.iterrows():
+            all_companies.append({
+                "name": str(row["회사명"]).strip(),
+                "code": str(row["종목코드"]).strip().zfill(6),
+                "industry": str(row.get("업종", "")).strip(),
+                "market": mkt_name,
+            })
+        print(f"  → {mkt_name.upper()}: {len(df)}개")
+
+    print(f"[INFO] KRX 총 {len(all_companies)}개 상장사")
+    return all_companies
 
 
 async def create_browser():
@@ -122,8 +99,8 @@ async def create_browser():
     return pw, browser, context
 
 
-async def search_company(context, company_name: str, retry: int = 2) -> dict | None:
-    """복지리에서 회사 검색 → 첫 번째 결과의 UUID와 표시 이름 반환"""
+async def search_bokziri(context, company_name: str, retry: int = 2) -> dict | None:
+    """복지리에서 회사 검색 → 첫 번째 결과의 UUID 반환"""
     encoded = quote(company_name)
     url = f"https://www.bokziri.com/#searchKeyword={encoded}&categoryFilter="
 
@@ -131,9 +108,8 @@ async def search_company(context, company_name: str, retry: int = 2) -> dict | N
         page = await context.new_page()
         try:
             await page.goto(url, wait_until="networkidle", timeout=20000)
-            await page.wait_for_timeout(3000)  # SPA 렌더링 대기
+            await page.wait_for_timeout(3000)
 
-            # 회사 링크 추출: /company/{uuid} 패턴
             links = await page.evaluate("""
                 () => {
                     const results = [];
@@ -143,7 +119,7 @@ async def search_company(context, company_name: str, retry: int = 2) -> dict | N
                         const match = href.match(/\\/company\\/([a-zA-Z0-9]+)/);
                         if (match) {
                             const text = a.innerText.trim().split('\\n')[0].trim();
-                            results.push({uuid: match[1], name: text, href: href});
+                            results.push({uuid: match[1], name: text});
                         }
                     }
                     return results;
@@ -151,18 +127,14 @@ async def search_company(context, company_name: str, retry: int = 2) -> dict | N
             """)
 
             if links:
-                # 첫 번째 결과 반환
-                return {"uuid": links[0]["uuid"], "bokziri_name": links[0]["name"], "url": f"https://www.bokziri.com/company/{links[0]['uuid']}"}
+                return {"uuid": links[0]["uuid"], "bokziri_name": links[0]["name"]}
 
             if attempt < retry:
-                print(f"  [RETRY] '{company_name}' 결과 없음, 재시도 {attempt + 1}/{retry}")
                 await page.wait_for_timeout(2000)
             else:
                 return None
         except Exception as e:
-            if attempt < retry:
-                print(f"  [RETRY] '{company_name}' 에러: {e}, 재시도 {attempt + 1}/{retry}")
-            else:
+            if attempt >= retry:
                 print(f"  [ERROR] '{company_name}' 실패: {e}")
                 return None
         finally:
@@ -171,80 +143,142 @@ async def search_company(context, company_name: str, retry: int = 2) -> dict | N
     return None
 
 
-async def collect_all(companies: list[str]) -> dict:
+async def collect_all(companies: list[dict], existing: dict | None = None) -> dict:
     """모든 회사의 복지리 UUID 수집"""
     pw, browser, context = await create_browser()
-    results = {}
+    found = existing.get("found", {}) if existing else {}
     not_found = []
+    skipped = 0
 
     try:
-        for i, name in enumerate(companies):
+        for i, comp in enumerate(companies):
+            name = comp["name"]
+
+            # 이미 수집된 회사 스킵
+            if name in found:
+                skipped += 1
+                continue
+
             print(f"[{i+1}/{len(companies)}] '{name}' 검색 중...")
-            result = await search_company(context, name)
+            result = await search_bokziri(context, name)
 
             if result:
-                results[name] = result
+                found[name] = {
+                    "uuid": result["uuid"],
+                    "bokziri_name": result["bokziri_name"],
+                    "url": f"https://www.bokziri.com/company/{result['uuid']}",
+                    "code": comp["code"],
+                    "industry": comp["industry"],
+                    "market": comp["market"],
+                }
                 print(f"  → UUID: {result['uuid']} ({result['bokziri_name']})")
             else:
-                not_found.append(name)
+                not_found.append({
+                    "name": name, "code": comp["code"],
+                    "industry": comp["industry"], "market": comp["market"],
+                })
                 print(f"  → 미발견")
 
-            # 요청 간격 (서버 부하 방지)
-            if i < len(companies) - 1:
-                await asyncio.sleep(1)
+            # 50개마다 중간 저장
+            if (i + 1) % 50 == 0:
+                _save_json({"found": found, "not_found": not_found})
+                print(f"  [SAVE] 중간 저장 ({len(found)}개 발견)")
+
+            # 요청 간격
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print(f"\n[INFO] 중단됨. 현재까지 저장합니다...")
     finally:
+        _save_json({"found": found, "not_found": not_found})
         await browser.close()
         await pw.stop()
 
-    return {"found": results, "not_found": not_found}
+    if skipped:
+        print(f"[INFO] 기존 수집 데이터 스킵: {skipped}개")
+
+    return {"found": found, "not_found": not_found}
+
+
+def _save_json(data: dict):
+    OUTPUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def generate_scrape_commands(data: dict) -> str:
     """수집된 UUID로 scrape_benefits.py 명령어 생성"""
+    from datetime import date
+
+    found = data["found"]
+    not_found = data.get("not_found", [])
+
+    # 시장별 분류
+    kospi = {k: v for k, v in found.items() if v.get("market") == "kospi"}
+    kosdaq = {k: v for k, v in found.items() if v.get("market") == "kosdaq"}
+
     lines = [
         "#!/bin/bash",
-        "# 복지리(bokziri.com) 기반 복지 스크래핑 명령어",
-        f"# 총 {len(data['found'])}개 회사 (미발견: {len(data['not_found'])}개)",
-        f"# 생성일: {__import__('datetime').date.today().isoformat()}",
+        "# 복지리(bokziri.com) 기반 복지 스크래핑 명령어 (KRX 상장사)",
+        f"# 총 {len(found)}개 회사 (KOSPI {len(kospi)}개, KOSDAQ {len(kosdaq)}개)",
+        f"# 미발견: {len(not_found)}개",
+        f"# 생성일: {date.today().isoformat()}",
         "",
+        "# ━━ KOSPI ━━",
     ]
 
-    for name, info in data["found"].items():
+    for name, info in kospi.items():
         lines.append(
             f'server/tools/.venv/bin/python server/tools/scrape_benefits.py "{name}" '
             f'--url "{info["url"]}" --raw-only'
         )
 
-    if data["not_found"]:
+    lines.append("")
+    lines.append("# ━━ KOSDAQ ━━")
+
+    for name, info in kosdaq.items():
+        lines.append(
+            f'server/tools/.venv/bin/python server/tools/scrape_benefits.py "{name}" '
+            f'--url "{info["url"]}" --raw-only'
+        )
+
+    if not_found:
         lines.append("")
-        lines.append("# ━━ 미발견 회사 (수동 확인 필요) ━━")
-        for name in data["not_found"]:
-            lines.append(f'# [NOT FOUND] "{name}"')
+        lines.append("# ━━ 미발견 회사 (복지리에 미등록) ━━")
+        for comp in not_found:
+            lines.append(f'# [NOT FOUND] {comp["market"].upper()} {comp["name"]} ({comp["code"]}) - {comp["industry"]}')
 
     return "\n".join(lines) + "\n"
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="복지리 UUID 수집 + 스크래핑 명령어 생성")
+    parser = argparse.ArgumentParser(description="KRX 상장사 → 복지리 UUID 수집 → 스크래핑 명령어 생성")
     parser.add_argument("--skip-collect", action="store_true", help="기존 JSON에서 명령어만 재생성")
+    parser.add_argument("--market", choices=["kospi", "kosdaq"], help="특정 시장만 수집")
+    parser.add_argument("--resume", action="store_true", help="기존 JSON에 없는 회사만 추가 수집")
     args = parser.parse_args()
 
     if args.skip_collect:
         if not OUTPUT_JSON.exists():
-            print(f"[ERROR] {OUTPUT_JSON} 파일이 없습니다. --skip-collect 없이 먼저 실행하세요.")
+            print(f"[ERROR] {OUTPUT_JSON} 파일이 없습니다.")
             sys.exit(1)
         data = json.loads(OUTPUT_JSON.read_text(encoding="utf-8"))
         print(f"[INFO] 기존 JSON 로드: {len(data['found'])}개 회사")
     else:
-        print(f"[INFO] 복지리 UUID 수집 시작 ({len(COMPANIES)}개 회사)")
-        print("=" * 60)
-        data = await collect_all(COMPANIES)
+        # KRX 목록 수집
+        companies = fetch_krx_companies(args.market)
 
-        # JSON 저장
-        OUTPUT_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        # 기존 데이터 로드 (resume 모드)
+        existing = None
+        if args.resume and OUTPUT_JSON.exists():
+            existing = json.loads(OUTPUT_JSON.read_text(encoding="utf-8"))
+            print(f"[INFO] 기존 데이터 로드: {len(existing['found'])}개 (이어서 수집)")
+
+        # 복지리 UUID 수집
+        print(f"\n[INFO] 복지리 UUID 수집 시작 ({len(companies)}개 회사)")
+        print("=" * 60)
+        data = await collect_all(companies, existing)
+
         print()
         print("=" * 60)
-        print(f"[INFO] UUID 수집 완료: {len(data['found'])}개 발견, {len(data['not_found'])}개 미발견")
+        print(f"[INFO] 수집 완료: {len(data['found'])}개 발견, {len(data['not_found'])}개 미발견")
         print(f"[INFO] JSON 저장: {OUTPUT_JSON}")
 
     # 스크래핑 명령어 생성
@@ -253,10 +287,8 @@ async def main():
     OUTPUT_SCRAPE_SH.chmod(0o755)
     print(f"[INFO] 스크래핑 명령어 저장: {OUTPUT_SCRAPE_SH}")
 
-    if data["not_found"]:
-        print(f"\n[WARN] 미발견 회사 {len(data['not_found'])}개:")
-        for name in data["not_found"]:
-            print(f"  - {name}")
+    if data.get("not_found"):
+        print(f"\n[WARN] 미발견 {len(data['not_found'])}개 (복지리 미등록)")
 
 
 if __name__ == "__main__":
