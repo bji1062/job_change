@@ -273,15 +273,32 @@ BENEFIT_KEYWORDS = [
 BENEFIT_DIR = Path(__file__).resolve().parent.parent / "seed" / "benefit"
 
 
-def resolve_company_id(name: str, cli_id: str | None, raw_only: bool = False) -> str:
+def auto_generate_id(name: str, url: str | None = None) -> str:
+    """company_id 자동 생성:
+    1) bokziri URL에 UUID가 있으면 bz_{uuid} 사용
+    2) 없으면 회사명 MD5 해시 앞 8자로 auto_{hash} 생성
+    """
+    import hashlib
+    # bokziri URL 패턴: /company/{uuid}
+    if url:
+        m = re.search(r"bokziri\.com/company/([a-zA-Z0-9]+)", url)
+        if m:
+            return f"bz_{m.group(1)}"
+    # 해시 기반 fallback (같은 회사명은 항상 같은 id 생성)
+    h = hashlib.md5(name.encode("utf-8")).hexdigest()[:8]
+    return f"auto_{h}"
+
+
+def resolve_company_id(name: str, cli_id: str | None, raw_only: bool = False, url: str | None = None) -> str:
     if cli_id:
         return cli_id
     if name in KNOWN_IDS:
         return KNOWN_IDS[name]
-    # --raw-only 모드에서는 company_id가 SQL 생성에 쓰이지 않으므로 경고만 출력
+    # --raw-only 모드에서는 company_id를 자동 생성하고 계속 진행
     if raw_only:
-        print(f"[WARN] '{name}'의 company_id 미등록 — raw-only 모드이므로 계속 진행합니다.")
-        return "unknown"
+        auto_id = auto_generate_id(name, url)
+        print(f"[INFO] '{name}' company_id 자동 생성: {auto_id}")
+        return auto_id
     print(f"[ERROR] '{name}'의 company_id를 알 수 없습니다.")
     print(f"        --id 옵션으로 지정해주세요. 예: --id mycompany")
     sys.exit(1)
@@ -532,7 +549,7 @@ async def main():
     parser.add_argument("--raw-only", action="store_true", help="Raw 텍스트만 출력, SQL 생성 안 함")
     args = parser.parse_args()
 
-    company_id = resolve_company_id(args.company, args.company_id, args.raw_only)
+    company_id = resolve_company_id(args.company, args.company_id, args.raw_only, args.url)
     BENEFIT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── 스크래핑 ──
