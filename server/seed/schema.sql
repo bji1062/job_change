@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS company_aliases (
   company_id VARCHAR(30) NOT NULL COMMENT '회사 FK (companies.id)',
   alias VARCHAR(100) NOT NULL COMMENT '검색용 별칭 (CJ, 씨제이, cj 등)',
   FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_company_alias (company_id, alias),
   INDEX idx_alias (alias)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

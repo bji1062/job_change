@@ -64,7 +64,7 @@ BEN_PRESETS = {
 COMPANIES = [
     {
         "id": "cj", "name": "CJ그룹",
-        "aliases": ["CJ", "cj", "씨제이", "CJ제일제당", "CJ올리브영", "CJ ENM"],
+        "aliases": ["CJ", "cj", "씨제이", "CJ주식회사"],
         "type": "large", "industry": "식품/유통/엔터", "logo": "CJ",
         "careersUrl": "https://recruit.cj.net/recruit/culture/welfare",
         "benefits": [
@@ -108,6 +108,30 @@ COMPANIES = [
             {"key": "refresh", "name": "리프레시 휴가 (3년마다 1개월)", "val": 0, "cat": "time", "badge": "auto", "qual": True, "qualText": "근속 3년마다 1개월 유급 휴가"},
         ],
         "workStyle": {"remote": True, "flex": True, "unlimitedPTO": True, "refreshLeave": "3년마다 1개월 유급", "overtime": "자율 (성과 중심)"},
+    },
+    {
+        "id": "cj_cheiljedang", "name": "CJ제일제당",
+        "aliases": ["CJ제일제당", "제일제당", "cj_cheiljedang"],
+        "type": "large", "industry": "식품/바이오", "logo": "CJ",
+        "careersUrl": "https://recruit.cj.net/",
+        "benefits": [],
+        "workStyle": {"remote": False, "flex": False, "unlimitedPTO": False, "overtime": "일반적 대기업 수준"},
+    },
+    {
+        "id": "cj_enm", "name": "CJ ENM",
+        "aliases": ["CJ ENM", "CJ이엔엠", "cj_enm", "tvN", "티빙"],
+        "type": "large", "industry": "엔터/미디어", "logo": "CE",
+        "careersUrl": "https://recruit.cj.net/",
+        "benefits": [],
+        "workStyle": {"remote": False, "flex": True, "unlimitedPTO": False, "overtime": "콘텐츠 제작 특성상 변동 큼"},
+    },
+    {
+        "id": "cj_oliveyoung", "name": "CJ올리브영",
+        "aliases": ["CJ올리브영", "올리브영", "cj_oliveyoung", "oliveyoung"],
+        "type": "large", "industry": "유통/뷰티", "logo": "OY",
+        "careersUrl": "https://recruit.cj.net/",
+        "benefits": [],
+        "workStyle": {"remote": False, "flex": False, "unlimitedPTO": False, "overtime": "일반적 대기업 수준"},
     },
 ]
 
