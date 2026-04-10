@@ -273,11 +273,15 @@ BENEFIT_KEYWORDS = [
 BENEFIT_DIR = Path(__file__).resolve().parent.parent / "seed" / "benefit"
 
 
-def resolve_company_id(name: str, cli_id: str | None) -> str:
+def resolve_company_id(name: str, cli_id: str | None, raw_only: bool = False) -> str:
     if cli_id:
         return cli_id
     if name in KNOWN_IDS:
         return KNOWN_IDS[name]
+    # --raw-only 모드에서는 company_id가 SQL 생성에 쓰이지 않으므로 경고만 출력
+    if raw_only:
+        print(f"[WARN] '{name}'의 company_id 미등록 — raw-only 모드이므로 계속 진행합니다.")
+        return "unknown"
     print(f"[ERROR] '{name}'의 company_id를 알 수 없습니다.")
     print(f"        --id 옵션으로 지정해주세요. 예: --id mycompany")
     sys.exit(1)
@@ -528,7 +532,7 @@ async def main():
     parser.add_argument("--raw-only", action="store_true", help="Raw 텍스트만 출력, SQL 생성 안 함")
     args = parser.parse_args()
 
-    company_id = resolve_company_id(args.company, args.company_id)
+    company_id = resolve_company_id(args.company, args.company_id, args.raw_only)
     BENEFIT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── 스크래핑 ──
