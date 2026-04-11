@@ -1,0 +1,661 @@
+# Oracle Cloud + MySQL 백엔드 구축 계획
+
+## Context
+
+현재 Job Choice OS는 순수 클라이언트 SPA(`index.html` 단일 파일)로, 모든 데이터(~100KB)가 JS 상수로 하드코딩되어 있다. 회사 DB 확장, 사용자 비교 이력 저장, 로그인 기능을 위해 Oracle Cloud Always Free 티어에 FastAPI + MySQL 백엔드를 구축한다.
+
+## 아키텍처
+
+┌──────────────┐
+│   Browser    │
+│  index.html  │  ← 계산 로직은 그대로 클라이언트
+└──────┬───────┘
+       │ fetch()
+┌──────▼───────┐
+│    Nginx     │  ← SSL + 리버스 프록시
+│   :443/:80   │
+└──────┬───────┘
+       │ proxy_pass :8000
+┌──────▼───────┐
+│   FastAPI    │  ← Python 백엔드
+│   :8000      │
+└──────┬───────┘
+       │ aiomysql
+┌──────▼───────┐
+│    MySQL     │  ← 자체 호스팅 (localhost)
+│   :3306      │
+└──────────────┘
+
+---
+
+## Phase 1: OCI 인프라 구축 (Terraform)
+
+Terraform으로 OCI 인프라를 코드로 관리한다.
+서버 내부 설정(MySQL, Nginx, FastAPI)은 SSH 접속 후 수동 설정.
+
+### 1.0 Terraform 프로젝트 구조 (infra/)
+
+  infra/
+  ├── provider.tf        # OCI provider 설정
+  ├── variables.tf       # 변수 정의 (compartment_id, ssh_key, region 등)
+  ├── terraform.tfvars   # 실제 값 (gitignore 대상)
+  ├── network.tf         # VCN, Subnet, Internet Gateway, Route Table, Security List
+  ├── compute.tf         # Compute 인스턴스 (Always Free ARM)
+  ├── outputs.tf         # Public IP, SSH 접속 명령 출력
+  └── .gitignore         # terraform.tfvars, .terraform/, *.tfstate*
+
+### 1.1 provider.tf
+
+  terraform {
+    required_providers {
+      oci = {
+        source  = "oracle/oci"
+        version = "~> 5.0"
+      }
+    }
+  }
+
+  provider "oci" {
+    tenancy_ocid     = var.tenancy_ocid
+    user_ocid        = var.user_ocid
+    fingerprint      = var.fingerprint
+    private_key_path = var.private_key_path
+    region           = var.region
+  }
+
+### 1.2 variables.tf
+
+  variable "tenancy_ocid" {}
+  variable "user_ocid" {}
+  variable "fingerprint" {}
+  variable "private_key_path" {}
+  variable "region" { default = "ap-seoul-1" }
+  variable "compartment_ocid" {}
+  variable "ssh_public_key" {}
+  variable "instance_shape" { default = "VM.Standard.A1.Flex" }
+  variable "instance_ocpus" { default = 2 }
+  variable "instance_memory_gb" { default = 12 }
+  variable "my_ip_cidr" { description = "SSH 접근 허용 IP (예: 1.2.3.4/32)" }
+
+### 1.3 network.tf — VCN + Subnet + Security List
+
+  - VCN CIDR: 10.0.0.0/16
+  - Public Subnet: 10.0.1.0/24
+  - Internet Gateway + Route Table (0.0.0.0/0 → IGW)
+  - Security List:
+    - TCP 22 (SSH) — var.my_ip_cidr만
+    - TCP 80, 443 (HTTP/HTTPS) — 0.0.0.0/0
+    - Egress 전체 허용
+    - TCP 3306 (MySQL) — 규칙 없음 (외부 차단)
+
+### 1.4 compute.tf — ARM 인스턴스 (Always Free)
+
+  - Shape: VM.Standard.A1.Flex
+  - 2 OCPU, 12GB RAM
+  - Ubuntu 22.04 (최신 이미지 자동 선택)
+  - Boot Volume: 50GB
+  - Public IP 자동 할당
+
+### 1.5 outputs.tf
+
+  output "public_ip"   → 인스턴스 Public IP
+  output "ssh_command"  → "ssh ubuntu@<ip>"
+
+### 1.6 사용법
+
+  cd infra/
+  cp terraform.tfvars.example terraform.tfvars   # 값 채우기
+  terraform init
+  terraform plan      # 리소스 확인
+  terraform apply     # 인프라 생성
+  terraform output    # Public IP 확인
+
+### 1.7 SSH 접속 후 수동 설정
+
+  # MySQL
+  sudo apt update && sudo apt install mysql-server -y
+  sudo systemctl enable --now mysql
+  sudo mysql_secure_installation
+  sudo mysql -e "
+    CREATE DATABASE jobchoice CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER 'jobapp'@'localhost' IDENTIFIED BY '<strong_password>';
+    GRANT ALL PRIVILEGES ON jobchoice.* TO 'jobapp'@'localhost';
+    FLUSH PRIVILEGES;"
+
+  # Nginx
+  sudo apt install nginx -y
+
+  # Python
+  sudo apt install python3.11 python3.11-venv python3-pip -y
+
+  # SSL (도메인 A 레코드 설정 후)
+  sudo apt install certbot python3-certbot-nginx -y
+  sudo certbot --nginx -d yourdomain.com
+
+---
+
+## Phase 2: MySQL 스키마
+
+명명 규칙:
+- 테이블: 대문자 + 접두사 T (예: TCOMPANY, TMEMBER)
+- 컬럼: UPPER_SNAKE_CASE, 분류어 종결 (NM/CD/ID/NO/CNT/VAL/AMT/RT/YN/DTM/TXT/JSON)
+- PK: 전 테이블 INT AUTO_INCREMENT (방안 A)
+- 기존 문자열 id(예: 'cj', 'large')는 *_ENG_NM / *_CD 컬럼에 UNIQUE 로 보존
+- 감사 컬럼 4종(INS_ID, INS_DTM, MOD_ID, MOD_DTM)을 모든 테이블에 공통 추가
+
+### 2.1 레퍼런스 데이터 테이블
+
+  -- 기업 유형 (6종)
+  CREATE TABLE TCOMPANY_TYPE (
+    COMP_TP_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL UNIQUE,
+    COMP_TP_NM          VARCHAR(20)  NOT NULL,
+    GROWTH_RT           DECIMAL(5,4) NOT NULL,
+    GROWTH_LABEL_NM     VARCHAR(50)  NOT NULL,
+    STABILITY_SCORE_VAL TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
+  -- 기업 DB (확장 가능)
+  CREATE TABLE TCOMPANY (
+    COMP_ID             INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ENG_NM         VARCHAR(30)  NOT NULL UNIQUE,
+    COMP_NM             VARCHAR(100) NOT NULL,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL,
+    INDUSTRY_NM         VARCHAR(50),
+    LOGO_NM             VARCHAR(10),
+    WORK_STYLE_JSON     JSON,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_TP_CD) REFERENCES TCOMPANY_TYPE(COMP_TP_CD),
+    FULLTEXT INDEX IDX_COMP_NM (COMP_NM)
+  );
+  -- 주: WORK_STYLE_JSON 내부 서브키(remote/flex/unlimitedPTO/refreshLeave/overtime)는
+  --     애플리케이션 계약. Phase 6 이후 정규화 여지를 재검토한다.
+
+  -- 기업 검색 별칭
+  CREATE TABLE TCOMPANY_ALIAS (
+    ALIAS_ID            INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ID             INT          NOT NULL,
+    ALIAS_NM            VARCHAR(100) NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_ID) REFERENCES TCOMPANY(COMP_ID) ON DELETE CASCADE,
+    INDEX IDX_ALIAS_NM (ALIAS_NM)
+  );
+
+  -- 기업별 복리후생
+  CREATE TABLE TCOMPANY_BENEFIT (
+    BENEFIT_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ID             INT          NOT NULL,
+    BENEFIT_CD          VARCHAR(30)  NOT NULL,
+    BENEFIT_NM          VARCHAR(100) NOT NULL,
+    BENEFIT_AMT         INT          DEFAULT 0,
+    CATEGORY_CD         VARCHAR(20)  NOT NULL,
+    BADGE_CD            VARCHAR(10)  DEFAULT 'est',
+    NOTE_NM             VARCHAR(200),
+    QUALITATIVE_YN      CHAR(1)      DEFAULT 'N',
+    QUAL_TXT            VARCHAR(500),
+    SORT_NO             SMALLINT     DEFAULT 0,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_ID) REFERENCES TCOMPANY(COMP_ID) ON DELETE CASCADE
+  );
+
+  -- 유형별 복지 프리셋
+  CREATE TABLE TBENEFIT_PRESET (
+    PRESET_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL,
+    BENEFIT_CD          VARCHAR(30)  NOT NULL,
+    BENEFIT_NM          VARCHAR(100) NOT NULL,
+    BENEFIT_AMT         INT          DEFAULT 0,
+    CATEGORY_CD         VARCHAR(20)  NOT NULL,
+    BADGE_CD            VARCHAR(10)  DEFAULT 'est',
+    CHECKED_YN          CHAR(1)      DEFAULT 'Y',
+    SORT_NO             SMALLINT     DEFAULT 0,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_TP_CD) REFERENCES TCOMPANY_TYPE(COMP_TP_CD)
+  );
+
+  -- 커리어 프로필 (9종)
+  CREATE TABLE TPROFILE (
+    PROFILE_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    PROFILE_CD          VARCHAR(20)  NOT NULL UNIQUE,
+    PROFILE_TP_NM       VARCHAR(20)  NOT NULL,
+    PROFILE_DESC_TXT    TEXT         NOT NULL,
+    MAP_PRIORITY_CD     VARCHAR(20)  NOT NULL,
+    VEC_JSON            JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
+  -- 프로필 직무 적합도
+  CREATE TABLE TPROFILE_JOB_FIT (
+    FIT_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    PROFILE_ID          INT          NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    FIT_TXT             TEXT         NOT NULL,
+    CAUTION_TXT         TEXT         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (PROFILE_ID) REFERENCES TPROFILE(PROFILE_ID),
+    UNIQUE INDEX IDX_PROFILE_SCENARIO (PROFILE_ID, SCENARIO_CD)
+  );
+
+  -- 직군
+  CREATE TABLE TJOB_GROUP (
+    JOB_GROUP_ID        INT AUTO_INCREMENT PRIMARY KEY,
+    JOB_GROUP_NM        VARCHAR(30)  NOT NULL,
+    COLOR_CD            VARCHAR(10)  NOT NULL,
+    SORT_NO             TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
+  -- 직무
+  CREATE TABLE TJOB (
+    JOB_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    JOB_CD              VARCHAR(30)  NOT NULL UNIQUE,
+    JOB_GROUP_ID        INT          NOT NULL,
+    JOB_NM              VARCHAR(30)  NOT NULL,
+    ICON_CD             VARCHAR(10)  NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    SORT_NO             TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (JOB_GROUP_ID) REFERENCES TJOB_GROUP(JOB_GROUP_ID)
+  );
+
+  -- 프로파일러 질문 (12문항)
+  CREATE TABLE TQUESTION (
+    QUESTION_ID         INT AUTO_INCREMENT PRIMARY KEY,
+    QUESTION_LABEL_NM   VARCHAR(30)  NOT NULL,
+    OPT_A_TITLE_NM      VARCHAR(50)  NOT NULL,
+    OPT_A_FX_JSON       JSON         NOT NULL,
+    OPT_B_TITLE_NM      VARCHAR(50)  NOT NULL,
+    OPT_B_FX_JSON       JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  );
+
+  -- 질문 시나리오별 설명
+  CREATE TABLE TQUESTION_SCENARIO (
+    SCENARIO_ID         INT AUTO_INCREMENT PRIMARY KEY,
+    QUESTION_ID         INT          NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    DESC_A_TXT          TEXT         NOT NULL,
+    DESC_B_TXT          TEXT         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (QUESTION_ID) REFERENCES TQUESTION(QUESTION_ID),
+    UNIQUE INDEX IDX_QUESTION_SCENARIO (QUESTION_ID, SCENARIO_CD)
+  );
+
+### 2.2 사용자 & 세션 테이블
+
+  -- 사용자 (이메일/비밀번호 로그인)  — users → TMEMBER
+  CREATE TABLE TMEMBER (
+    MBR_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    EMAIL_NM            VARCHAR(255) NOT NULL UNIQUE,
+    PWD_HASH_NM         VARCHAR(255) NOT NULL,
+    MBR_NM              VARCHAR(50),
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX IDX_EMAIL_NM (EMAIL_NM)
+  );
+
+  -- 프로파일러 결과 저장
+  CREATE TABLE TPROFILER_RESULT (
+    RESULT_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    MBR_ID              INT          NOT NULL,
+    JOB_ID              INT,
+    SCORE_JSON          JSON         NOT NULL,
+    PROFILE_ID          INT          NOT NULL,
+    SIMILARITY_RT       DECIMAL(5,4) NOT NULL,
+    ANSWER_JSON         JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (MBR_ID)     REFERENCES TMEMBER(MBR_ID) ON DELETE CASCADE,
+    FOREIGN KEY (PROFILE_ID) REFERENCES TPROFILE(PROFILE_ID),
+    FOREIGN KEY (JOB_ID)     REFERENCES TJOB(JOB_ID)
+  );
+
+  -- 비교 이력 저장
+  CREATE TABLE TCOMPARISON (
+    COMPARISON_ID       INT AUTO_INCREMENT PRIMARY KEY,
+    MBR_ID              INT          NOT NULL,
+    COMP_A_NM           VARCHAR(100),
+    COMP_A_TP_CD        VARCHAR(20)  NOT NULL,
+    SALARY_A_MIN_AMT    INT,
+    SALARY_A_MAX_AMT    INT,
+    COMMUTE_A_CNT       INT          DEFAULT 0,
+    WORK_STYLE_A_JSON   JSON,
+    BENEFIT_A_JSON      JSON,
+    COMP_B_NM           VARCHAR(100),
+    COMP_B_TP_CD        VARCHAR(20)  NOT NULL,
+    SALARY_INCR_RT      INT,
+    COMMUTE_B_CNT       INT          DEFAULT 0,
+    WORK_STYLE_B_JSON   JSON,
+    BENEFIT_B_JSON      JSON,
+    PRIORITY_CD         VARCHAR(20)  NOT NULL,
+    SACRIFICE_CD        VARCHAR(20),
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (MBR_ID) REFERENCES TMEMBER(MBR_ID) ON DELETE CASCADE,
+    INDEX IDX_MBR_INS_DTM (MBR_ID, INS_DTM)
+  );
+
+---
+
+## Phase 3: FastAPI 백엔드
+
+### 3.1 프로젝트 구조
+
+  server/
+  ├── requirements.txt
+  ├── .env
+  ├── main.py                 # FastAPI 앱 진입점
+  ├── config.py               # 환경변수, DB 설정
+  ├── database.py             # aiomysql 커넥션 풀
+  ├── models/
+  │   ├── user.py             # Pydantic 모델 (User, Auth)
+  │   ├── company.py          # Company, Benefit 모델
+  │   ├── profiler.py         # Profile, Question 모델
+  │   └── comparison.py       # Comparison 모델
+  ├── routers/
+  │   ├── auth.py             # POST /auth/register, /auth/login
+  │   ├── companies.py        # GET /companies/search, /companies/{id}
+  │   ├── reference.py        # GET /reference/all
+  │   ├── profiler.py         # GET /profiler/jobs, questions, profiles
+  │   └── comparisons.py      # POST/GET /comparisons
+  ├── services/
+  │   ├── auth_service.py     # 비밀번호 해싱, JWT 생성
+  │   └── cache.py            # 레퍼런스 데이터 메모리 캐시
+  ├── middleware/
+  │   └── auth_middleware.py  # JWT 토큰 검증
+  └── seed/
+      ├── seed.py             # 시드 데이터 삽입 스크립트
+      └── schema.sql          # 전체 DDL
+
+### 3.2 핵심 의존성 (requirements.txt)
+
+  fastapi==0.115.*
+  uvicorn[standard]==0.34.*
+  aiomysql==0.2.*
+  pydantic==2.*
+  python-jose[cryptography]==3.3.*
+  passlib[bcrypt]==1.7.*
+  python-dotenv==1.*
+
+### 3.3 API 엔드포인트
+
+인증 (공개):
+  POST  /api/v1/auth/register    회원가입 (email, password, name)
+  POST  /api/v1/auth/login       로그인 → JWT 토큰 반환
+
+레퍼런스 데이터 (공개, 캐싱):
+  GET   /api/v1/reference/all    모든 상수 데이터 한 번에 반환
+
+기업 검색 (공개):
+  GET   /api/v1/companies/search?q=토스    이름/별칭 검색
+  GET   /api/v1/companies/{id}             기업 상세 (복지, 근무방식 포함)
+
+프로파일러 (공개):
+  GET   /api/v1/profiler/jobs                  직군/직무 목록
+  GET   /api/v1/profiler/questions?scenario=tech    질문 + 시나리오 설명
+  GET   /api/v1/profiler/profiles              프로필 유형 목록
+
+사용자 데이터 (인증 필요):
+  POST  /api/v1/profiler/results     프로파일러 결과 저장
+  POST  /api/v1/comparisons          비교 이력 저장
+  GET   /api/v1/comparisons          내 비교 이력 조회
+  GET   /api/v1/comparisons/{id}     비교 상세 조회
+
+### 3.4 인증 방식
+- JWT (JSON Web Token) 기반
+- 회원가입: email + password → bcrypt 해싱 저장
+- 로그인: email + password 검증 → JWT 발급 (24시간 만료)
+- 인증 필요 API: Authorization: Bearer <token> 헤더
+
+### 3.5 캐싱 전략
+- /reference/all 응답을 메모리에 캐싱 (TTL 1시간)
+- HTTP 헤더: Cache-Control: public, max-age=3600
+- 기업 검색은 캐싱 없음 (실시간)
+
+---
+
+## Phase 4: 프론트엔드 통합 (index.html 수정)
+
+### 4.1 전략: Progressive Enhancement (점진적 향상)
+- 하드코딩 데이터를 폴백으로 유지
+- API 사용 가능 시 서버 데이터로 교체
+- API 불가 시 기존처럼 동작
+
+### 4.2 변경 사항
+
+1) const → let 변경 (API 데이터로 교체 가능하도록):
+
+  // 변경 대상: DB, BEN_PRESETS, PROFILES, JOB_GROUPS, Q_BASE, Q_DESC
+  // 주: DB/BEN_PRESETS 필드명은 TCOMPANY / TCOMPANY_BENEFIT / TBENEFIT_PRESET
+  //     컬럼명(COMP_NM, BENEFIT_AMT 등)과 1:1 매핑되어 있음. 그 외 JS 내부 상수
+  //     (PROFILES/Q_BASE 등)는 /reference/all 응답을 받는 시점에 키 매핑.
+  let DB = [...];        // const → let
+  let BEN_PRESETS = {};  // const → let
+  let PROFILES = [];     // const → let
+  // ... 기타 동일
+
+2) API 클라이언트 추가 (<script> 상단):
+
+  // ━━ API CLIENT ━━
+  const API_BASE = location.protocol === 'file:' ? '' : '';
+  let AUTH_TOKEN = localStorage.getItem('jc_token') || null;
+
+  async function apiFetch(path, opts = {}) {
+    if (!API_BASE) return null;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (AUTH_TOKEN) headers['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+      const r = await fetch(API_BASE + '/api/v1' + path, { ...opts, headers });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+3) 초기화 수정 (INIT 섹션):
+
+  (async function init() {
+    initPri(); calc();
+    if (!API_BASE) return;
+    const ref = await apiFetch('/reference/all');
+    if (ref) {
+      DB = ref.companies || DB;
+      BEN_PRESETS = ref.benPresets || BEN_PRESETS;
+      // ... 기타 데이터 교체
+    }
+  })();
+
+4) 기업 검색 API 연동:
+  - doSearch(s) 함수에서 API 우선 호출, 실패 시 로컬 DB 필터링
+
+5) 로그인/회원가입 UI 추가:
+  - 랜딩 페이지에 로그인 버튼 추가
+  - 간단한 모달 팝업 (이메일 + 비밀번호)
+  - 로그인 성공 시 JWT를 localStorage에 저장
+
+6) 비교 이력 저장:
+  - compare() 함수 끝에 API 호출 추가 (로그인 상태일 때만)
+  - 마이페이지에서 이전 비교 목록 조회
+
+---
+
+## Phase 5: 배포 및 운영
+
+### 5.1 서버 환경 구성
+
+  # Python 3.11+ 설치
+  sudo apt install python3.11 python3.11-venv python3-pip -y
+
+  # 프로젝트 셋업
+  cd /home/ubuntu/job_change/server
+  python3.11 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+
+  # 환경변수 (.env)
+  DB_HOST=localhost
+  DB_USER=jobapp
+  DB_PASS=<strong_password>
+  DB_NAME=jobchoice
+  JWT_SECRET=<random_secret_key>
+  JWT_EXPIRE_HOURS=24
+
+### 5.2 스키마 & 시드 데이터
+
+  mysql -u jobapp -p jobchoice < seed/schema.sql
+  python seed/seed.py
+
+### 5.3 Systemd 서비스
+
+  # /etc/systemd/system/jobchoice.service
+  [Unit]
+  Description=Job Choice OS API
+  After=network.target mysql.service
+
+  [Service]
+  User=ubuntu
+  WorkingDirectory=/home/ubuntu/job_change/server
+  Environment=PATH=/home/ubuntu/job_change/server/venv/bin
+  ExecStart=/home/ubuntu/job_change/server/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+  Restart=always
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+
+  sudo systemctl enable --now jobchoice
+
+### 5.4 Nginx 설정
+
+  server {
+      listen 80;
+      server_name yourdomain.com;
+      return 301 https://$host$request_uri;
+  }
+
+  server {
+      listen 443 ssl;
+      server_name yourdomain.com;
+
+      ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+      # 프론트엔드 (정적 파일)
+      root /home/ubuntu/job_change;
+      index index.html;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      # API 프록시
+      location /api/ {
+          proxy_pass http://127.0.0.1:8000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+
+---
+
+## 구현 순서 (총 6단계)
+
+Step 1: OCI 인프라 (Terraform)
+  - infra/ 디렉토리에 .tf 파일 작성
+  - terraform init && terraform apply로 인프라 생성
+  - SSH 접속 후 MySQL, Nginx, Python 수동 설치
+
+Step 2: MySQL 설치 & 스키마 생성
+  - MySQL 설치, 보안 설정, 유저/DB 생성
+  - seed/schema.sql 작성 및 실행
+
+Step 3: FastAPI 백엔드 개발
+  - 프로젝트 구조 생성
+  - 레퍼런스 데이터 API 구현
+  - 기업 검색 API 구현
+  - 인증 (회원가입/로그인) 구현
+  - 비교 이력 CRUD 구현
+
+Step 4: 시드 데이터 마이그레이션
+  - index.html의 하드코딩 데이터를 MySQL로 이전
+  - seed/seed.py 작성 및 실행
+
+Step 5: 프론트엔드 통합
+  - index.html에 API 클라이언트 추가
+  - const → let 변경
+  - 로그인 UI 추가
+  - 기업 검색 API 연동
+  - 비교 이력 저장/조회 연동
+
+Step 6: 배포
+  - Nginx + SSL 설정
+  - Systemd 서비스 등록
+  - 도메인 연결
+
+---
+
+## 수정 대상 파일
+
+  index.html              API 클라이언트 추가, const→let, 로그인 UI, API 연동
+  infra/ (신규)           Terraform OCI 인프라 코드 (.tf 파일 6개)
+  server/ (신규)          FastAPI 백엔드 전체
+  server/seed/schema.sql  MySQL DDL
+  server/seed/seed.py     시드 데이터 삽입
+
+## 검증 방법
+
+  1. mysql -u jobapp -p jobchoice -e "SELECT COUNT(*) FROM companies;"
+     → 데이터 확인
+
+  2. curl http://localhost:8000/api/v1/reference/all
+     → API 응답 확인
+
+  3. curl -X POST http://localhost:8000/api/v1/auth/register \
+       -H "Content-Type: application/json" \
+       -d '{"email":"test@test.com","password":"test1234","name":"테스트"}'
+     → 회원가입 테스트
+
+  4. 브라우저에서 index.html 열어 기존 기능 정상 동작 확인 (폴백)
+
+  5. 로그인 후 비교 실행 → DB에 이력 저장 확인
