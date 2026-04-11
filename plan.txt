@@ -136,175 +136,243 @@ Terraform으로 OCI 인프라를 코드로 관리한다.
 
 ## Phase 2: MySQL 스키마
 
+명명 규칙:
+- 테이블: 대문자 + 접두사 T (예: TCOMPANY, TMEMBER)
+- 컬럼: UPPER_SNAKE_CASE, 분류어 종결 (NM/CD/ID/NO/CNT/VAL/AMT/RT/YN/DTM/TXT/JSON)
+- PK: 전 테이블 INT AUTO_INCREMENT (방안 A)
+- 기존 문자열 id(예: 'cj', 'large')는 *_ENG_NM / *_CD 컬럼에 UNIQUE 로 보존
+- 감사 컬럼 4종(INS_ID, INS_DTM, MOD_ID, MOD_DTM)을 모든 테이블에 공통 추가
+
 ### 2.1 레퍼런스 데이터 테이블
 
   -- 기업 유형 (6종)
-  CREATE TABLE company_types (
-    id VARCHAR(20) PRIMARY KEY,
-    label VARCHAR(20) NOT NULL,
-    growth_rate DECIMAL(5,4) NOT NULL,
-    growth_label VARCHAR(50) NOT NULL,
-    stability_score TINYINT NOT NULL
+  CREATE TABLE TCOMPANY_TYPE (
+    COMP_TP_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL UNIQUE,
+    COMP_TP_NM          VARCHAR(20)  NOT NULL,
+    GROWTH_RT           DECIMAL(5,4) NOT NULL,
+    GROWTH_LABEL_NM     VARCHAR(50)  NOT NULL,
+    STABILITY_SCORE_VAL TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   -- 기업 DB (확장 가능)
-  CREATE TABLE companies (
-    id VARCHAR(30) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    type_id VARCHAR(20) NOT NULL,
-    industry VARCHAR(50),
-    logo VARCHAR(10),
-    work_style JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (type_id) REFERENCES company_types(id),
-    FULLTEXT INDEX idx_name (name)
+  CREATE TABLE TCOMPANY (
+    COMP_ID             INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ENG_NM         VARCHAR(30)  NOT NULL UNIQUE,
+    COMP_NM             VARCHAR(100) NOT NULL,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL,
+    INDUSTRY_NM         VARCHAR(50),
+    LOGO_NM             VARCHAR(10),
+    WORK_STYLE_JSON     JSON,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_TP_CD) REFERENCES TCOMPANY_TYPE(COMP_TP_CD),
+    FULLTEXT INDEX IDX_COMP_NM (COMP_NM)
   );
+  -- 주: WORK_STYLE_JSON 내부 서브키(remote/flex/unlimitedPTO/refreshLeave/overtime)는
+  --     애플리케이션 계약. Phase 6 이후 정규화 여지를 재검토한다.
 
   -- 기업 검색 별칭
-  CREATE TABLE company_aliases (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    company_id VARCHAR(30) NOT NULL,
-    alias VARCHAR(100) NOT NULL,
-    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
-    INDEX idx_alias (alias)
+  CREATE TABLE TCOMPANY_ALIAS (
+    ALIAS_ID            INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ID             INT          NOT NULL,
+    ALIAS_NM            VARCHAR(100) NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_ID) REFERENCES TCOMPANY(COMP_ID) ON DELETE CASCADE,
+    INDEX IDX_ALIAS_NM (ALIAS_NM)
   );
 
   -- 기업별 복리후생
-  CREATE TABLE company_benefits (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    company_id VARCHAR(30) NOT NULL,
-    ben_key VARCHAR(30) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    val INT DEFAULT 0,
-    category VARCHAR(20) NOT NULL,
-    badge VARCHAR(10) DEFAULT 'est',
-    note VARCHAR(200),
-    is_qualitative BOOLEAN DEFAULT FALSE,
-    qual_text VARCHAR(500),
-    sort_order SMALLINT DEFAULT 0,
-    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+  CREATE TABLE TCOMPANY_BENEFIT (
+    BENEFIT_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_ID             INT          NOT NULL,
+    BENEFIT_CD          VARCHAR(30)  NOT NULL,
+    BENEFIT_NM          VARCHAR(100) NOT NULL,
+    BENEFIT_AMT         INT          DEFAULT 0,
+    CATEGORY_CD         VARCHAR(20)  NOT NULL,
+    BADGE_CD            VARCHAR(10)  DEFAULT 'est',
+    NOTE_NM             VARCHAR(200),
+    QUALITATIVE_YN      CHAR(1)      DEFAULT 'N',
+    QUAL_TXT            VARCHAR(500),
+    SORT_NO             SMALLINT     DEFAULT 0,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_ID) REFERENCES TCOMPANY(COMP_ID) ON DELETE CASCADE
   );
 
   -- 유형별 복지 프리셋
-  CREATE TABLE benefit_presets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    type_id VARCHAR(20) NOT NULL,
-    ben_key VARCHAR(30) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    val INT DEFAULT 0,
-    category VARCHAR(20) NOT NULL,
-    badge VARCHAR(10) DEFAULT 'est',
-    checked_default BOOLEAN DEFAULT TRUE,
-    sort_order SMALLINT DEFAULT 0,
-    FOREIGN KEY (type_id) REFERENCES company_types(id)
+  CREATE TABLE TBENEFIT_PRESET (
+    PRESET_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    COMP_TP_CD          VARCHAR(20)  NOT NULL,
+    BENEFIT_CD          VARCHAR(30)  NOT NULL,
+    BENEFIT_NM          VARCHAR(100) NOT NULL,
+    BENEFIT_AMT         INT          DEFAULT 0,
+    CATEGORY_CD         VARCHAR(20)  NOT NULL,
+    BADGE_CD            VARCHAR(10)  DEFAULT 'est',
+    CHECKED_YN          CHAR(1)      DEFAULT 'Y',
+    SORT_NO             SMALLINT     DEFAULT 0,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (COMP_TP_CD) REFERENCES TCOMPANY_TYPE(COMP_TP_CD)
   );
 
   -- 커리어 프로필 (9종)
-  CREATE TABLE profiles (
-    id VARCHAR(20) PRIMARY KEY,
-    type_name VARCHAR(20) NOT NULL,
-    description TEXT NOT NULL,
-    map_priority VARCHAR(20) NOT NULL,
-    vec JSON NOT NULL
+  CREATE TABLE TPROFILE (
+    PROFILE_ID          INT AUTO_INCREMENT PRIMARY KEY,
+    PROFILE_CD          VARCHAR(20)  NOT NULL UNIQUE,
+    PROFILE_TP_NM       VARCHAR(20)  NOT NULL,
+    PROFILE_DESC_TXT    TEXT         NOT NULL,
+    MAP_PRIORITY_CD     VARCHAR(20)  NOT NULL,
+    VEC_JSON            JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   -- 프로필 직무 적합도
-  CREATE TABLE profile_job_fits (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    profile_id VARCHAR(20) NOT NULL,
-    scenario VARCHAR(20) NOT NULL,
-    fit TEXT NOT NULL,
-    caution TEXT NOT NULL,
-    FOREIGN KEY (profile_id) REFERENCES profiles(id),
-    UNIQUE INDEX (profile_id, scenario)
+  CREATE TABLE TPROFILE_JOB_FIT (
+    FIT_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    PROFILE_ID          INT          NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    FIT_TXT             TEXT         NOT NULL,
+    CAUTION_TXT         TEXT         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (PROFILE_ID) REFERENCES TPROFILE(PROFILE_ID),
+    UNIQUE INDEX IDX_PROFILE_SCENARIO (PROFILE_ID, SCENARIO_CD)
   );
 
-  -- 직군/직무
-  CREATE TABLE job_groups (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    group_label VARCHAR(30) NOT NULL,
-    color VARCHAR(10) NOT NULL,
-    sort_order TINYINT NOT NULL
+  -- 직군
+  CREATE TABLE TJOB_GROUP (
+    JOB_GROUP_ID        INT AUTO_INCREMENT PRIMARY KEY,
+    JOB_GROUP_NM        VARCHAR(30)  NOT NULL,
+    COLOR_CD            VARCHAR(10)  NOT NULL,
+    SORT_NO             TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
-  CREATE TABLE jobs (
-    id VARCHAR(30) PRIMARY KEY,
-    group_id INT NOT NULL,
-    label VARCHAR(30) NOT NULL,
-    icon VARCHAR(10) NOT NULL,
-    scenario VARCHAR(20) NOT NULL,
-    sort_order TINYINT NOT NULL,
-    FOREIGN KEY (group_id) REFERENCES job_groups(id)
+  -- 직무
+  CREATE TABLE TJOB (
+    JOB_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    JOB_CD              VARCHAR(30)  NOT NULL UNIQUE,
+    JOB_GROUP_ID        INT          NOT NULL,
+    JOB_NM              VARCHAR(30)  NOT NULL,
+    ICON_CD             VARCHAR(10)  NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    SORT_NO             TINYINT      NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (JOB_GROUP_ID) REFERENCES TJOB_GROUP(JOB_GROUP_ID)
   );
 
   -- 프로파일러 질문 (12문항)
-  CREATE TABLE profiler_questions (
-    id INT PRIMARY KEY,
-    label VARCHAR(30) NOT NULL,
-    option_a_title VARCHAR(50) NOT NULL,
-    option_a_fx JSON NOT NULL,
-    option_b_title VARCHAR(50) NOT NULL,
-    option_b_fx JSON NOT NULL
+  CREATE TABLE TQUESTION (
+    QUESTION_ID         INT AUTO_INCREMENT PRIMARY KEY,
+    QUESTION_LABEL_NM   VARCHAR(30)  NOT NULL,
+    OPT_A_TITLE_NM      VARCHAR(50)  NOT NULL,
+    OPT_A_FX_JSON       JSON         NOT NULL,
+    OPT_B_TITLE_NM      VARCHAR(50)  NOT NULL,
+    OPT_B_FX_JSON       JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   );
 
   -- 질문 시나리오별 설명
-  CREATE TABLE question_scenarios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    question_id INT NOT NULL,
-    scenario VARCHAR(20) NOT NULL,
-    desc_a TEXT NOT NULL,
-    desc_b TEXT NOT NULL,
-    FOREIGN KEY (question_id) REFERENCES profiler_questions(id),
-    UNIQUE INDEX (question_id, scenario)
+  CREATE TABLE TQUESTION_SCENARIO (
+    SCENARIO_ID         INT AUTO_INCREMENT PRIMARY KEY,
+    QUESTION_ID         INT          NOT NULL,
+    SCENARIO_CD         VARCHAR(20)  NOT NULL,
+    DESC_A_TXT          TEXT         NOT NULL,
+    DESC_B_TXT          TEXT         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (QUESTION_ID) REFERENCES TQUESTION(QUESTION_ID),
+    UNIQUE INDEX IDX_QUESTION_SCENARIO (QUESTION_ID, SCENARIO_CD)
   );
 
 ### 2.2 사용자 & 세션 테이블
 
-  -- 사용자 (이메일/비밀번호 로그인)
-  CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_email (email)
+  -- 사용자 (이메일/비밀번호 로그인)  — users → TMEMBER
+  CREATE TABLE TMEMBER (
+    MBR_ID              INT AUTO_INCREMENT PRIMARY KEY,
+    EMAIL_NM            VARCHAR(255) NOT NULL UNIQUE,
+    PWD_HASH_NM         VARCHAR(255) NOT NULL,
+    MBR_NM              VARCHAR(50),
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX IDX_EMAIL_NM (EMAIL_NM)
   );
 
   -- 프로파일러 결과 저장
-  CREATE TABLE profiler_results (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    job_id VARCHAR(30),
-    scores JSON NOT NULL,
-    profile_id VARCHAR(20) NOT NULL,
-    similarity DECIMAL(5,4) NOT NULL,
-    answers JSON NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (profile_id) REFERENCES profiles(id)
+  CREATE TABLE TPROFILER_RESULT (
+    RESULT_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    MBR_ID              INT          NOT NULL,
+    JOB_ID              INT,
+    SCORE_JSON          JSON         NOT NULL,
+    PROFILE_ID          INT          NOT NULL,
+    SIMILARITY_RT       DECIMAL(5,4) NOT NULL,
+    ANSWER_JSON         JSON         NOT NULL,
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (MBR_ID)     REFERENCES TMEMBER(MBR_ID) ON DELETE CASCADE,
+    FOREIGN KEY (PROFILE_ID) REFERENCES TPROFILE(PROFILE_ID),
+    FOREIGN KEY (JOB_ID)     REFERENCES TJOB(JOB_ID)
   );
 
   -- 비교 이력 저장
-  CREATE TABLE comparisons (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    company_a_name VARCHAR(100),
-    type_a VARCHAR(20) NOT NULL,
-    salary_a_min INT, salary_a_max INT,
-    commute_a INT DEFAULT 0,
-    work_style_a JSON,
-    benefits_a JSON,
-    company_b_name VARCHAR(100),
-    type_b VARCHAR(20) NOT NULL,
-    salary_rate INT,
-    commute_b INT DEFAULT 0,
-    work_style_b JSON,
-    benefits_b JSON,
-    priority_key VARCHAR(20) NOT NULL,
-    sacrifice_key VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user_created (user_id, created_at)
+  CREATE TABLE TCOMPARISON (
+    COMPARISON_ID       INT AUTO_INCREMENT PRIMARY KEY,
+    MBR_ID              INT          NOT NULL,
+    COMP_A_NM           VARCHAR(100),
+    COMP_A_TP_CD        VARCHAR(20)  NOT NULL,
+    SALARY_A_MIN_AMT    INT,
+    SALARY_A_MAX_AMT    INT,
+    COMMUTE_A_CNT       INT          DEFAULT 0,
+    WORK_STYLE_A_JSON   JSON,
+    BENEFIT_A_JSON      JSON,
+    COMP_B_NM           VARCHAR(100),
+    COMP_B_TP_CD        VARCHAR(20)  NOT NULL,
+    SALARY_INCR_RT      INT,
+    COMMUTE_B_CNT       INT          DEFAULT 0,
+    WORK_STYLE_B_JSON   JSON,
+    BENEFIT_B_JSON      JSON,
+    PRIORITY_CD         VARCHAR(20)  NOT NULL,
+    SACRIFICE_CD        VARCHAR(20),
+    INS_ID              VARCHAR(50),
+    INS_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    MOD_ID              VARCHAR(50),
+    MOD_DTM             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (MBR_ID) REFERENCES TMEMBER(MBR_ID) ON DELETE CASCADE,
+    INDEX IDX_MBR_INS_DTM (MBR_ID, INS_DTM)
   );
 
 ---
@@ -398,6 +466,9 @@ Terraform으로 OCI 인프라를 코드로 관리한다.
 1) const → let 변경 (API 데이터로 교체 가능하도록):
 
   // 변경 대상: DB, BEN_PRESETS, PROFILES, JOB_GROUPS, Q_BASE, Q_DESC
+  // 주: DB/BEN_PRESETS 필드명은 TCOMPANY / TCOMPANY_BENEFIT / TBENEFIT_PRESET
+  //     컬럼명(COMP_NM, BENEFIT_AMT 등)과 1:1 매핑되어 있음. 그 외 JS 내부 상수
+  //     (PROFILES/Q_BASE 등)는 /reference/all 응답을 받는 시점에 키 매핑.
   let DB = [...];        // const → let
   let BEN_PRESETS = {};  // const → let
   let PROFILES = [];     // const → let

@@ -3,7 +3,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function fW(v){return Math.abs(v)>=10000?(v/10000).toFixed(1)+'억원':Math.round(v).toLocaleString()+'만원'}
-function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.cat===cat)t+=b.val});return t}
+function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.CATEGORY_CD===cat)t+=b.BENEFIT_AMT});return t}
 
 function compare(){
   const salA=getSalRange(),salB=getOfferRange();
@@ -19,8 +19,8 @@ function compare(){
   const hrsA=getWSHours('a'),hrsB=getWSHours('b');
   const otPayA=getOTPay('a'),otPayB=getOTPay('b');
   const wA=wsState.a,wB=wsState.b;
-  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
-  const wsA=matched.a?.workStyle||{},wsB=matched.b?.workStyle||{};
+  const nA=matched.a?matched.a.COMP_NM:'현직',nB=matched.b?matched.b.COMP_NM:'이직처';
+  const wsA=matched.a?.WORK_STYLE_JSON||{},wsB=matched.b?.WORK_STYLE_JSON||{};
   const pri=PRIORITIES.find(p=>p.key===curPri);
   const effDiffMid=effB.mid-effA.mid,salDiffMid=salB.mid-salA.mid;
   const effDiffMin=effB.min-effA.min,effDiffMax=effB.max-effA.max;
@@ -222,12 +222,12 @@ function compare(){
     html+=`</div></div>`;
   }
 
-  if(curPri==='benefits'){const listA=benS.a||[],listB=benS.b||[];if(listA.length||listB.length){const allKeys=new Set();listA.forEach(b=>allKeys.add(b.key));listB.forEach(b=>allKeys.add(b.key));let rows='';allKeys.forEach(k=>{const a=listA.find(b=>b.key===k),b_=listB.find(b=>b.key===k);const vA=a?.checked?a.val:0,vB=b_?.checked?b_.val:0;const nm=a?.name||b_?.name||k;const df=vB-vA;rows+=`<tr><td class="td-name">${nm}</td><td class="td-a">${vA?vA.toLocaleString()+'만':'—'}</td><td class="td-b">${vB?vB.toLocaleString()+'만':'—'}</td><td class="td-diff ${df>0?'pos':df<0?'neg':'eq'}">${df!==0?(df>0?'+':'')+df.toLocaleString()+'만':'—'}</td></tr>`});const totA=listA.reduce((s,b)=>s+(b.checked?b.val:0),0),totB=listB.reduce((s,b)=>s+(b.checked?b.val:0),0),totD=totB-totA;html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 항목별 비교</div><div class="cmp-body"><table class="ben-compare"><thead><tr><th>항목</th><th>${nA}</th><th>${nB}</th><th>차이</th></tr></thead><tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="font-weight:700;color:var(--t1)">합계</td><td class="td-a" style="font-weight:700">${totA.toLocaleString()}만</td><td class="td-b" style="font-weight:700">${totB.toLocaleString()}만</td><td class="td-diff ${totD>0?'pos':totD<0?'neg':'eq'}" style="font-weight:700">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</td></tr></tbody></table></div></div>`}}
+  if(curPri==='benefits'){const listA=benS.a||[],listB=benS.b||[];if(listA.length||listB.length){const allKeys=new Set();listA.forEach(b=>allKeys.add(b.BENEFIT_CD));listB.forEach(b=>allKeys.add(b.BENEFIT_CD));let rows='';allKeys.forEach(k=>{const a=listA.find(b=>b.BENEFIT_CD===k),b_=listB.find(b=>b.BENEFIT_CD===k);const vA=a?.checked?a.BENEFIT_AMT:0,vB=b_?.checked?b_.BENEFIT_AMT:0;const nm=a?.BENEFIT_NM||b_?.BENEFIT_NM||k;const df=vB-vA;rows+=`<tr><td class="td-name">${nm}</td><td class="td-a">${vA?vA.toLocaleString()+'만':'—'}</td><td class="td-b">${vB?vB.toLocaleString()+'만':'—'}</td><td class="td-diff ${df>0?'pos':df<0?'neg':'eq'}">${df!==0?(df>0?'+':'')+df.toLocaleString()+'만':'—'}</td></tr>`});const totA=listA.reduce((s,b)=>s+(b.checked?b.BENEFIT_AMT:0),0),totB=listB.reduce((s,b)=>s+(b.checked?b.BENEFIT_AMT:0),0),totD=totB-totA;html+=`<div class="cmp"><div class="cmp-head">🎁 복리후생 항목별 비교</div><div class="cmp-body"><table class="ben-compare"><thead><tr><th>항목</th><th>${nA}</th><th>${nB}</th><th>차이</th></tr></thead><tbody>${rows}<tr style="border-top:2px solid var(--border)"><td style="font-weight:700;color:var(--t1)">합계</td><td class="td-a" style="font-weight:700">${totA.toLocaleString()}만</td><td class="td-b" style="font-weight:700">${totB.toLocaleString()}만</td><td class="td-diff ${totD>0?'pos':totD<0?'neg':'eq'}" style="font-weight:700">${totD===0?'동일':(totD>0?'+':'')+totD.toLocaleString()+'만'}</td></tr></tbody></table></div></div>`}}
   if(curPri==='brand'){html+=`<div class="cmp"><div class="cmp-head">🏢 브랜드 가치</div><div class="cmp-body"><div class="callout info"><span class="callout-icon">💡</span><span>회사 브랜드는 <strong>"다음 이직"의 연봉 협상력</strong>으로 전환됩니다. 3년 후 이력서에 더 빛날 이름을 선택하세요.</span></div></div></div>`}
 
   // Qualitative benefits
-  const qualA=(benS.a||[]).filter(b=>b.qual),qualB=(benS.b||[]).filter(b=>b.qual);
-  if(qualA.length||qualB.length){html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">`;qualA.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-a">${nA}</span><span>${b.qualText||b.name}</span></div>`});qualB.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-b">${nB}</span><span>${b.qualText||b.name}</span></div>`});html+=`</div></div>`}
+  const qualA=(benS.a||[]).filter(b=>b.QUALITATIVE_YN),qualB=(benS.b||[]).filter(b=>b.QUALITATIVE_YN);
+  if(qualA.length||qualB.length){html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">`;qualA.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-a">${nA}</span><span>${b.QUAL_TXT||b.BENEFIT_NM}</span></div>`});qualB.forEach(b=>{html+=`<div class="qual-item"><span class="qual-side qs-b">${nB}</span><span>${b.QUAL_TXT||b.BENEFIT_NM}</span></div>`});html+=`</div></div>`}
 
   // [FIX] 3년 투영 — 변수 섀도잉 수정 (barWA/barWB)
   const grA=GROWTH_RATES[typeAVal]||0.04,grB=GROWTH_RATES[typeBVal]||0.04;

@@ -125,8 +125,8 @@ function setupBasic(opts={}){
 
 test('DB 회사 선택 — CJ(현직) vs 토스(이직)', ()=>{
   setupBasic({compA:'cj',compB:'toss',salA:'5000-6000',rate:15,pri:'salary',sac:'wlb',comA:50,comB:30});
-  assert(win.matched.a&&win.matched.a.id==='cj','CJ not matched');
-  assert(win.matched.b&&win.matched.b.id==='toss','Toss not matched');
+  assert(win.matched.a&&win.matched.a.COMP_ENG_NM==='cj','CJ not matched');
+  assert(win.matched.b&&win.matched.b.COMP_ENG_NM==='toss','Toss not matched');
   assert(win.benS.a.length>0,'CJ benefits empty');
   assert(win.benS.b.length>0,'Toss benefits empty');
   win.compare();
