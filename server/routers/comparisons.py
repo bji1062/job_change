@@ -12,10 +12,10 @@ router = APIRouter()
 async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
     try:
         cid = await database.execute(
-            """INSERT INTO comparisons
-               (user_id, company_a_name, type_a, salary_a_min, salary_a_max, commute_a,
-                work_style_a, benefits_a, company_b_name, type_b, salary_rate, commute_b,
-                work_style_b, benefits_b, priority_key, sacrifice_key)
+            """INSERT INTO TCOMPARISON
+               (MBR_ID, COMP_A_NM, COMP_A_TP_CD, SALARY_A_MIN_AMT, SALARY_A_MAX_AMT, COMMUTE_A_MIN_NO,
+                WORK_STYLE_A_VAL, BENEFITS_A_VAL, COMP_B_NM, COMP_B_TP_CD, SALARY_RATE_VAL, COMMUTE_B_MIN_NO,
+                WORK_STYLE_B_VAL, BENEFITS_B_VAL, PRIORITY_CD, SACRIFICE_CD)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (user_id, req.company_a_name, req.type_a, req.salary_a_min, req.salary_a_max,
              req.commute_a, json.dumps(req.work_style_a, ensure_ascii=False) if req.work_style_a else None,
@@ -36,10 +36,10 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
     if req.feed_headline:
         try:
             await database.execute(
-                """INSERT INTO comparison_feed
-                   (comparison_id, job_category, company_a_display, type_a,
-                    company_b_display, type_b, headline, detail,
-                    metric_val, metric_label, metric_type)
+                """INSERT INTO TCOMPARISON_FEED
+                   (COMPARISON_ID, JOB_CTGR_NM, COMP_A_DISP_NM, COMP_A_TP_CD,
+                    COMP_B_DISP_NM, COMP_B_TP_CD, HEADLINE_CTNT, DETAIL_CTNT,
+                    METRIC_VAL_CTNT, METRIC_LABEL_NM, METRIC_TYPE_CD)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (cid, req.feed_job_category, req.company_a_name or '현직', req.type_a,
                  req.company_b_name or '이직처', req.type_b, req.feed_headline,
@@ -59,23 +59,23 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
             }
             # Check if this pair already exists (A vs B or B vs A)
             existing = await database.fetch_one(
-                """SELECT id FROM popular_cases
-                   WHERE (title_a=%s AND title_b=%s) OR (title_a=%s AND title_b=%s)
+                """SELECT CASE_ID AS id FROM TPOPULAR_CASE
+                   WHERE (TITLE_A_NM=%s AND TITLE_B_NM=%s) OR (TITLE_A_NM=%s AND TITLE_B_NM=%s)
                    LIMIT 1""",
                 (req.company_a_name, req.company_b_name,
                  req.company_b_name, req.company_a_name))
             print(f"[popular_cases] existing={existing}")
             if existing:
                 await database.execute(
-                    "UPDATE popular_cases SET comparison_count=comparison_count+1 WHERE id=%s",
+                    "UPDATE TPOPULAR_CASE SET COMPARISON_NO=COMPARISON_NO+1 WHERE CASE_ID=%s",
                     (existing["id"],))
                 print(f"[popular_cases] UPDATE done for id={existing['id']}")
             else:
                 points = json.dumps(req.feed_points[:3], ensure_ascii=False) if req.feed_points else '[]'
                 await database.execute(
-                    """INSERT INTO popular_cases
-                       (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
-                        points, view_count, comparison_count)
+                    """INSERT INTO TPOPULAR_CASE
+                       (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM,
+                        POINTS_VAL, VIEW_NO, COMPARISON_NO)
                        VALUES ('company',%s,%s,%s,%s,%s,%s,%s,0,1)""",
                     (req.company_a_name, req.type_a, type_labels.get(req.type_a, req.type_a),
                      req.company_b_name, req.type_b, type_labels.get(req.type_b, req.type_b),
@@ -90,8 +90,8 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
     # Daily stats increment
     try:
         await database.execute(
-            """INSERT INTO daily_stats (stat_date, comparison_count) VALUES (CURDATE(), 1)
-               ON DUPLICATE KEY UPDATE comparison_count = comparison_count + 1""")
+            """INSERT INTO TDAILY_STAT (STAT_DT, COMPARISON_NO) VALUES (CURDATE(), 1)
+               ON DUPLICATE KEY UPDATE COMPARISON_NO = COMPARISON_NO + 1""")
     except Exception as e:
         print(f"[daily_stats error] {e}")
     # Invalidate feed cache
@@ -101,9 +101,10 @@ async def create(req: ComparisonReq, user_id: int = Depends(get_current_user)):
 @router.get("")
 async def list_mine(user_id: int = Depends(get_current_user)):
     rows = await database.fetch_all(
-        """SELECT id, company_a_name, type_a, company_b_name, type_b,
-                  priority_key, created_at
-           FROM comparisons WHERE user_id=%s ORDER BY created_at DESC LIMIT 50""",
+        """SELECT COMPARISON_ID AS id, COMP_A_NM AS company_a_name, COMP_A_TP_CD AS type_a,
+                  COMP_B_NM AS company_b_name, COMP_B_TP_CD AS type_b,
+                  PRIORITY_CD AS priority_key, INS_DTM AS created_at
+           FROM TCOMPARISON WHERE MBR_ID=%s ORDER BY INS_DTM DESC LIMIT 50""",
         (user_id,),
     )
     for r in rows:
@@ -114,7 +115,18 @@ async def list_mine(user_id: int = Depends(get_current_user)):
 @router.get("/{comparison_id}")
 async def get_one(comparison_id: int, user_id: int = Depends(get_current_user)):
     row = await database.fetch_one(
-        "SELECT * FROM comparisons WHERE id=%s AND user_id=%s", (comparison_id, user_id)
+        """SELECT COMPARISON_ID AS id, MBR_ID AS user_id,
+                  COMP_A_NM AS company_a_name, COMP_A_TP_CD AS type_a,
+                  SALARY_A_MIN_AMT AS salary_a_min, SALARY_A_MAX_AMT AS salary_a_max,
+                  COMMUTE_A_MIN_NO AS commute_a,
+                  WORK_STYLE_A_VAL AS work_style_a, BENEFITS_A_VAL AS benefits_a,
+                  COMP_B_NM AS company_b_name, COMP_B_TP_CD AS type_b,
+                  SALARY_RATE_VAL AS salary_rate, COMMUTE_B_MIN_NO AS commute_b,
+                  WORK_STYLE_B_VAL AS work_style_b, BENEFITS_B_VAL AS benefits_b,
+                  PRIORITY_CD AS priority_key, SACRIFICE_CD AS sacrifice_key,
+                  INS_DTM AS created_at
+           FROM TCOMPARISON WHERE COMPARISON_ID=%s AND MBR_ID=%s""",
+        (comparison_id, user_id),
     )
     if not row:
         return {"error": "not found"}

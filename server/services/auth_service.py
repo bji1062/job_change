@@ -48,14 +48,14 @@ async def find_or_create_social_user(
     email_verified: bool = False
 ) -> dict:
     """소셜 로그인 사용자 조회 또는 생성. 반환: {id, email, name, role, company_email_verification_yn}"""
-    # 1. social_accounts에서 기존 연동 조회
+    # 1. TSOCIAL_ACCOUNT에서 기존 연동 조회
     sa = await database.fetch_one(
-        "SELECT user_id FROM social_accounts WHERE provider=%s AND provider_id=%s",
+        "SELECT MBR_ID AS user_id FROM TSOCIAL_ACCOUNT WHERE PROVIDER_CD=%s AND PROVIDER_USER_ID=%s",
         (provider, provider_id),
     )
     if sa:
         user = await database.fetch_one(
-            "SELECT id, email, name, role, company_email_verification_yn FROM users WHERE id=%s",
+            "SELECT MBR_ID AS id, EMAIL_ADDR AS email, MBR_NM AS name, ROLE_CD AS role, COMP_EMAIL_VRFC_YN AS company_email_verification_yn FROM TMEMBER WHERE MBR_ID=%s",
             (sa["user_id"],),
         )
         if user:
@@ -70,13 +70,13 @@ async def find_or_create_social_user(
     # 2. 이메일로 기존 사용자 조회 (이메일이 검증된 경우만 자동 연동)
     if email and email_verified:
         user = await database.fetch_one(
-            "SELECT id, email, name, role, company_email_verification_yn FROM users WHERE email=%s",
+            "SELECT MBR_ID AS id, EMAIL_ADDR AS email, MBR_NM AS name, ROLE_CD AS role, COMP_EMAIL_VRFC_YN AS company_email_verification_yn FROM TMEMBER WHERE EMAIL_ADDR=%s",
             (email,),
         )
         if user:
-            # social_accounts에 연동 추가
+            # TSOCIAL_ACCOUNT 연동 추가
             await database.execute(
-                "INSERT INTO social_accounts (user_id, provider, provider_id, email, name) VALUES (%s,%s,%s,%s,%s)",
+                "INSERT INTO TSOCIAL_ACCOUNT (MBR_ID, PROVIDER_CD, PROVIDER_USER_ID, EMAIL_ADDR, SOCIAL_NM) VALUES (%s,%s,%s,%s,%s)",
                 (user["id"], provider, provider_id, email, name),
             )
             return {
@@ -90,11 +90,11 @@ async def find_or_create_social_user(
     # 3. 신규 사용자 생성
     use_email = email or f"{provider}_{provider_id}@social.local"
     user_id = await database.execute(
-        "INSERT INTO users (email, password_hash, name, login_auth_provider) VALUES (%s, NULL, %s, %s)",
+        "INSERT INTO TMEMBER (EMAIL_ADDR, PWD_HASH_VAL, MBR_NM, LOGIN_PROVIDER_CD) VALUES (%s, NULL, %s, %s)",
         (use_email, name, provider),
     )
     await database.execute(
-        "INSERT INTO social_accounts (user_id, provider, provider_id, email, name) VALUES (%s,%s,%s,%s,%s)",
+        "INSERT INTO TSOCIAL_ACCOUNT (MBR_ID, PROVIDER_CD, PROVIDER_USER_ID, EMAIL_ADDR, SOCIAL_NM) VALUES (%s,%s,%s,%s,%s)",
         (user_id, provider, provider_id, email, name),
     )
     return {

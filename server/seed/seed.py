@@ -312,89 +312,132 @@ def seed():
     )
     cur = conn.cursor()
 
-    # 1. Company types
+    # 1. Company types — INSERT then build code→ID map
     for t in COMPANY_TYPES:
         cur.execute(
-            "INSERT IGNORE INTO company_types (id, label, growth_rate, growth_label, stability_score) VALUES (%s,%s,%s,%s,%s)", t
+            "INSERT IGNORE INTO TCOMPANY_TYPE (COMP_TP_CD, COMP_TP_NM, GROWTH_RATE_VAL, GROWTH_LABEL_NM, STABILITY_SCORE_NO) VALUES (%s,%s,%s,%s,%s)",
+            t,
         )
-    print(f"  company_types: {len(COMPANY_TYPES)}")
+    cur.execute("SELECT COMP_TP_ID, COMP_TP_CD FROM TCOMPANY_TYPE")
+    TP_MAP = {row[1]: row[0] for row in cur.fetchall()}
+    print(f"  TCOMPANY_TYPE: {len(COMPANY_TYPES)}")
 
     # 2. Benefit presets
     count = 0
-    for type_id, items in BEN_PRESETS.items():
+    for type_cd, items in BEN_PRESETS.items():
+        comp_tp_id = TP_MAP.get(type_cd)
+        if not comp_tp_id:
+            continue
         for i, b in enumerate(items):
             cur.execute(
-                "INSERT INTO benefit_presets (type_id, ben_key, name, val, category, badge, checked_default, sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                (type_id, b["key"], b["name"], b["val"], b["cat"], b["badge"], b["checked"], i),
+                "INSERT INTO TBENEFIT_PRESET (COMP_TP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, DEFAULT_CHECKED_YN, SORT_ORDER_NO) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (comp_tp_id, b["key"], b["name"], b["val"], b["cat"], b["badge"], b["checked"], i),
             )
             count += 1
-    print(f"  benefit_presets: {count}")
+    print(f"  TBENEFIT_PRESET: {count}")
 
-    # 3. Companies
+    # 3. Companies — INSERT with COMP_ENG_NM (former string id) + grab lastrowid for FK
     for c in COMPANIES:
         cur.execute(
-            "INSERT IGNORE INTO companies (id, name, type_id, industry, logo, work_style, careers_benefit_url) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (c["id"], c["name"], c["type"], c.get("industry"), c.get("logo"), json.dumps(c.get("workStyle")) if c.get("workStyle") else None, c.get("careersUrl")),
+            "INSERT IGNORE INTO TCOMPANY (COMP_ENG_NM, COMP_NM, COMP_TP_ID, INDUSTRY_NM, LOGO_NM, WORK_STYLE_VAL, CAREERS_BENEFIT_URL) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (
+                c["id"],
+                c["name"],
+                TP_MAP.get(c["type"]),
+                c.get("industry"),
+                c.get("logo"),
+                json.dumps(c.get("workStyle"), ensure_ascii=False) if c.get("workStyle") else None,
+                c.get("careersUrl"),
+            ),
         )
+        # Resolve COMP_ID (handle INSERT IGNORE case where row already exists)
+        cur.execute("SELECT COMP_ID FROM TCOMPANY WHERE COMP_ENG_NM=%s", (c["id"],))
+        row = cur.fetchone()
+        if not row:
+            continue
+        comp_id = row[0]
         for alias in c.get("aliases", []):
             cur.execute(
-                "INSERT INTO company_aliases (company_id, alias) VALUES (%s,%s)", (c["id"], alias)
+                "INSERT IGNORE INTO TCOMPANY_ALIAS (COMP_ID, ALIAS_NM) VALUES (%s,%s)",
+                (comp_id, alias),
             )
         for i, b in enumerate(c.get("benefits", [])):
             cur.execute(
-                "INSERT INTO company_benefits (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (c["id"], b["key"], b["name"], b["val"], b["cat"], b["badge"], b.get("note"), b.get("qual", False), b.get("qualText"), i),
+                "INSERT IGNORE INTO TCOMPANY_BENEFIT (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    comp_id,
+                    b["key"],
+                    b["name"],
+                    b["val"],
+                    b["cat"],
+                    b["badge"],
+                    b.get("note"),
+                    b.get("qual", False),
+                    b.get("qualText"),
+                    i,
+                ),
             )
-    print(f"  companies: {len(COMPANIES)}")
+    print(f"  TCOMPANY: {len(COMPANIES)}")
 
     # 4. Profiles
     for p in PROFILES:
         cur.execute(
-            "INSERT IGNORE INTO profiles (id, type_name, description, map_priority, vec) VALUES (%s,%s,%s,%s,%s)",
+            "INSERT IGNORE INTO TPROFILE (PROFILE_CD, PROFILE_NM, PROFILE_DESC_CTNT, MAP_PRIORITY_CD, VEC_VAL) VALUES (%s,%s,%s,%s,%s)",
             (p["id"], p["type"], p["desc"], p["mapPri"], json.dumps(p["vec"])),
         )
+    cur.execute("SELECT PROFILE_ID, PROFILE_CD FROM TPROFILE")
+    PROFILE_MAP = {row[1]: row[0] for row in cur.fetchall()}
+    for p in PROFILES:
+        profile_id = PROFILE_MAP.get(p["id"])
+        if not profile_id:
+            continue
         for scenario, fit in p["jobFit"].items():
             cur.execute(
-                "INSERT IGNORE INTO profile_job_fits (profile_id, scenario, fit, caution) VALUES (%s,%s,%s,%s)",
-                (p["id"], scenario, fit["fit"], fit["caution"]),
+                "INSERT IGNORE INTO TPROFILE_JOB_FIT (PROFILE_ID, SCENARIO_CD, FIT_CTNT, CAUTION_CTNT) VALUES (%s,%s,%s,%s)",
+                (profile_id, scenario, fit["fit"], fit["caution"]),
             )
-    print(f"  profiles: {len(PROFILES)}")
+    print(f"  TPROFILE: {len(PROFILES)}")
 
     # 5. Job groups & jobs
     job_count = 0
     for i, g in enumerate(JOB_GROUPS):
         cur.execute(
-            "INSERT INTO job_groups (group_label, color, sort_order) VALUES (%s,%s,%s)",
+            "INSERT INTO TJOB_GROUP (JOB_GROUP_NM, COLOR_CD, SORT_ORDER_NO) VALUES (%s,%s,%s)",
             (g["groupLabel"], g["color"], i),
         )
         gid = cur.lastrowid
         for j, job in enumerate(g["jobs"]):
             cur.execute(
-                "INSERT IGNORE INTO jobs (id, group_id, label, icon, scenario, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
+                "INSERT IGNORE INTO TJOB (JOB_CD, JOB_GROUP_ID, JOB_NM, ICON_NM, SCENARIO_CD, SORT_ORDER_NO) VALUES (%s,%s,%s,%s,%s,%s)",
                 (job["id"], gid, job["label"], job["icon"], job["scenario"], j),
             )
             job_count += 1
-    print(f"  job_groups: {len(JOB_GROUPS)}, jobs: {job_count}")
+    print(f"  TJOB_GROUP: {len(JOB_GROUPS)}, TJOB: {job_count}")
 
-    # 6. Profiler questions
+    # 6. Profiler questions — QUESTION_NO preserves original 1..N
     for q in Q_BASE:
         cur.execute(
-            "INSERT IGNORE INTO profiler_questions (id, label, option_a_title, option_a_fx, option_b_title, option_b_fx) VALUES (%s,%s,%s,%s,%s,%s)",
+            "INSERT IGNORE INTO TPROFILER_QUESTION (QUESTION_NO, QUESTION_LABEL_NM, OPTION_A_TITLE_NM, OPTION_A_FX_VAL, OPTION_B_TITLE_NM, OPTION_B_FX_VAL) VALUES (%s,%s,%s,%s,%s,%s)",
             (q["id"], q["label"], q["a"]["title"], json.dumps(q["a"]["fx"]), q["b"]["title"], json.dumps(q["b"]["fx"])),
         )
-    print(f"  profiler_questions: {len(Q_BASE)}")
+    cur.execute("SELECT QUESTION_ID, QUESTION_NO FROM TPROFILER_QUESTION")
+    Q_MAP = {row[1]: row[0] for row in cur.fetchall()}
+    print(f"  TPROFILER_QUESTION: {len(Q_BASE)}")
 
     # 7. Question scenario descriptions
     desc_count = 0
     for scenario, descs in Q_DESC.items():
         for i, d in enumerate(descs):
-            q_id = Q_BASE[i]["id"]
+            q_no = Q_BASE[i]["id"]
+            q_id = Q_MAP.get(q_no)
+            if not q_id:
+                continue
             cur.execute(
-                "INSERT IGNORE INTO question_scenarios (question_id, scenario, desc_a, desc_b) VALUES (%s,%s,%s,%s)",
+                "INSERT IGNORE INTO TQUESTION_SCENARIO (QUESTION_ID, SCENARIO_CD, DESC_A_CTNT, DESC_B_CTNT) VALUES (%s,%s,%s,%s)",
                 (q_id, scenario, d["a"], d["b"]),
             )
             desc_count += 1
-    print(f"  question_scenarios: {desc_count}")
+    print(f"  TQUESTION_SCENARIO: {desc_count}")
 
     # 8. Popular cases (landing page)
     POPULAR_CASES = [
@@ -432,14 +475,14 @@ def seed():
     pop_count = 0
     for pc in POPULAR_CASES:
         cur.execute(
-            """INSERT IGNORE INTO popular_cases
-               (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
-                points, view_count, comparison_count)
+            """INSERT IGNORE INTO TPOPULAR_CASE
+               (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM,
+                POINTS_VAL, VIEW_NO, COMPARISON_NO)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             pc,
         )
         pop_count += 1
-    print(f"  popular_cases: {pop_count}")
+    print(f"  TPOPULAR_CASE: {pop_count}")
 
     cur.close()
     conn.close()

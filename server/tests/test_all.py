@@ -80,7 +80,7 @@ def test_convert_row_decimal():
 
 def test_register_req():
     from models.user import RegisterReq
-    r = RegisterReq(email="test@example.com", password="abc123", job_id="fe_dev")
+    r = RegisterReq(email="test@example.com", password="abc123", job_nm="백엔드 개발")
     assert r.email == "test@example.com"
     assert r.name is None
 
@@ -88,7 +88,7 @@ def test_register_req():
 def test_register_req_invalid_email():
     from models.user import RegisterReq
     try:
-        RegisterReq(email="not-email", password="abc", job_id="x")
+        RegisterReq(email="not-email", password="abc", job_nm="x")
         assert False, "should raise"
     except Exception:
         pass
@@ -173,7 +173,7 @@ def test_validation_errors():
     client = TestClient(main.app, raise_server_exceptions=False)
     assert client.get("/api/v1/companies/search").status_code == 422
     assert client.post("/api/v1/auth/register", json={
-        "email": "invalid", "password": "abc", "job_id": "dev"
+        "email": "invalid", "password": "abc", "job_nm": "dev"
     }).status_code == 422
     assert client.post("/api/v1/auth/login", json={}).status_code == 422
 

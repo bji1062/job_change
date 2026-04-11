@@ -11,7 +11,7 @@ class DashboardStats(BaseModel):
     active_visitors: int
 
 class CompanyListItem(BaseModel):
-    id: str
+    id: int
     name: str
     type: str
     industry: str | None = None

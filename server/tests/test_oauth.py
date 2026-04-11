@@ -211,7 +211,7 @@ def test_benefits_upsert_no_token_returns_403():
     """PUT /companies/{id}/benefits without token returns 403."""
     c = _client()
     r = c.put(
-        "/api/v1/companies/samsung/benefits",
+        "/api/v1/companies/1/benefits",
         json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
     )
     assert r.status_code == 403
@@ -221,7 +221,7 @@ def test_benefits_upsert_unverified_user_returns_403():
     """PUT /companies/{id}/benefits with unverified user (cev=false) returns 403."""
     c = _client()
     r = c.put(
-        "/api/v1/companies/samsung/benefits",
+        "/api/v1/companies/1/benefits",
         json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
         headers=_user_token(user_id=1, cev=False),
     )
@@ -234,12 +234,12 @@ def test_benefits_upsert_unverified_user_returns_403():
      "badge": "est", "note": None, "qual": 0, "qualText": None},
 ])
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_benefits_upsert_verified_user_succeeds(mock_one, mock_exec, mock_all):
     """PUT /companies/{id}/benefits with verified user (cev=true) returns 200."""
     c = _client()
     r = c.put(
-        "/api/v1/companies/samsung/benefits",
+        "/api/v1/companies/1/benefits",
         json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
         headers=_verified_user_token(user_id=1),
     )
@@ -252,12 +252,12 @@ def test_benefits_upsert_verified_user_succeeds(mock_one, mock_exec, mock_all):
      "badge": "est", "note": None, "qual": 0, "qualText": None},
 ])
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_benefits_upsert_admin_succeeds(mock_one, mock_exec, mock_all):
     """PUT /companies/{id}/benefits with admin token returns 200 (admin bypass)."""
     c = _client()
     r = c.put(
-        "/api/v1/companies/samsung/benefits",
+        "/api/v1/companies/1/benefits",
         json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
         headers=_admin_token(),
     )

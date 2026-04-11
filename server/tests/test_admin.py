@@ -46,10 +46,10 @@ def test_admin_endpoints_require_token():
         ("PUT",  "/api/v1/admin/users/1/role"),
         ("GET",  "/api/v1/admin/companies"),
         ("POST", "/api/v1/admin/companies"),
-        ("PUT",  "/api/v1/admin/companies/test"),
-        ("DELETE", "/api/v1/admin/companies/test"),
-        ("PUT",  "/api/v1/admin/companies/test/benefits"),
-        ("PUT",  "/api/v1/admin/companies/test/aliases"),
+        ("PUT",  "/api/v1/admin/companies/1"),
+        ("DELETE", "/api/v1/admin/companies/1"),
+        ("PUT",  "/api/v1/admin/companies/1/benefits"),
+        ("PUT",  "/api/v1/admin/companies/1/aliases"),
         ("GET",  "/api/v1/admin/popular-cases"),
         ("POST", "/api/v1/admin/popular-cases"),
         ("PUT",  "/api/v1/admin/popular-cases/1"),
@@ -198,8 +198,8 @@ def test_list_companies_with_filters(mock_one, mock_all):
     assert r.json()["total"] == 0
 
 
-@patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, side_effect=[None, None])  # name check, id check
+@patch("database.execute", new_callable=AsyncMock, return_value=1)
+@patch("database.fetch_one", new_callable=AsyncMock, side_effect=[None, None, {"id": 7}])  # name check, eng_nm check, type_cd lookup
 def test_create_company(mock_one, mock_exec):
     c = _client()
     r = c.post(
@@ -211,7 +211,7 @@ def test_create_company(mock_one, mock_exec):
     assert "id" in r.json()
 
 
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "existing"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 42})
 def test_create_company_duplicate_name(mock_one):
     c = _client()
     r = c.post(
@@ -223,11 +223,11 @@ def test_create_company_duplicate_name(mock_one):
 
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_update_company(mock_one, mock_exec):
     c = _client()
     r = c.put(
-        "/api/v1/admin/companies/samsung",
+        "/api/v1/admin/companies/1",
         json={"name": "Samsung Electronics", "industry": "Semiconductor"},
         headers=_admin_token(),
     )
@@ -239,7 +239,7 @@ def test_update_company(mock_one, mock_exec):
 def test_update_company_not_found(mock_one):
     c = _client()
     r = c.put(
-        "/api/v1/admin/companies/nonexistent",
+        "/api/v1/admin/companies/999",
         json={"name": "Nope"},
         headers=_admin_token(),
     )
@@ -247,10 +247,10 @@ def test_update_company_not_found(mock_one):
 
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_delete_company(mock_one, mock_exec):
     c = _client()
-    r = c.delete("/api/v1/admin/companies/samsung", headers=_admin_token())
+    r = c.delete("/api/v1/admin/companies/1", headers=_admin_token())
     assert r.status_code == 200
     assert r.json()["ok"] is True
 
@@ -258,14 +258,14 @@ def test_delete_company(mock_one, mock_exec):
 @patch("database.fetch_one", new_callable=AsyncMock, return_value=None)
 def test_delete_company_not_found(mock_one):
     c = _client()
-    r = c.delete("/api/v1/admin/companies/nonexistent", headers=_admin_token())
+    r = c.delete("/api/v1/admin/companies/999", headers=_admin_token())
     assert r.status_code == 404
 
 
 # ━━ COMPANY BENEFITS ━━
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_save_company_benefits(mock_one, mock_exec):
     c = _client()
     benefits = [
@@ -273,7 +273,7 @@ def test_save_company_benefits(mock_one, mock_exec):
         {"ben_key": "bonus", "name": "Bonus", "val": 300, "category": "financial"},
     ]
     r = c.put(
-        "/api/v1/admin/companies/samsung/benefits",
+        "/api/v1/admin/companies/1/benefits",
         json=benefits,
         headers=_admin_token(),
     )
@@ -285,7 +285,7 @@ def test_save_company_benefits(mock_one, mock_exec):
 def test_save_benefits_company_not_found(mock_one):
     c = _client()
     r = c.put(
-        "/api/v1/admin/companies/nonexistent/benefits",
+        "/api/v1/admin/companies/999/benefits",
         json=[{"ben_key": "meal", "name": "Meal", "val": 100}],
         headers=_admin_token(),
     )
@@ -298,7 +298,7 @@ def test_save_benefits_company_not_found(mock_one):
 ])
 def test_get_company_benefits(mock_all):
     c = _client()
-    r = c.get("/api/v1/admin/companies/samsung/benefits", headers=_admin_token())
+    r = c.get("/api/v1/admin/companies/1/benefits", headers=_admin_token())
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 1
@@ -308,11 +308,11 @@ def test_get_company_benefits(mock_all):
 # ━━ COMPANY ALIASES ━━
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": "samsung"})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_save_company_aliases(mock_one, mock_exec):
     c = _client()
     r = c.put(
-        "/api/v1/admin/companies/samsung/aliases",
+        "/api/v1/admin/companies/1/aliases",
         json={"aliases": ["Samsung Electronics", "SEC"]},
         headers=_admin_token(),
     )
@@ -324,7 +324,7 @@ def test_save_company_aliases(mock_one, mock_exec):
 def test_save_aliases_company_not_found(mock_one):
     c = _client()
     r = c.put(
-        "/api/v1/admin/companies/nonexistent/aliases",
+        "/api/v1/admin/companies/999/aliases",
         json={"aliases": ["Test"]},
         headers=_admin_token(),
     )

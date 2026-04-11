@@ -30,10 +30,17 @@ def get_conn():
     )
 
 
+def _load_type_map(cur):
+    """TCOMPANY_TYPE 코드 → INT PK 매핑 로드"""
+    cur.execute("SELECT COMP_TP_ID, COMP_TP_CD FROM TCOMPANY_TYPE")
+    return {row[1]: row[0] for row in cur.fetchall()}
+
+
 def seed_companies(cur):
-    """companies 테이블에 INSERT (중복 시 SKIP)"""
+    """TCOMPANY 테이블에 INSERT (중복 시 SKIP). COMP_ENG_NM에 기존 영문 id 저장."""
+    tp_map = _load_type_map(cur)
     sql = """
-        INSERT IGNORE INTO companies (id, name, type_id, industry, logo, careers_benefit_url)
+        INSERT IGNORE INTO TCOMPANY (COMP_ENG_NM, COMP_NM, COMP_TP_ID, INDUSTRY_NM, LOGO_NM, CAREERS_BENEFIT_URL)
         VALUES (%s, %s, %s, %s, %s, %s)
     """
     rows = []
@@ -41,27 +48,33 @@ def seed_companies(cur):
         rows.append((
             c["id"],
             c["name"],
-            c["type"],
+            tp_map.get(c["type"]),
             c.get("industry"),
             c.get("logo"),
             c.get("careersUrl", ""),
         ))
     cur.executemany(sql, rows)
-    print(f"  companies: {cur.rowcount} rows inserted")
+    print(f"  TCOMPANY: {cur.rowcount} rows inserted")
 
 
 def seed_aliases(cur):
-    """company_aliases 테이블에 INSERT (중복 시 SKIP)"""
+    """TCOMPANY_ALIAS 테이블에 INSERT (중복 시 SKIP). COMP_ENG_NM → COMP_ID 매핑 후 INT FK 사용."""
+    cur.execute("SELECT COMP_ID, COMP_ENG_NM FROM TCOMPANY")
+    eng_to_id = {row[1]: row[0] for row in cur.fetchall()}
     sql = """
-        INSERT IGNORE INTO company_aliases (company_id, alias)
+        INSERT IGNORE INTO TCOMPANY_ALIAS (COMP_ID, ALIAS_NM)
         VALUES (%s, %s)
     """
     rows = []
     for c in ALL_COMPANIES:
+        comp_id = eng_to_id.get(c["id"])
+        if not comp_id:
+            continue
         for alias in c.get("aliases", []):
-            rows.append((c["id"], alias))
-    cur.executemany(sql, rows)
-    print(f"  aliases: {cur.rowcount} rows inserted")
+            rows.append((comp_id, alias))
+    if rows:
+        cur.executemany(sql, rows)
+    print(f"  TCOMPANY_ALIAS: {cur.rowcount} rows inserted")
 
 
 def main():

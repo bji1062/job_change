@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 class CompanyBrief(BaseModel):
-    id: str
+    id: int
     name: str
     type: str
     industry: str | None = None

@@ -481,23 +481,24 @@ def generate_sql(
         f"-- badge: 'est' (추정치 — 공식 확인 시 'official'로 변경)",
         f"-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "",
-        f"-- 1) 회사 등록 (없는 경우)",
-        f"INSERT IGNORE INTO companies (id, name, type_id, industry, logo, careers_benefit_url)",
-        f"VALUES ('{company_id}', '{company_name}', '{company_type}', {escape_sql(industry)}, '{logo}', '{url}');",
+        f"-- 1) 회사 등록 (없는 경우) — COMP_TP_ID는 코드 조회",
+        f"INSERT IGNORE INTO TCOMPANY (COMP_ENG_NM, COMP_NM, COMP_TP_ID, INDUSTRY_NM, LOGO_NM, CAREERS_BENEFIT_URL)",
+        f"VALUES ('{company_id}', '{company_name}', (SELECT COMP_TP_ID FROM TCOMPANY_TYPE WHERE COMP_TP_CD='{company_type}'), {escape_sql(industry)}, '{logo}', '{url}');",
         "",
         f"-- 2) 기존 추정 데이터 삭제 (official 보존)",
-        f"DELETE FROM company_benefits WHERE company_id = '{company_id}' AND badge = 'est';",
+        f"DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID = (SELECT COMP_ID FROM TCOMPANY WHERE COMP_ENG_NM='{company_id}') AND BADGE_CD = 'est';",
         "",
         f"-- 3) 복리후생 INSERT",
-        "INSERT INTO company_benefits",
-        "  (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)",
+        "INSERT INTO TCOMPANY_BENEFIT",
+        "  (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)",
         "VALUES",
     ]
 
+    comp_id_subq = f"(SELECT COMP_ID FROM TCOMPANY WHERE COMP_ENG_NM='{company_id}')"
     value_lines = []
     for b in benefits:
         val_line = (
-            f"  ('{b['company_id']}', '{b['ben_key']}', {escape_sql(b['name'])}, "
+            f"  ({comp_id_subq}, '{b['ben_key']}', {escape_sql(b['name'])}, "
             f"{b['val']}, '{b['category']}', '{b['badge']}', {escape_sql(b['note'])}, "
             f"{'TRUE' if b['is_qualitative'] else 'FALSE'}, {escape_sql(b['qual_text'])}, "
             f"{b['sort_order']})"
@@ -508,7 +509,7 @@ def generate_sql(
         lines.append(",\n".join(value_lines) + ";")
     else:
         lines.append("  -- [NOTE] 자동 파싱된 항목 없음 — raw 텍스트를 참고하여 수동 작성 필요")
-        lines.append("  ('placeholder', 'placeholder', 'placeholder', 0, 'financial', 'est', NULL, FALSE, NULL, 0);")
+        lines.append(f"  ({comp_id_subq}, 'placeholder', 'placeholder', 0, 'financial', 'est', NULL, FALSE, NULL, 0);")
 
     return "\n".join(lines) + "\n"
 

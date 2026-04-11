@@ -15,17 +15,17 @@ router = APIRouter()
 
 @router.get("/dashboard", response_model=DashboardStats)
 async def dashboard(admin_id: int = Depends(get_admin_user)):
-    total_users = await database.fetch_one("SELECT COUNT(*) AS cnt FROM users")
+    total_users = await database.fetch_one("SELECT COUNT(*) AS cnt FROM TMEMBER")
     today_users = await database.fetch_one(
-        "SELECT COUNT(*) AS cnt FROM users WHERE DATE(created_at) = CURDATE()"
+        "SELECT COUNT(*) AS cnt FROM TMEMBER WHERE DATE(INS_DTM) = CURDATE()"
     )
-    total_comparisons = await database.fetch_one("SELECT COUNT(*) AS cnt FROM comparisons")
+    total_comparisons = await database.fetch_one("SELECT COUNT(*) AS cnt FROM TCOMPARISON")
     today_comparisons = await database.fetch_one(
-        "SELECT comparison_count AS cnt FROM daily_stats WHERE stat_date = CURDATE()"
+        "SELECT COMPARISON_NO AS cnt FROM TDAILY_STAT WHERE STAT_DT = CURDATE()"
     )
-    total_companies = await database.fetch_one("SELECT COUNT(*) AS cnt FROM companies")
+    total_companies = await database.fetch_one("SELECT COUNT(*) AS cnt FROM TCOMPANY")
     companies_with_ben = await database.fetch_one(
-        "SELECT COUNT(DISTINCT company_id) AS cnt FROM company_benefits"
+        "SELECT COUNT(DISTINCT COMP_ID) AS cnt FROM TCOMPANY_BENEFIT"
     )
     # Active visitors from landing router
     from routers.landing import _get_active_count
@@ -49,21 +49,22 @@ async def list_users(
 ):
     page_size = 20
     offset = (page - 1) * page_size
+    select_cols = "MBR_ID AS id, EMAIL_ADDR AS email, MBR_NM AS name, ROLE_CD AS role, JOB_NM AS job_nm, INS_DTM AS created_at"
     if q:
-        where = "WHERE email LIKE %s OR name LIKE %s"
+        where = "WHERE EMAIL_ADDR LIKE %s OR MBR_NM LIKE %s"
         like = f"%{q}%"
         args = (like, like)
         count_row = await database.fetch_one(
-            f"SELECT COUNT(*) AS cnt FROM users {where}", args
+            f"SELECT COUNT(*) AS cnt FROM TMEMBER {where}", args
         )
         rows = await database.fetch_all(
-            f"SELECT id, email, name, role, job_nm, created_at FROM users {where} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            f"SELECT {select_cols} FROM TMEMBER {where} ORDER BY INS_DTM DESC LIMIT %s OFFSET %s",
             (*args, page_size, offset),
         )
     else:
-        count_row = await database.fetch_one("SELECT COUNT(*) AS cnt FROM users")
+        count_row = await database.fetch_one("SELECT COUNT(*) AS cnt FROM TMEMBER")
         rows = await database.fetch_all(
-            "SELECT id, email, name, role, job_nm, created_at FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            f"SELECT {select_cols} FROM TMEMBER ORDER BY INS_DTM DESC LIMIT %s OFFSET %s",
             (page_size, offset),
         )
     for r in rows:
@@ -84,10 +85,10 @@ async def update_user_role(
 ):
     if user_id == admin_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot change own role")
-    user = await database.fetch_one("SELECT id FROM users WHERE id=%s", (user_id,))
+    user = await database.fetch_one("SELECT MBR_ID AS id FROM TMEMBER WHERE MBR_ID=%s", (user_id,))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    await database.execute("UPDATE users SET role=%s WHERE id=%s", (req.role, user_id))
+    await database.execute("UPDATE TMEMBER SET ROLE_CD=%s WHERE MBR_ID=%s", (req.role, user_id))
     return {"ok": True}
 
 # ━━ COMPANIES ━━
@@ -104,25 +105,27 @@ async def list_companies(
     conditions = []
     args = []
     if q:
-        conditions.append("c.name LIKE %s")
+        conditions.append("c.COMP_NM LIKE %s")
         args.append(f"%{q}%")
     if type:
-        conditions.append("c.type_id = %s")
+        conditions.append("ct.COMP_TP_CD = %s")
         args.append(type)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     count_row = await database.fetch_one(
-        f"SELECT COUNT(*) AS cnt FROM companies c {where}", tuple(args)
+        f"SELECT COUNT(*) AS cnt FROM TCOMPANY c JOIN TCOMPANY_TYPE ct ON ct.COMP_TP_ID = c.COMP_TP_ID {where}",
+        tuple(args),
     )
     rows = await database.fetch_all(
-        f"""SELECT c.id, c.name, c.type_id AS type, c.industry,
+        f"""SELECT c.COMP_ID AS id, c.COMP_NM AS name, ct.COMP_TP_CD AS type, c.INDUSTRY_NM AS industry,
                    COALESCE(b.ben_cnt, 0) AS benefit_count,
                    COALESCE(a.alias_cnt, 0) AS alias_count
-            FROM companies c
-            LEFT JOIN (SELECT company_id, COUNT(*) AS ben_cnt FROM company_benefits GROUP BY company_id) b ON b.company_id = c.id
-            LEFT JOIN (SELECT company_id, COUNT(*) AS alias_cnt FROM company_aliases GROUP BY company_id) a ON a.company_id = c.id
+            FROM TCOMPANY c
+            JOIN TCOMPANY_TYPE ct ON ct.COMP_TP_ID = c.COMP_TP_ID
+            LEFT JOIN (SELECT COMP_ID, COUNT(*) AS ben_cnt FROM TCOMPANY_BENEFIT GROUP BY COMP_ID) b ON b.COMP_ID = c.COMP_ID
+            LEFT JOIN (SELECT COMP_ID, COUNT(*) AS alias_cnt FROM TCOMPANY_ALIAS GROUP BY COMP_ID) a ON a.COMP_ID = c.COMP_ID
             {where}
-            ORDER BY c.name
+            ORDER BY c.COMP_NM
             LIMIT %s OFFSET %s""",
         (*args, page_size, offset),
     )
@@ -133,95 +136,110 @@ async def list_companies(
         page_size=page_size,
     )
 
+async def _resolve_comp_tp_id(type_cd: str) -> int | None:
+    """COMP_TP_CD 문자열 코드를 INT PK로 변환."""
+    row = await database.fetch_one(
+        "SELECT COMP_TP_ID AS id FROM TCOMPANY_TYPE WHERE COMP_TP_CD=%s", (type_cd,)
+    )
+    return row["id"] if row else None
+
+
 @router.post("/companies")
 async def create_company(req: CompanyCreate, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM companies WHERE name=%s", (req.name,))
+    existing = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_NM=%s", (req.name,))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Company name already exists")
-    # Generate id from name (lowercase, no spaces, max 30 chars)
-    company_id = req.name.lower().replace(" ", "_")[:30]
-    existing_id = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
-    if existing_id:
+    # COMP_ENG_NM 슬러그 생성 (기존 id 생성 로직 유지)
+    eng_nm = req.name.lower().replace(" ", "_")[:30]
+    existing_eng = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_ENG_NM=%s", (eng_nm,))
+    if existing_eng:
         import time as _t
-        company_id = f"{company_id[:24]}_{int(_t.time()) % 100000}"
+        eng_nm = f"{eng_nm[:24]}_{int(_t.time()) % 100000}"
+    tp_id = await _resolve_comp_tp_id(req.type_id)
+    if not tp_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown company type")
     work_style_json = json.dumps(req.work_style, ensure_ascii=False) if req.work_style else None
-    await database.execute(
-        """INSERT INTO companies (id, name, type_id, industry, logo, work_style, careers_benefit_url)
+    new_id = await database.execute(
+        """INSERT INTO TCOMPANY (COMP_ENG_NM, COMP_NM, COMP_TP_ID, INDUSTRY_NM, LOGO_NM, WORK_STYLE_VAL, CAREERS_BENEFIT_URL)
            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-        (company_id, req.name, req.type_id, req.industry, req.logo, work_style_json, req.careers_benefit_url),
+        (eng_nm, req.name, tp_id, req.industry, req.logo, work_style_json, req.careers_benefit_url),
     )
     cache.delete("reference_all")
-    return {"id": company_id}
+    return {"id": new_id}
 
 @router.put("/companies/{company_id}")
-async def update_company(company_id: str, req: CompanyUpdate, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
+async def update_company(company_id: int, req: CompanyUpdate, admin_id: int = Depends(get_admin_user)):
+    existing = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_ID=%s", (company_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     sets = []
     args = []
     if req.name is not None:
-        sets.append("name=%s")
+        sets.append("COMP_NM=%s")
         args.append(req.name)
     if req.type_id is not None:
-        sets.append("type_id=%s")
-        args.append(req.type_id)
+        tp_id = await _resolve_comp_tp_id(req.type_id)
+        if not tp_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown company type")
+        sets.append("COMP_TP_ID=%s")
+        args.append(tp_id)
     if req.industry is not None:
-        sets.append("industry=%s")
+        sets.append("INDUSTRY_NM=%s")
         args.append(req.industry)
     if req.logo is not None:
-        sets.append("logo=%s")
+        sets.append("LOGO_NM=%s")
         args.append(req.logo)
     if req.work_style is not None:
-        sets.append("work_style=%s")
+        sets.append("WORK_STYLE_VAL=%s")
         args.append(json.dumps(req.work_style, ensure_ascii=False))
     if req.careers_benefit_url is not None:
-        sets.append("careers_benefit_url=%s")
+        sets.append("CAREERS_BENEFIT_URL=%s")
         args.append(req.careers_benefit_url)
     if not sets:
         return {"ok": True}
     args.append(company_id)
     await database.execute(
-        f"UPDATE companies SET {', '.join(sets)} WHERE id=%s", tuple(args)
+        f"UPDATE TCOMPANY SET {', '.join(sets)} WHERE COMP_ID=%s", tuple(args)
     )
     cache.delete("reference_all")
     return {"ok": True}
 
 @router.delete("/companies/{company_id}")
-async def delete_company(company_id: str, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
+async def delete_company(company_id: int, admin_id: int = Depends(get_admin_user)):
+    existing = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_ID=%s", (company_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    await database.execute("DELETE FROM companies WHERE id=%s", (company_id,))
+    await database.execute("DELETE FROM TCOMPANY WHERE COMP_ID=%s", (company_id,))
     cache.delete("reference_all")
     return {"ok": True}
 
 # ━━ COMPANY BENEFITS ━━
 
 @router.get("/companies/{company_id}/benefits")
-async def get_company_benefits(company_id: str, admin_id: int = Depends(get_admin_user)):
+async def get_company_benefits(company_id: int, admin_id: int = Depends(get_admin_user)):
     rows = await database.fetch_all(
-        """SELECT id, ben_key, name, val, category, badge, note,
-                  is_qualitative, qual_text, sort_order
-           FROM company_benefits WHERE company_id=%s ORDER BY sort_order""",
+        """SELECT BENEFIT_ID AS id, BENEFIT_CD AS ben_key, BENEFIT_NM AS name, BENEFIT_AMT AS val,
+                  BENEFIT_CTGR_CD AS category, BADGE_CD AS badge, NOTE_CTNT AS note,
+                  QUAL_YN AS is_qualitative, QUAL_DESC_CTNT AS qual_text, SORT_ORDER_NO AS sort_order
+           FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s ORDER BY SORT_ORDER_NO""",
         (company_id,),
     )
     return rows
 
 @router.put("/companies/{company_id}/benefits")
 async def save_company_benefits(
-    company_id: str,
+    company_id: int,
     benefits: list[BenefitItem],
     admin_id: int = Depends(get_admin_user),
 ):
-    existing = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
+    existing = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_ID=%s", (company_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    await database.execute("DELETE FROM company_benefits WHERE company_id=%s", (company_id,))
+    await database.execute("DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s", (company_id,))
     for i, b in enumerate(benefits):
         await database.execute(
-            """INSERT INTO company_benefits
-               (company_id, ben_key, name, val, category, badge, note, is_qualitative, qual_text, sort_order)
+            """INSERT INTO TCOMPANY_BENEFIT
+               (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (company_id, b.ben_key, b.name, b.val,
              b.category, b.badge, b.note,
@@ -234,18 +252,18 @@ async def save_company_benefits(
 
 @router.put("/companies/{company_id}/aliases")
 async def save_company_aliases(
-    company_id: str,
+    company_id: int,
     req: AliasUpdate,
     admin_id: int = Depends(get_admin_user),
 ):
-    existing = await database.fetch_one("SELECT id FROM companies WHERE id=%s", (company_id,))
+    existing = await database.fetch_one("SELECT COMP_ID AS id FROM TCOMPANY WHERE COMP_ID=%s", (company_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    await database.execute("DELETE FROM company_aliases WHERE company_id=%s", (company_id,))
+    await database.execute("DELETE FROM TCOMPANY_ALIAS WHERE COMP_ID=%s", (company_id,))
     for alias in req.aliases:
         if alias.strip():
             await database.execute(
-                "INSERT INTO company_aliases (company_id, alias) VALUES (%s, %s)",
+                "INSERT INTO TCOMPANY_ALIAS (COMP_ID, ALIAS_NM) VALUES (%s, %s)",
                 (company_id, alias.strip()),
             )
     cache.delete("reference_all")
@@ -256,9 +274,11 @@ async def save_company_aliases(
 @router.get("/popular-cases")
 async def list_popular_cases(admin_id: int = Depends(get_admin_user)):
     rows = await database.fetch_all(
-        """SELECT id, case_type, title_a, type_a, sub_a, title_b, type_b, sub_b,
-                  points, view_count, comparison_count, is_active, created_at
-           FROM popular_cases ORDER BY comparison_count DESC"""
+        """SELECT CASE_ID AS id, CASE_TYPE_CD AS case_type, TITLE_A_NM AS title_a, TYPE_A_CD AS type_a,
+                  SUB_A_NM AS sub_a, TITLE_B_NM AS title_b, TYPE_B_CD AS type_b, SUB_B_NM AS sub_b,
+                  POINTS_VAL AS points, VIEW_NO AS view_count, COMPARISON_NO AS comparison_count,
+                  ACTIVE_YN AS is_active, INS_DTM AS created_at
+           FROM TPOPULAR_CASE ORDER BY COMPARISON_NO DESC"""
     )
     for r in rows:
         if isinstance(r.get("points"), str):
@@ -272,8 +292,8 @@ async def list_popular_cases(admin_id: int = Depends(get_admin_user)):
 async def create_popular_case(req: PopularCaseReq, admin_id: int = Depends(get_admin_user)):
     points_json = json.dumps(req.points, ensure_ascii=False) if req.points else "[]"
     case_id = await database.execute(
-        """INSERT INTO popular_cases
-           (case_type, title_a, type_a, sub_a, title_b, type_b, sub_b, points, is_active)
+        """INSERT INTO TPOPULAR_CASE
+           (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM, POINTS_VAL, ACTIVE_YN)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (req.case_type, req.title_a, req.type_a, req.sub_a,
          req.title_b, req.type_b, req.sub_b, points_json, req.is_active),
@@ -283,15 +303,15 @@ async def create_popular_case(req: PopularCaseReq, admin_id: int = Depends(get_a
 
 @router.put("/popular-cases/{case_id}")
 async def update_popular_case(case_id: int, req: PopularCaseReq, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM popular_cases WHERE id=%s", (case_id,))
+    existing = await database.fetch_one("SELECT CASE_ID AS id FROM TPOPULAR_CASE WHERE CASE_ID=%s", (case_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Popular case not found")
     points_json = json.dumps(req.points, ensure_ascii=False) if req.points else "[]"
     await database.execute(
-        """UPDATE popular_cases
-           SET case_type=%s, title_a=%s, type_a=%s, sub_a=%s,
-               title_b=%s, type_b=%s, sub_b=%s, points=%s, is_active=%s
-           WHERE id=%s""",
+        """UPDATE TPOPULAR_CASE
+           SET CASE_TYPE_CD=%s, TITLE_A_NM=%s, TYPE_A_CD=%s, SUB_A_NM=%s,
+               TITLE_B_NM=%s, TYPE_B_CD=%s, SUB_B_NM=%s, POINTS_VAL=%s, ACTIVE_YN=%s
+           WHERE CASE_ID=%s""",
         (req.case_type, req.title_a, req.type_a, req.sub_a,
          req.title_b, req.type_b, req.sub_b, points_json, req.is_active, case_id),
     )
@@ -300,10 +320,10 @@ async def update_popular_case(case_id: int, req: PopularCaseReq, admin_id: int =
 
 @router.delete("/popular-cases/{case_id}")
 async def delete_popular_case(case_id: int, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM popular_cases WHERE id=%s", (case_id,))
+    existing = await database.fetch_one("SELECT CASE_ID AS id FROM TPOPULAR_CASE WHERE CASE_ID=%s", (case_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Popular case not found")
-    await database.execute("DELETE FROM popular_cases WHERE id=%s", (case_id,))
+    await database.execute("DELETE FROM TPOPULAR_CASE WHERE CASE_ID=%s", (case_id,))
     cache.delete("landing_popular")
     return {"ok": True}
 
@@ -316,12 +336,15 @@ async def list_feed(
 ):
     page_size = 20
     offset = (page - 1) * page_size
-    count_row = await database.fetch_one("SELECT COUNT(*) AS cnt FROM comparison_feed")
+    count_row = await database.fetch_one("SELECT COUNT(*) AS cnt FROM TCOMPARISON_FEED")
     rows = await database.fetch_all(
-        """SELECT id, comparison_id, job_category, company_a_display, type_a,
-                  company_b_display, type_b, headline, detail,
-                  metric_val, metric_label, metric_type, created_at
-           FROM comparison_feed ORDER BY created_at DESC LIMIT %s OFFSET %s""",
+        """SELECT FEED_ID AS id, COMPARISON_ID AS comparison_id, JOB_CTGR_NM AS job_category,
+                  COMP_A_DISP_NM AS company_a_display, COMP_A_TP_CD AS type_a,
+                  COMP_B_DISP_NM AS company_b_display, COMP_B_TP_CD AS type_b,
+                  HEADLINE_CTNT AS headline, DETAIL_CTNT AS detail,
+                  METRIC_VAL_CTNT AS metric_val, METRIC_LABEL_NM AS metric_label,
+                  METRIC_TYPE_CD AS metric_type, INS_DTM AS created_at
+           FROM TCOMPARISON_FEED ORDER BY INS_DTM DESC LIMIT %s OFFSET %s""",
         (page_size, offset),
     )
     for r in rows:
@@ -336,10 +359,10 @@ async def list_feed(
 
 @router.delete("/feed/{feed_id}")
 async def delete_feed(feed_id: int, admin_id: int = Depends(get_admin_user)):
-    existing = await database.fetch_one("SELECT id FROM comparison_feed WHERE id=%s", (feed_id,))
+    existing = await database.fetch_one("SELECT FEED_ID AS id FROM TCOMPARISON_FEED WHERE FEED_ID=%s", (feed_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feed not found")
-    await database.execute("DELETE FROM comparison_feed WHERE id=%s", (feed_id,))
+    await database.execute("DELETE FROM TCOMPARISON_FEED WHERE FEED_ID=%s", (feed_id,))
     cache.delete("landing_feed")
     return {"ok": True}
 
@@ -358,10 +381,10 @@ async def stats_comparisons(
     admin_id: int = Depends(get_admin_user),
 ):
     rows = await database.fetch_all(
-        """SELECT stat_date, comparison_count
-           FROM daily_stats
-           WHERE stat_date >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
-           ORDER BY stat_date""",
+        """SELECT STAT_DT AS stat_date, COMPARISON_NO AS comparison_count
+           FROM TDAILY_STAT
+           WHERE STAT_DT >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+           ORDER BY STAT_DT""",
         (days,),
     )
     for r in rows:
@@ -372,14 +395,14 @@ async def stats_comparisons(
 @router.get("/stats/companies")
 async def stats_popular_companies(admin_id: int = Depends(get_admin_user)):
     rows_a = await database.fetch_all(
-        """SELECT company_a_name AS name, COUNT(*) AS cnt
-           FROM comparisons WHERE company_a_name IS NOT NULL
-           GROUP BY company_a_name"""
+        """SELECT COMP_A_NM AS name, COUNT(*) AS cnt
+           FROM TCOMPARISON WHERE COMP_A_NM IS NOT NULL
+           GROUP BY COMP_A_NM"""
     )
     rows_b = await database.fetch_all(
-        """SELECT company_b_name AS name, COUNT(*) AS cnt
-           FROM comparisons WHERE company_b_name IS NOT NULL
-           GROUP BY company_b_name"""
+        """SELECT COMP_B_NM AS name, COUNT(*) AS cnt
+           FROM TCOMPARISON WHERE COMP_B_NM IS NOT NULL
+           GROUP BY COMP_B_NM"""
     )
     merged = {}
     for r in rows_a + rows_b:
@@ -394,10 +417,10 @@ async def stats_users(
     admin_id: int = Depends(get_admin_user),
 ):
     rows = await database.fetch_all(
-        """SELECT DATE(created_at) AS reg_date, COUNT(*) AS cnt
-           FROM users
-           WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
-           GROUP BY DATE(created_at)
+        """SELECT DATE(INS_DTM) AS reg_date, COUNT(*) AS cnt
+           FROM TMEMBER
+           WHERE INS_DTM >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+           GROUP BY DATE(INS_DTM)
            ORDER BY reg_date""",
         (days,),
     )
