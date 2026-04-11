@@ -1,4 +1,6 @@
 .env
+.env.oracle
+.env.refactor
 __pycache__/
 *.pyc
 venv/
