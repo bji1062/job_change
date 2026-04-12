@@ -2,36 +2,36 @@ from pydantic import BaseModel
 from datetime import datetime
 
 class FeedItem(BaseModel):
-    id: int
-    job_category: str | None = None
-    company_a_display: str
-    type_a: str
-    company_b_display: str
-    type_b: str
-    headline: str
-    detail: str | None = None
-    metric_val: str | None = None
-    metric_label: str | None = None
-    metric_type: str = "neu"
-    created_at: datetime
+    feed_id: int
+    job_ctgr_nm: str | None = None
+    comp_a_disp_nm: str
+    comp_a_tp_cd: str
+    comp_b_disp_nm: str
+    comp_b_tp_cd: str
+    headline_ctnt: str
+    detail_ctnt: str | None = None
+    metric_val_ctnt: str | None = None
+    metric_label_nm: str | None = None
+    metric_type_cd: str = "neu"
+    ins_dtm: datetime
 
 class PingReq(BaseModel):
     client_id: str
 
 class LandingStats(BaseModel):
-    today_comparisons: int = 0
-    total_comparisons: int = 0
-    active_visitors: int = 0
+    today_comparison_no: int = 0
+    total_comparison_no: int = 0
+    active_visitor_no: int = 0
 
 class PopularCase(BaseModel):
-    id: int
-    case_type: str
-    title_a: str
-    type_a: str
-    sub_a: str | None = None
-    title_b: str
-    type_b: str
-    sub_b: str | None = None
-    points: list[str] | None = None
-    view_count: int = 0
-    comparison_count: int = 0
+    case_id: int
+    case_type_cd: str
+    title_a_nm: str
+    type_a_cd: str
+    sub_a_nm: str | None = None
+    title_b_nm: str
+    type_b_cd: str
+    sub_b_nm: str | None = None
+    points_val: list[str] | None = None
+    view_no: int = 0
+    comparison_no: int = 0

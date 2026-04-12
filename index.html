@@ -852,12 +852,12 @@ let authIsRegister=false;
   const token=params.get('token');
   if(token){
     AUTH_TOKEN=token;
-    AUTH_USER={id:parseInt(params.get('uid')||'0'),name:decodeURIComponent(params.get('name')||'사용자'),role:params.get('role')||'user',company_email_verified:params.get('cev')==='1'};
+    AUTH_USER={mbr_id:parseInt(params.get('mbr_id')||'0'),mbr_nm:decodeURIComponent(params.get('mbr_nm')||'사용자'),role_cd:params.get('role_cd')||'user',comp_email_vrfc_yn:params.get('cev')==='1'};
     localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
     history.replaceState({},'','/');updateAuthUI();
   }
   if(params.get('email_verified')==='1'){
-    apiFetch('/oauth/me').then(u=>{if(u){AUTH_USER.company_email_verified=true;localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));updateAuthUI()}});
+    apiFetch('/oauth/me').then(u=>{if(u){AUTH_USER.comp_email_vrfc_yn=true;localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));updateAuthUI()}});
     history.replaceState({},'','/');
   }
 })();
@@ -895,7 +895,7 @@ function toggleAuthMode(){
 }
 function populateAuthJobs(){
   const sel=document.getElementById('authJob');if(sel.options.length>1)return;
-  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.groupLabel;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.id;o.textContent=j.icon+' '+j.label;og.appendChild(o)});sel.appendChild(og)});
+  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.job_group_nm;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.job_cd;o.textContent=j.icon_nm+' '+j.job_nm;og.appendChild(o)});sel.appendChild(og)});
 }
 async function submitAuth(){
   const email=document.getElementById('authEmail').value.trim();
@@ -907,10 +907,10 @@ async function submitAuth(){
   const jobNm=jobSel.options[jobSel.selectedIndex]?.text.trim()||'';
   if(authIsRegister&&!jobSel.value){errEl.textContent='직군을 선택하세요.';return}
   const path=authIsRegister?'/auth/register':'/auth/login';
-  const body=authIsRegister?{email,password:pass,name:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email,password:pass};
+  const body=authIsRegister?{email_addr:email,password:pass,mbr_nm:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email_addr:email,password:pass};
   const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
   if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
-  AUTH_TOKEN=r.access_token;AUTH_USER={id:r.user_id,name:r.name,role:r.role||'user',company_email_verified:r.company_email_verified||false};
+  AUTH_TOKEN=r.access_token;AUTH_USER={mbr_id:r.mbr_id,mbr_nm:r.mbr_nm,role_cd:r.role_cd||'user',comp_email_vrfc_yn:r.comp_email_vrfc_yn||false};
   localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
   updateAuthUI();closeAuth();
   if(window._saveRetry){window._saveRetry();window._saveRetry=null}
@@ -919,10 +919,10 @@ function logout(){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_tok
 function toggleUserDrop(){const d=document.getElementById('userDrop');d.classList.toggle('open')}
 function updateAuthUI(){
   const btn=document.getElementById('authNavBtn');const drop=document.getElementById('userDrop');
-  if(AUTH_USER){btn.innerHTML=esc(AUTH_USER.name||'사용자')+'님'+(AUTH_USER.company_email_verified?' <span class="cev-badge">&#10003; 인증됨</span>':'');btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
+  if(AUTH_USER){btn.innerHTML=esc(AUTH_USER.mbr_nm||'사용자')+'님'+(AUTH_USER.comp_email_vrfc_yn?' <span class="cev-badge">&#10003; 인증됨</span>':'');btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
     let admHtml='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>';
-    if(AUTH_USER.role==='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();go(\'s-admin\')">관리자</button>'+admHtml;
-    if(!AUTH_USER.company_email_verified&&AUTH_USER.role!=='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();requestCompanyEmail()">회사 이메일 인증</button>'+admHtml;
+    if(AUTH_USER.role_cd==='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();go(\'s-admin\')">관리자</button>'+admHtml;
+    if(!AUTH_USER.comp_email_vrfc_yn&&AUTH_USER.role_cd!=='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();requestCompanyEmail()">회사 이메일 인증</button>'+admHtml;
     drop.innerHTML=admHtml}
   else{btn.textContent='로그인';btn.classList.remove('l-user');btn.classList.add('l-login');btn.onclick=openAuth;drop.classList.remove('open');drop.innerHTML='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>'}
 }
@@ -932,15 +932,15 @@ async function saveComparison(){
   const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
   if(!tA||!tB)throw new Error('기업 유형 미선택');
   const payload={
-    company_a_name:matched.a?.name||document.getElementById('sA')?.value?.trim()||null,type_a:tA,
-    salary_a_min:getSalRange().min,salary_a_max:getSalRange().max,
-    commute_a:parseInt(document.getElementById('comA')?.value)||0,
-    work_style_a:wsState.a,benefits_a:benS.a.filter(b=>b.checked),
-    company_b_name:matched.b?.name||document.getElementById('sB')?.value?.trim()||null,type_b:tB,
-    salary_rate:selectedRate,
-    commute_b:parseInt(document.getElementById('comB')?.value)||0,
-    work_style_b:wsState.b,benefits_b:benS.b.filter(b=>b.checked),
-    priority_key:curPri,sacrifice_key:curSacrifice
+    comp_a_nm:matched.a?.comp_nm||document.getElementById('sA')?.value?.trim()||null,comp_a_tp_cd:tA,
+    salary_a_min_amt:getSalRange().min,salary_a_max_amt:getSalRange().max,
+    commute_a_min_no:parseInt(document.getElementById('comA')?.value)||0,
+    work_style_a_val:wsState.a,benefits_a_val:benS.a.filter(b=>b.checked),
+    comp_b_nm:matched.b?.comp_nm||document.getElementById('sB')?.value?.trim()||null,comp_b_tp_cd:tB,
+    salary_rate_val:selectedRate,
+    commute_b_min_no:parseInt(document.getElementById('comB')?.value)||0,
+    work_style_b_val:wsState.b,benefits_b_val:benS.b.filter(b=>b.checked),
+    priority_cd:curPri,sacrifice_cd:curSacrifice
   };
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
   const body=JSON.stringify(payload);
@@ -980,35 +980,35 @@ const DIM_META={
 };
 
 let JOB_GROUPS = [
-  { groupLabel:'기술', color:'#4b8df8', jobs:[
-    {id:'dev',label:'개발',icon:'💻',scenario:'tech',custom:true},
-    {id:'devops',label:'DevOps/인프라',icon:'🛠️',scenario:'tech',custom:true},
-    {id:'security',label:'보안',icon:'🔐',scenario:'tech',custom:true},
-    {id:'data',label:'데이터 분석',icon:'📊',scenario:'tech',custom:false},
-    {id:'ai',label:'AI / ML',icon:'🤖',scenario:'tech',custom:false},
+  { job_group_nm:'기술', color_cd:'#4b8df8', jobs:[
+    {job_cd:'dev',job_nm:'개발',icon_nm:'💻',scenario_cd:'tech',custom:true},
+    {job_cd:'devops',job_nm:'DevOps/인프라',icon_nm:'🛠️',scenario_cd:'tech',custom:true},
+    {job_cd:'security',job_nm:'보안',icon_nm:'🔐',scenario_cd:'tech',custom:true},
+    {job_cd:'data',job_nm:'데이터 분석',icon_nm:'📊',scenario_cd:'tech',custom:false},
+    {job_cd:'ai',job_nm:'AI / ML',icon_nm:'🤖',scenario_cd:'tech',custom:false},
   ]},
-  { groupLabel:'디자인', color:'#e85d9a', jobs:[
-    {id:'uxui',label:'UX/UI 디자인',icon:'🎨',scenario:'design',custom:true},
-    {id:'graphic',label:'그래픽/영상',icon:'🎬',scenario:'design',custom:false},
+  { job_group_nm:'디자인', color_cd:'#e85d9a', jobs:[
+    {job_cd:'uxui',job_nm:'UX/UI 디자인',icon_nm:'🎨',scenario_cd:'design',custom:true},
+    {job_cd:'graphic',job_nm:'그래픽/영상',icon_nm:'🎬',scenario_cd:'design',custom:false},
   ]},
-  { groupLabel:'비즈니스', color:'#f0a030', jobs:[
-    {id:'pm',label:'서비스기획/PM',icon:'📋',scenario:'planning',custom:true},
-    {id:'po',label:'프로덕트 오너',icon:'📦',scenario:'planning',custom:false},
-    {id:'marketing',label:'마케팅',icon:'📢',scenario:'marketing',custom:true},
-    {id:'content',label:'콘텐츠/에디터',icon:'✍️',scenario:'marketing',custom:false},
-    {id:'sales',label:'영업/세일즈',icon:'🤝',scenario:'sales',custom:true},
-    {id:'cs',label:'고객성공(CS/CX)',icon:'📞',scenario:'sales',custom:false},
+  { job_group_nm:'비즈니스', color_cd:'#f0a030', jobs:[
+    {job_cd:'pm',job_nm:'서비스기획/PM',icon_nm:'📋',scenario_cd:'planning',custom:true},
+    {job_cd:'po',job_nm:'프로덕트 오너',icon_nm:'📦',scenario_cd:'planning',custom:false},
+    {job_cd:'marketing',job_nm:'마케팅',icon_nm:'📢',scenario_cd:'marketing',custom:true},
+    {job_cd:'content',job_nm:'콘텐츠/에디터',icon_nm:'✍️',scenario_cd:'marketing',custom:false},
+    {job_cd:'sales',job_nm:'영업/세일즈',icon_nm:'🤝',scenario_cd:'sales',custom:true},
+    {job_cd:'cs',job_nm:'고객성공(CS/CX)',icon_nm:'📞',scenario_cd:'sales',custom:false},
   ]},
-  { groupLabel:'경영', color:'#34c77b', jobs:[
-    {id:'finance',label:'재무/회계',icon:'💰',scenario:'corporate',custom:true},
-    {id:'hr',label:'인사(HR)',icon:'👤',scenario:'corporate',custom:false},
-    {id:'legal',label:'총무/법무',icon:'📑',scenario:'corporate',custom:false},
+  { job_group_nm:'경영', color_cd:'#34c77b', jobs:[
+    {job_cd:'finance',job_nm:'재무/회계',icon_nm:'💰',scenario_cd:'corporate',custom:true},
+    {job_cd:'hr',job_nm:'인사(HR)',icon_nm:'👤',scenario_cd:'corporate',custom:false},
+    {job_cd:'legal',job_nm:'총무/법무',icon_nm:'📑',scenario_cd:'corporate',custom:false},
   ]},
-  { groupLabel:'산업/연구', color:'#8b6cf6', jobs:[
-    {id:'manufacturing',label:'생산/제조/품질',icon:'🏭',scenario:'corporate',custom:false},
-    {id:'logistics',label:'물류/SCM',icon:'🚛',scenario:'corporate',custom:false},
-    {id:'md',label:'MD/바잉',icon:'🏪',scenario:'sales',custom:false},
-    {id:'rnd',label:'연구/R&D',icon:'🔬',scenario:'tech',custom:false},
+  { job_group_nm:'산업/연구', color_cd:'#8b6cf6', jobs:[
+    {job_cd:'manufacturing',job_nm:'생산/제조/품질',icon_nm:'🏭',scenario_cd:'corporate',custom:false},
+    {job_cd:'logistics',job_nm:'물류/SCM',icon_nm:'🚛',scenario_cd:'corporate',custom:false},
+    {job_cd:'md',job_nm:'MD/바잉',icon_nm:'🏪',scenario_cd:'sales',custom:false},
+    {job_cd:'rnd',job_nm:'연구/R&D',icon_nm:'🔬',scenario_cd:'tech',custom:false},
   ]},
 ];
 
@@ -1115,22 +1115,22 @@ let Q_DESC = {
 };
 
 let PROFILES=[
-  {id:"explorer",type:"탐험가형",vec:{compensation:-.3,security:-.6,growth:.9,autonomy:.8,impact:0,flexibility:.4},desc:"돈과 안정성을 기꺼이 포기하더라도 배움과 자유를 택합니다.",mapPri:"wlb",
-    jobFit:{tech:{fit:'스타트업 초기 멤버, 프리랜서 개발자',caution:'안정성을 경시하면 생애 주기 변화에서 급격한 스트레스를 받을 수 있습니다.'},planning:{fit:'신규 서비스 0→1 기획, 스타트업 첫 PM',caution:'탐험을 위한 이직이 잦으면 런칭→성장까지의 결과물을 증명하기 어렵습니다.'},marketing:{fit:'그로스 마케팅 초기 셋업, 스타트업 마케팅 1호',caution:'너무 자주 이동하면 캠페인 성과를 끝까지 증명하기 어렵습니다.'},sales:{fit:'신규 시장 개척 영업, 스타트업 첫 세일즈',caution:'고객 관계는 시간이 걸립니다. 너무 빨리 떠나면 네트워크가 쌓이지 않습니다.'},design:{fit:'브랜딩 에이전시, 프리랜서 디자이너',caution:'포트폴리오 다양성은 좋지만, 깊이 있는 프로젝트 하나가 더 강력합니다.'},corporate:{fit:'스타트업 경영지원 1호, 신규 법인 셋업',caution:'경영지원은 신뢰와 안정이 핵심입니다. 잦은 이동은 신뢰를 쌓기 어렵게 만듭니다.'}}},
-  {id:"architect",type:"건축가형",vec:{compensation:0,security:-.1,growth:.8,autonomy:.2,impact:.8,flexibility:0},desc:"전문적 깊이와 조직적 영향력을 동시에 추구합니다.",mapPri:"salary",
-    jobFit:{tech:{fit:'기술 리드, CTO, 플랫폼 아키텍트',caution:'기술과 경영 두 축을 동시에 추구하면 중간에 빠질 위험이 있습니다.'},planning:{fit:'CPO, 프로덕트 전략가, 서비스 아키텍트',caution:'기획 깊이와 조직 영향력 사이에서 시기별로 비중을 조절해야 합니다.'},marketing:{fit:'CMO, 브랜드 전략가, 마케팅 디렉터',caution:'전략과 실행을 동시에 잡으려면 위임 능력이 핵심입니다.'},sales:{fit:'영업 디렉터, 전략 파트너십, 사업개발 리더',caution:'영업 현장과 전략 사이에서 균형을 잃으면 둘 다 약해집니다.'},design:{fit:'CDO, 디자인 시스템 리드, UX 디렉터',caution:'디자인 실무에서 멀어지면 팀의 신뢰를 잃을 수 있습니다.'},corporate:{fit:'CFO, CHRO, 경영전략 임원',caution:'실무 감각을 잃으면 현장과 괴리된 의사결정을 하게 됩니다.'}}},
-  {id:"fortress",type:"요새형",vec:{compensation:.7,security:.9,growth:-.3,autonomy:-.3,impact:0,flexibility:-.5},desc:"예측 가능한 보상과 안정성을 최우선으로 합니다.",mapPri:"benefits",
-    jobFit:{tech:{fit:'대기업 전문가 트랙, 공공기관 IT, 금융권 개발',caution:'안정성에 과도하게 최적화하면 기술 트렌드 변화에 적응력이 약해집니다.'},planning:{fit:'대기업 서비스기획, 공공 SI 기획, 금융권 PM',caution:'안정적 환경에서 혁신적 기획 역량이 정체될 수 있습니다.'},marketing:{fit:'대기업 브랜드 마케팅, 공기업 홍보',caution:'안정적이지만 퍼포먼스 마케팅 역량이 약해질 수 있습니다.'},sales:{fit:'대기업 기존 고객 관리, 공공 입찰 영업',caution:'신규 개척 역량이 약해지면 시장 변화에 취약해집니다.'},design:{fit:'대기업 인하우스, 공공기관 디자인',caution:'외부 트렌드와 단절되면 디자인 감각이 정체됩니다.'},corporate:{fit:'대기업 재무/인사, 공기업 경영지원',caution:'한 회사에 오래 있으면 외부 시장가치를 모르게 됩니다.'}}},
-  {id:"conqueror",type:"정복자형",vec:{compensation:.9,security:-.2,growth:.1,autonomy:0,impact:.8,flexibility:-.2},desc:"높은 보상과 강한 영향력을 함께 추구합니다.",mapPri:"salary",
-    jobFit:{tech:{fit:'빅테크 시니어, 핀테크 리드, 높은 RSU 제공 기업',caution:'보상에 집중하면 기술적 깊이가 약해질 수 있습니다.'},planning:{fit:'빅테크 PM, 전략 컨설팅, VC/PE 투자심사역',caution:'보상과 타이틀에 집착하면 실질적 기획 역량이 정체됩니다.'},marketing:{fit:'퍼포먼스 에이전시 임원, 빅테크 마케팅 리드',caution:'매출 기여만 추구하면 브랜드 역량이 약해집니다.'},sales:{fit:'엔터프라이즈 세일즈, 투자 세일즈, 고연봉 영업직',caution:'단기 실적 추구가 장기 고객 관계를 해칠 수 있습니다.'},design:{fit:'빅테크 디자인 리드, 에이전시 CD',caution:'보상 중심 이동은 포트폴리오의 일관성을 해칩니다.'},corporate:{fit:'경영 컨설팅, 투자은행, CFO 트랙',caution:'보상과 직급에만 집중하면 실무 역량이 약해집니다.'}}},
-  {id:"nomad",type:"유목민형",vec:{compensation:-.4,security:-.5,growth:.2,autonomy:.8,impact:-.3,flexibility:.9},desc:"어떤 것에도 묶이지 않는 것을 최고의 가치로 봅니다.",mapPri:"wlb",
-    jobFit:{tech:{fit:'디지털 노마드 개발자, 프리랜서, 오픈소스 컨트리뷰터',caution:'유연성 자체가 목적이 되면 깊이도 영향력도 쌓이지 않습니다.'},planning:{fit:'프리랜서 PM/기획 컨설턴트, 멀티 프로젝트',caution:'프로덕트의 성장을 끝까지 보지 못하면 기획 역량이 제한됩니다.'},marketing:{fit:'프리랜서 마케터, 포트폴리오 커리어',caution:'브랜드 마케팅은 시간이 걸립니다. 짧은 프로젝트만으론 한계가 있습니다.'},sales:{fit:'독립 에이전트, 프리랜서 세일즈 컨설턴트',caution:'영업은 관계 비즈니스입니다. 유목 생활이 네트워크 구축을 방해할 수 있습니다.'},design:{fit:'프리랜서 디자이너, 디지털 노마드',caution:'클라이언트 의존도가 높으면 진정한 자유가 아닙니다.'},corporate:{fit:'프리랜서 회계사, 독립 HR 컨설턴트',caution:'경영지원은 조직 맥락을 깊이 아는 것이 핵심인데, 짧은 관여로는 어렵습니다.'}}},
-  {id:"gardener",type:"정원사형",vec:{compensation:.1,security:.7,growth:.7,autonomy:-.1,impact:0,flexibility:-.2},desc:"안전한 환경 안에서 꾸준히 성장하는 것을 선호합니다.",mapPri:"benefits",
-    jobFit:{tech:{fit:'대기업 R&D, 사내 기술 리더, 내부 이동 활용',caution:'외부 시장 가치를 점검하지 않으면 사내에서만 통하는 전문가가 됩니다.'},planning:{fit:'대기업 기획실, 안정적 서비스의 지속적 개선',caution:'새로운 시장/서비스 경험 없이는 기획 역량에 한계가 옵니다.'},marketing:{fit:'대기업 브랜드팀, 안정적 마케팅 조직',caution:'같은 브랜드만 오래 하면 새 도전에 대한 감각이 둔해집니다.'},sales:{fit:'대기업 핵심 고객 관리, 장기 파트너십 영업',caution:'신규 개척 없이 관리만 하면 영업 근육이 약해집니다.'},design:{fit:'대기업 디자인센터, 디자인 시스템 장기 운영',caution:'같은 가이드라인 안에서만 작업하면 창의성이 정체됩니다.'},corporate:{fit:'대기업 재무/인사 전문가, 장기 근속',caution:'한 회사에 최적화되면 이직 시 적응이 어렵습니다.'}}},
-  {id:"sovereign",type:"주권자형",vec:{compensation:.2,security:-.3,growth:.1,autonomy:.9,impact:.5,flexibility:.3},desc:"자기 방식대로 일하면서 의미 있는 결정을 내리고 싶어합니다.",mapPri:"wlb",
-    jobFit:{tech:{fit:'창업, 소규모 팀 리더, 독립 컨설턴트',caution:'모든 것을 직접 통제하려는 성향이 위임 실패와 번아웃으로 이어질 수 있습니다.'},planning:{fit:'1인 PM, 사내 벤처, 독립 프로덕트 컨설팅',caution:'혼자 결정하는 습관이 팀 협업을 어렵게 만들 수 있습니다.'},marketing:{fit:'1인 마케팅 에이전시, 사내 벤처 마케팅 리드',caution:'혼자서 다 하려다 전문성 깊이가 얕아질 수 있습니다.'},sales:{fit:'독립 세일즈 에이전트, 소규모 팀 영업 리더',caution:'영업은 조직 지원이 중요합니다. 혼자 다 하면 스케일이 안 됩니다.'},design:{fit:'1인 디자인 스튜디오, 사내 벤처 디자인 리드',caution:'클라이언트 관리와 디자인을 동시에 하면 둘 다 약해질 수 있습니다.'},corporate:{fit:'소규모 법인 CFO, 스타트업 COO',caution:'경영지원을 혼자 맡으면 전문 분야의 깊이가 얕아집니다.'}}},
-  {id:"strategist",type:"전략가형",vec:{compensation:.5,security:.2,growth:.3,autonomy:0,impact:.6,flexibility:.5},desc:"어떤 한 축에 올인하지 않고 최적의 포지션을 계산합니다.",mapPri:"salary",
-    jobFit:{tech:{fit:'PM, 전략 기획, 매니지먼트 트랙',caution:'균형 추구가 어느 것도 강하지 않은 상태로 이어질 수 있습니다.'},planning:{fit:'전략 기획, 사업개발, PM → 경영 트랙',caution:'다방면에 관심이 분산되면 전문성이 약해집니다.'},marketing:{fit:'마케팅 전략가, 브랜드+퍼포먼스 양쪽 경험',caution:'다 잘하려다 아무것도 깊지 않을 수 있습니다.'},sales:{fit:'전략 영업, 사업개발, 파트너십 매니저',caution:'너무 전략적으로만 접근하면 현장 감각을 잃습니다.'},design:{fit:'UX 전략가, 디자인+기획 겸직',caution:'디자인과 전략 사이에서 정체성이 모호해질 수 있습니다.'},corporate:{fit:'전략기획실, 경영진 보좌, MBA 트랙',caution:'전략만 하고 실행을 안 하면 신뢰를 잃습니다.'}}},
+  {profile_cd:"explorer",profile_nm:"탐험가형",vec_val:{compensation:-.3,security:-.6,growth:.9,autonomy:.8,impact:0,flexibility:.4},profile_desc_ctnt:"돈과 안정성을 기꺼이 포기하더라도 배움과 자유를 택합니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'스타트업 초기 멤버, 프리랜서 개발자',caution_ctnt:'안정성을 경시하면 생애 주기 변화에서 급격한 스트레스를 받을 수 있습니다.'},planning:{fit_ctnt:'신규 서비스 0→1 기획, 스타트업 첫 PM',caution_ctnt:'탐험을 위한 이직이 잦으면 런칭→성장까지의 결과물을 증명하기 어렵습니다.'},marketing:{fit_ctnt:'그로스 마케팅 초기 셋업, 스타트업 마케팅 1호',caution_ctnt:'너무 자주 이동하면 캠페인 성과를 끝까지 증명하기 어렵습니다.'},sales:{fit_ctnt:'신규 시장 개척 영업, 스타트업 첫 세일즈',caution_ctnt:'고객 관계는 시간이 걸립니다. 너무 빨리 떠나면 네트워크가 쌓이지 않습니다.'},design:{fit_ctnt:'브랜딩 에이전시, 프리랜서 디자이너',caution_ctnt:'포트폴리오 다양성은 좋지만, 깊이 있는 프로젝트 하나가 더 강력합니다.'},corporate:{fit_ctnt:'스타트업 경영지원 1호, 신규 법인 셋업',caution_ctnt:'경영지원은 신뢰와 안정이 핵심입니다. 잦은 이동은 신뢰를 쌓기 어렵게 만듭니다.'}}},
+  {profile_cd:"architect",profile_nm:"건축가형",vec_val:{compensation:0,security:-.1,growth:.8,autonomy:.2,impact:.8,flexibility:0},profile_desc_ctnt:"전문적 깊이와 조직적 영향력을 동시에 추구합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'기술 리드, CTO, 플랫폼 아키텍트',caution_ctnt:'기술과 경영 두 축을 동시에 추구하면 중간에 빠질 위험이 있습니다.'},planning:{fit_ctnt:'CPO, 프로덕트 전략가, 서비스 아키텍트',caution_ctnt:'기획 깊이와 조직 영향력 사이에서 시기별로 비중을 조절해야 합니다.'},marketing:{fit_ctnt:'CMO, 브랜드 전략가, 마케팅 디렉터',caution_ctnt:'전략과 실행을 동시에 잡으려면 위임 능력이 핵심입니다.'},sales:{fit_ctnt:'영업 디렉터, 전략 파트너십, 사업개발 리더',caution_ctnt:'영업 현장과 전략 사이에서 균형을 잃으면 둘 다 약해집니다.'},design:{fit_ctnt:'CDO, 디자인 시스템 리드, UX 디렉터',caution_ctnt:'디자인 실무에서 멀어지면 팀의 신뢰를 잃을 수 있습니다.'},corporate:{fit_ctnt:'CFO, CHRO, 경영전략 임원',caution_ctnt:'실무 감각을 잃으면 현장과 괴리된 의사결정을 하게 됩니다.'}}},
+  {profile_cd:"fortress",profile_nm:"요새형",vec_val:{compensation:.7,security:.9,growth:-.3,autonomy:-.3,impact:0,flexibility:-.5},profile_desc_ctnt:"예측 가능한 보상과 안정성을 최우선으로 합니다.",map_priority_cd:"benefits",
+    profile_job_fits:{tech:{fit_ctnt:'대기업 전문가 트랙, 공공기관 IT, 금융권 개발',caution_ctnt:'안정성에 과도하게 최적화하면 기술 트렌드 변화에 적응력이 약해집니다.'},planning:{fit_ctnt:'대기업 서비스기획, 공공 SI 기획, 금융권 PM',caution_ctnt:'안정적 환경에서 혁신적 기획 역량이 정체될 수 있습니다.'},marketing:{fit_ctnt:'대기업 브랜드 마케팅, 공기업 홍보',caution_ctnt:'안정적이지만 퍼포먼스 마케팅 역량이 약해질 수 있습니다.'},sales:{fit_ctnt:'대기업 기존 고객 관리, 공공 입찰 영업',caution_ctnt:'신규 개척 역량이 약해지면 시장 변화에 취약해집니다.'},design:{fit_ctnt:'대기업 인하우스, 공공기관 디자인',caution_ctnt:'외부 트렌드와 단절되면 디자인 감각이 정체됩니다.'},corporate:{fit_ctnt:'대기업 재무/인사, 공기업 경영지원',caution_ctnt:'한 회사에 오래 있으면 외부 시장가치를 모르게 됩니다.'}}},
+  {profile_cd:"conqueror",profile_nm:"정복자형",vec_val:{compensation:.9,security:-.2,growth:.1,autonomy:0,impact:.8,flexibility:-.2},profile_desc_ctnt:"높은 보상과 강한 영향력을 함께 추구합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'빅테크 시니어, 핀테크 리드, 높은 RSU 제공 기업',caution_ctnt:'보상에 집중하면 기술적 깊이가 약해질 수 있습니다.'},planning:{fit_ctnt:'빅테크 PM, 전략 컨설팅, VC/PE 투자심사역',caution_ctnt:'보상과 타이틀에 집착하면 실질적 기획 역량이 정체됩니다.'},marketing:{fit_ctnt:'퍼포먼스 에이전시 임원, 빅테크 마케팅 리드',caution_ctnt:'매출 기여만 추구하면 브랜드 역량이 약해집니다.'},sales:{fit_ctnt:'엔터프라이즈 세일즈, 투자 세일즈, 고연봉 영업직',caution_ctnt:'단기 실적 추구가 장기 고객 관계를 해칠 수 있습니다.'},design:{fit_ctnt:'빅테크 디자인 리드, 에이전시 CD',caution_ctnt:'보상 중심 이동은 포트폴리오의 일관성을 해칩니다.'},corporate:{fit_ctnt:'경영 컨설팅, 투자은행, CFO 트랙',caution_ctnt:'보상과 직급에만 집중하면 실무 역량이 약해집니다.'}}},
+  {profile_cd:"nomad",profile_nm:"유목민형",vec_val:{compensation:-.4,security:-.5,growth:.2,autonomy:.8,impact:-.3,flexibility:.9},profile_desc_ctnt:"어떤 것에도 묶이지 않는 것을 최고의 가치로 봅니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'디지털 노마드 개발자, 프리랜서, 오픈소스 컨트리뷰터',caution_ctnt:'유연성 자체가 목적이 되면 깊이도 영향력도 쌓이지 않습니다.'},planning:{fit_ctnt:'프리랜서 PM/기획 컨설턴트, 멀티 프로젝트',caution_ctnt:'프로덕트의 성장을 끝까지 보지 못하면 기획 역량이 제한됩니다.'},marketing:{fit_ctnt:'프리랜서 마케터, 포트폴리오 커리어',caution_ctnt:'브랜드 마케팅은 시간이 걸립니다. 짧은 프로젝트만으론 한계가 있습니다.'},sales:{fit_ctnt:'독립 에이전트, 프리랜서 세일즈 컨설턴트',caution_ctnt:'영업은 관계 비즈니스입니다. 유목 생활이 네트워크 구축을 방해할 수 있습니다.'},design:{fit_ctnt:'프리랜서 디자이너, 디지털 노마드',caution_ctnt:'클라이언트 의존도가 높으면 진정한 자유가 아닙니다.'},corporate:{fit_ctnt:'프리랜서 회계사, 독립 HR 컨설턴트',caution_ctnt:'경영지원은 조직 맥락을 깊이 아는 것이 핵심인데, 짧은 관여로는 어렵습니다.'}}},
+  {profile_cd:"gardener",profile_nm:"정원사형",vec_val:{compensation:.1,security:.7,growth:.7,autonomy:-.1,impact:0,flexibility:-.2},profile_desc_ctnt:"안전한 환경 안에서 꾸준히 성장하는 것을 선호합니다.",map_priority_cd:"benefits",
+    profile_job_fits:{tech:{fit_ctnt:'대기업 R&D, 사내 기술 리더, 내부 이동 활용',caution_ctnt:'외부 시장 가치를 점검하지 않으면 사내에서만 통하는 전문가가 됩니다.'},planning:{fit_ctnt:'대기업 기획실, 안정적 서비스의 지속적 개선',caution_ctnt:'새로운 시장/서비스 경험 없이는 기획 역량에 한계가 옵니다.'},marketing:{fit_ctnt:'대기업 브랜드팀, 안정적 마케팅 조직',caution_ctnt:'같은 브랜드만 오래 하면 새 도전에 대한 감각이 둔해집니다.'},sales:{fit_ctnt:'대기업 핵심 고객 관리, 장기 파트너십 영업',caution_ctnt:'신규 개척 없이 관리만 하면 영업 근육이 약해집니다.'},design:{fit_ctnt:'대기업 디자인센터, 디자인 시스템 장기 운영',caution_ctnt:'같은 가이드라인 안에서만 작업하면 창의성이 정체됩니다.'},corporate:{fit_ctnt:'대기업 재무/인사 전문가, 장기 근속',caution_ctnt:'한 회사에 최적화되면 이직 시 적응이 어렵습니다.'}}},
+  {profile_cd:"sovereign",profile_nm:"주권자형",vec_val:{compensation:.2,security:-.3,growth:.1,autonomy:.9,impact:.5,flexibility:.3},profile_desc_ctnt:"자기 방식대로 일하면서 의미 있는 결정을 내리고 싶어합니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'창업, 소규모 팀 리더, 독립 컨설턴트',caution_ctnt:'모든 것을 직접 통제하려는 성향이 위임 실패와 번아웃으로 이어질 수 있습니다.'},planning:{fit_ctnt:'1인 PM, 사내 벤처, 독립 프로덕트 컨설팅',caution_ctnt:'혼자 결정하는 습관이 팀 협업을 어렵게 만들 수 있습니다.'},marketing:{fit_ctnt:'1인 마케팅 에이전시, 사내 벤처 마케팅 리드',caution_ctnt:'혼자서 다 하려다 전문성 깊이가 얕아질 수 있습니다.'},sales:{fit_ctnt:'독립 세일즈 에이전트, 소규모 팀 영업 리더',caution_ctnt:'영업은 조직 지원이 중요합니다. 혼자 다 하면 스케일이 안 됩니다.'},design:{fit_ctnt:'1인 디자인 스튜디오, 사내 벤처 디자인 리드',caution_ctnt:'클라이언트 관리와 디자인을 동시에 하면 둘 다 약해질 수 있습니다.'},corporate:{fit_ctnt:'소규모 법인 CFO, 스타트업 COO',caution_ctnt:'경영지원을 혼자 맡으면 전문 분야의 깊이가 얕아집니다.'}}},
+  {profile_cd:"strategist",profile_nm:"전략가형",vec_val:{compensation:.5,security:.2,growth:.3,autonomy:0,impact:.6,flexibility:.5},profile_desc_ctnt:"어떤 한 축에 올인하지 않고 최적의 포지션을 계산합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'PM, 전략 기획, 매니지먼트 트랙',caution_ctnt:'균형 추구가 어느 것도 강하지 않은 상태로 이어질 수 있습니다.'},planning:{fit_ctnt:'전략 기획, 사업개발, PM → 경영 트랙',caution_ctnt:'다방면에 관심이 분산되면 전문성이 약해집니다.'},marketing:{fit_ctnt:'마케팅 전략가, 브랜드+퍼포먼스 양쪽 경험',caution_ctnt:'다 잘하려다 아무것도 깊지 않을 수 있습니다.'},sales:{fit_ctnt:'전략 영업, 사업개발, 파트너십 매니저',caution_ctnt:'너무 전략적으로만 접근하면 현장 감각을 잃습니다.'},design:{fit_ctnt:'UX 전략가, 디자인+기획 겸직',caution_ctnt:'디자인과 전략 사이에서 정체성이 모호해질 수 있습니다.'},corporate:{fit_ctnt:'전략기획실, 경영진 보좌, MBA 트랙',caution_ctnt:'전략만 하고 실행을 안 하면 신뢰를 잃습니다.'}}},
 ];
 
 const PRIORITIES=[
@@ -1149,11 +1149,11 @@ const GROWTH_RATES={large:0.04,mid:0.027,public:0.03,startup:0.10,foreign:0.05,f
 const GROWTH_LABELS={large:'대기업 평균 4%',mid:'중견기업 평균 2.7%',public:'공기업 평균 3%',startup:'스타트업 평균 10%',foreign:'외국계 평균 5%',freelance:'프리랜서 평균 2%'};
 
 const BEN_PRESETS={
-  large:[{key:'meal',name:'식대 지원 (3식)',val:360,cat:'work_env',badge:'est',checked:true},{key:'transport',name:'교통비/주차비',val:120,cat:'work_env',badge:'est',checked:true},{key:'welfare',name:'복지포인트/선택복지',val:200,cat:'financial',badge:'est',checked:true},{key:'bonus',name:'성과급/인센티브',val:300,cat:'financial',badge:'est',checked:false,note:'성과에 따라 편차 큼'},{key:'health',name:'건강검진 (본인+가족)',val:100,cat:'wellness',badge:'est',checked:true},{key:'housing',name:'사내대출 이자절감',val:200,cat:'financial',badge:'est',checked:true},{key:'child_edu',name:'자녀 학자금',val:300,cat:'family',badge:'est',checked:false,note:'자녀가 있는 경우'},{key:'event',name:'경조사 지원',val:50,cat:'financial',badge:'est',checked:true}],
-  mid:[{key:'meal',name:'식대 지원',val:300,cat:'work_env',badge:'est',checked:true},{key:'transport',name:'교통비',val:60,cat:'work_env',badge:'est',checked:true},{key:'health',name:'건강검진',val:50,cat:'wellness',badge:'est',checked:true},{key:'event',name:'경조사 지원',val:30,cat:'financial',badge:'est',checked:true}],
-  public:[{key:'meal',name:'식대 지원 (3식)',val:360,cat:'work_env',badge:'est',checked:true},{key:'transport',name:'교통비',val:120,cat:'work_env',badge:'est',checked:true},{key:'welfare',name:'복지포인트/선택복지',val:250,cat:'financial',badge:'est',checked:true},{key:'health',name:'건강검진',val:80,cat:'wellness',badge:'est',checked:true},{key:'housing',name:'사내대출 이자절감',val:250,cat:'financial',badge:'est',checked:true},{key:'child_edu',name:'자녀 학자금',val:400,cat:'family',badge:'est',checked:false,note:'자녀가 있는 경우'},{key:'edu',name:'교육비/자기개발비',val:100,cat:'growth',badge:'est',checked:true},{key:'event',name:'경조사 지원',val:50,cat:'financial',badge:'est',checked:true}],
-  startup:[{key:'meal',name:'식대 지원 (3식)',val:360,cat:'work_env',badge:'est',checked:true},{key:'stock',name:'스톡옵션/RSU 기대값',val:500,cat:'financial',badge:'est',checked:false,note:'성공 시 기대값 — 불확실성 높음'}],
-  foreign:[{key:'meal',name:'식대 지원 (3식)',val:360,cat:'work_env',badge:'est',checked:true},{key:'transport',name:'교통비',val:100,cat:'work_env',badge:'est',checked:true},{key:'welfare',name:'복지포인트',val:150,cat:'financial',badge:'est',checked:true},{key:'bonus',name:'성과급/인센티브',val:500,cat:'financial',badge:'est',checked:false,note:'성과에 따라 편차 큼'},{key:'health',name:'건강검진',val:150,cat:'wellness',badge:'est',checked:true},{key:'edu',name:'교육비 (도서, 세미나)',val:200,cat:'growth',badge:'est',checked:true}],
+  large:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비/주차비',benefit_amt:120,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트/선택복지',benefit_amt:200,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true},{benefit_cd:'bonus',benefit_nm:'성과급/인센티브',benefit_amt:300,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:false,note_ctnt:'성과에 따라 편차 큼'},{benefit_cd:'health',benefit_nm:'건강검진 (본인+가족)',benefit_amt:100,benefit_ctgr_cd:'wellness',badge_cd:'est',default_checked_yn:true},{benefit_cd:'housing',benefit_nm:'사내대출 이자절감',benefit_amt:200,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true},{benefit_cd:'child_edu',benefit_nm:'자녀 학자금',benefit_amt:300,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:false,note_ctnt:'자녀가 있는 경우'},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:50,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true}],
+  mid:[{benefit_cd:'meal',benefit_nm:'식대 지원',benefit_amt:300,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:60,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:50,benefit_ctgr_cd:'wellness',badge_cd:'est',default_checked_yn:true},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:30,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true}],
+  public:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:120,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트/선택복지',benefit_amt:250,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:80,benefit_ctgr_cd:'wellness',badge_cd:'est',default_checked_yn:true},{benefit_cd:'housing',benefit_nm:'사내대출 이자절감',benefit_amt:250,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true},{benefit_cd:'child_edu',benefit_nm:'자녀 학자금',benefit_amt:400,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:false,note_ctnt:'자녀가 있는 경우'},{benefit_cd:'edu',benefit_nm:'교육비/자기개발비',benefit_amt:100,benefit_ctgr_cd:'growth',badge_cd:'est',default_checked_yn:true},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:50,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true}],
+  startup:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'stock',benefit_nm:'스톡옵션/RSU 기대값',benefit_amt:500,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:false,note_ctnt:'성공 시 기대값 — 불확실성 높음'}],
+  foreign:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:100,benefit_ctgr_cd:'work_env',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트',benefit_amt:150,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:true},{benefit_cd:'bonus',benefit_nm:'성과급/인센티브',benefit_amt:500,benefit_ctgr_cd:'financial',badge_cd:'est',default_checked_yn:false,note_ctnt:'성과에 따라 편차 큼'},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:150,benefit_ctgr_cd:'wellness',badge_cd:'est',default_checked_yn:true},{benefit_cd:'edu',benefit_nm:'교육비 (도서, 세미나)',benefit_amt:200,benefit_ctgr_cd:'growth',badge_cd:'est',default_checked_yn:true}],
   freelance:[],
 };
 
@@ -1194,8 +1194,8 @@ function saveDraft(){
       salA:document.getElementById('salA')?.value||'',
       comA:document.getElementById('comA')?.value||'',comB:document.getElementById('comB')?.value||'',
       selectedRate,wsState,benS,curPri,curSacrifice,pfResult,pfJob,
-      mA:matched.a?{id:matched.a.id,name:matched.a.name}:null,
-      mB:matched.b?{id:matched.b.id,name:matched.b.name}:null,
+      mA:matched.a?{id:matched.a.comp_id,name:matched.a.comp_nm}:null,
+      mB:matched.b?{comp_id:matched.b.comp_id,comp_nm:matched.b.comp_nm}:null,
       t:Date.now()
     }))}catch{}
   },300);
@@ -1237,32 +1237,32 @@ function pfCos(a,b){const ma=pfMag(a),mb=pfMag(b);return(ma&&mb)?pfDot(a,b)/(ma*
 function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]]}return r}
 function pfInit(){pfShuffled=[];pfCur=0;pfAnswers=[];pfResult=null;pfJob=null;renderPfIntro()}
 function buildQuestions(jobId){
-  const job=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.id===jobId);
+  const job=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.job_cd===jobId);
   if(!job)return shuffle(Q_BASE);
   const descs=Q_DESC[job.scenario];
-  return shuffle(Q_BASE.map((q,i)=>{const d=descs?.[i];return{...q,a:{...q.a,desc:d?.a||''},b:{...q.b,desc:d?.b||''}}}));
+  return shuffle(Q_BASE.map((q,i)=>{const d=descs?.[i];return{...q,a:{...q.option_a,desc:d?.a||''},b:{...q.option_b,desc:d?.b||''}}}));
 }
 
 function renderPfIntro(){
   let jobsHtml='';
   JOB_GROUPS.forEach((g,gi)=>{
     const oc=gi===0?' open':'';
-    jobsHtml+=`<div class="pf-job-group"><div class="pf-job-group-label${oc}" style="border-color:${g.color}25" onclick="toggleJobGroup(this)"><span style="background:${g.color};width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span><span style="color:${g.color}">${g.groupLabel}</span><span class="jg-arrow">▼</span></div><div class="pf-job-grid${oc}">`;
-    g.jobs.forEach(j=>{jobsHtml+=`<button class="pf-job-chip" data-jid="${j.id}" onclick="pfSelectJob('${j.id}')"><span class="pf-job-chip-i">${j.icon}</span><span class="pf-job-chip-t">${j.label}</span></button>`});
+    jobsHtml+=`<div class="pf-job-group"><div class="pf-job-group-label${oc}" style="border-color:${g.color_cd}25" onclick="toggleJobGroup(this)"><span style="background:${g.color_cd};width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span><span style="color:${g.color_cd}">${g.job_group_nm}</span><span class="jg-arrow">▼</span></div><div class="pf-job-grid${oc}">`;
+    g.jobs.forEach(j=>{jobsHtml+=`<button class="pf-job-chip" data-jid="${j.job_cd}" onclick="pfSelectJob('${j.job_cd}')"><span class="pf-job-chip-i">${j.icon_nm}</span><span class="pf-job-chip-t">${j.job_nm}</span></button>`});
     jobsHtml+=`</div></div>`;
   });
   document.getElementById('pfWrap').innerHTML=`<button class="back" onclick="go('s-landing')">← 처음으로</button><div class="pf-intro fadein"><div class="mono pf-badge">Career Values Profiler <span style="opacity:.4">v3</span></div><h1 class="pf-h">당신의 커리어 가치관을<br><span>발견</span>합니다</h1><p class="pf-p">12개의 구체적 시나리오에서 트레이드오프를 선택하세요.<br>각 선택이 6개 가치 차원에 미치는 복합 효과를 분석합니다.</p><div class="pf-dims">${DIMS.map(d=>`<span class="pf-dim" style="border-color:${DIM_META[d].color}30;color:${DIM_META[d].color}">${DIM_META[d].icon} ${DIM_META[d].label}</span>`).join('')}</div><div class="pf-job-section"><div class="pf-job-label">먼저, 현재 직무를 선택해주세요</div>${jobsHtml}<div class="pf-job-notice" id="pfJobNotice"></div></div><button class="pf-start" id="pfStartBtn" onclick="pfStart()" disabled style="opacity:.4;cursor:not-allowed">직무를 선택하면 시작할 수 있습니다</button><p class="mono" style="margin-top:20px;font-size:11px;color:rgba(255,255,255,.18)">약 3~5분 · 12문항 · 직무 맞춤 시나리오</p></div>`;
 }
 function toggleJobGroup(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
 function pfSelectJob(jobId){
-  pfJob=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.id===jobId);
+  pfJob=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.job_cd===jobId);
   document.querySelectorAll('.pf-job-chip').forEach(c=>c.classList.toggle('on',c.dataset.jid===jobId));
   document.querySelectorAll('.pf-job-chip.on').forEach(c=>{const g=c.closest('.pf-job-grid'),l=g?.previousElementSibling;if(g&&!g.classList.contains('open')){g.classList.add('open');l?.classList.add('open')}});
   const n=document.getElementById('pfJobNotice');
-  if(pfJob&&!pfJob.custom){n.innerHTML=`현재 <strong>${pfJob.label}</strong>은 범용 시나리오가 적용됩니다. 곧 직무별 맞춤 시나리오가 추가됩니다.`;n.classList.add('show')}else{n.classList.remove('show')}
+  if(pfJob&&!pfJob.custom){n.innerHTML=`현재 <strong>${pfJob.job_nm}</strong>은 범용 시나리오가 적용됩니다. 곧 직무별 맞춤 시나리오가 추가됩니다.`;n.classList.add('show')}else{n.classList.remove('show')}
   const btn=document.getElementById('pfStartBtn');btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.textContent='시작하기';
 }
-function pfStart(){if(!pfJob)return;pfCur=0;pfAnswers=[];pfShuffled=buildQuestions(pfJob.id);renderPfQ()}
+function pfStart(){if(!pfJob)return;pfCur=0;pfAnswers=[];pfShuffled=buildQuestions(pfJob.job_cd);renderPfQ()}
 
 function pfBack(){if(pfLock)return;if(pfCur>0){pfCur--;pfAnswers.pop();renderPfQ()}else{renderPfIntro()}}
 function renderPfQ(){
@@ -1270,16 +1270,16 @@ function renderPfQ(){
   const q=pfShuffled[pfCur];
   const bars=pfShuffled.map((_,i)=>`<div class="pf-bar" style="background:${i<pfCur?'#E8B931':i===pfCur?'rgba(232,185,49,.4)':'rgba(255,255,255,.05)'}"></div>`).join('');
   function fxTags(fx){return DIMS.filter(d=>Math.abs(fx[d])>=.3).sort((a,b)=>Math.abs(fx[b])-Math.abs(fx[a])).map(d=>{const v=fx[d],pos=v>0;return`<span class="opt-fx-tag" style="background:${pos?DIM_META[d].color+'15':'rgba(255,255,255,.03)'};color:${pos?DIM_META[d].color:'rgba(255,255,255,.25)'};border-color:${pos?DIM_META[d].color+'30':'rgba(255,255,255,.06)'}">${pos?'↑':'↓'} ${DIM_META[d].label}</span>`}).join('')}
-  document.getElementById('pfWrap').innerHTML=`<div class="pf-q fadein"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="back" onclick="pfBack()" style="margin:0">← 이전</button><span class="mono" style="font-size:12px;color:rgba(255,255,255,.3)">${String(pfCur+1).padStart(2,'0')} / ${pfShuffled.length}</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.18)">${q.label}</span></div><div class="pf-progress">${bars}</div><p class="pf-prompt">두 회사에서 동시에 오퍼를 받았습니다. 어디를 선택하시겠습니까?</p><div class="opt-card" id="pfOptA" onclick="pfSelect('a')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#E8B931;background:rgba(232,185,49,.15)">A</span><span class="opt-title">${q.a.title}</span></div><p class="opt-desc">${q.a.desc}</p><div class="opt-fx">${fxTags(q.a.fx)}</div></div><div class="opt-card" id="pfOptB" onclick="pfSelect('b')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#7B68C8;background:rgba(123,104,200,.15)">B</span><span class="opt-title">${q.b.title}</span></div><p class="opt-desc">${q.b.desc}</p><div class="opt-fx">${fxTags(q.b.fx)}</div></div></div>`;
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-q fadein"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="back" onclick="pfBack()" style="margin:0">← 이전</button><span class="mono" style="font-size:12px;color:rgba(255,255,255,.3)">${String(pfCur+1).padStart(2,'0')} / ${pfShuffled.length}</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.18)">${q.question_label_nm}</span></div><div class="pf-progress">${bars}</div><p class="pf-prompt">두 회사에서 동시에 오퍼를 받았습니다. 어디를 선택하시겠습니까?</p><div class="opt-card" id="pfOptA" onclick="pfSelect('a')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#E8B931;background:rgba(232,185,49,.15)">A</span><span class="opt-title">${q.option_a.option_a_title_nm}</span></div><p class="opt-desc">${q.option_a.desc_a_ctnt}</p><div class="opt-fx">${fxTags(q.option_a.option_a_fx_val)}</div></div><div class="opt-card" id="pfOptB" onclick="pfSelect('b')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#7B68C8;background:rgba(123,104,200,.15)">B</span><span class="opt-title">${q.option_b.option_b_title_nm}</span></div><p class="opt-desc">${q.option_b.desc_b_ctnt}</p><div class="opt-fx">${fxTags(q.option_b.option_b_fx_val)}</div></div></div>`;
 }
 let pfLock=false;
-function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];document.getElementById(side==='a'?'pfOptA':'pfOptB').classList.add('sel-'+side);document.getElementById(side==='a'?'pfOptB':'pfOptA').classList.add('dim');setTimeout(()=>{pfAnswers.push({fx:side==='a'?q.a.fx:q.b.fx});pfCur++;pfLock=false;renderPfQ()},500)}
+function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];document.getElementById(side==='a'?'pfOptA':'pfOptB').classList.add('sel-'+side);document.getElementById(side==='a'?'pfOptB':'pfOptA').classList.add('dim');setTimeout(()=>{pfAnswers.push({fx:side==='a'?q.option_a.option_a_fx_val:q.option_b.option_b_fx_val});pfCur++;pfLock=false;renderPfQ()},500)}
 
 function pfFinish(){
   const scores={};DIMS.forEach(d=>scores[d]=0);pfAnswers.forEach(a=>DIMS.forEach(d=>scores[d]+=(a.fx[d]||0)));
-  let best=null,bestSim=-Infinity;PROFILES.forEach(p=>{const s=pfCos(scores,p.vec);if(s>bestSim){bestSim=s;best=p}});
-  pfResult={scores,profile:best,similarity:bestSim,job:pfJob};saveDraft();
-  const allSim=PROFILES.map(p=>({p,s:pfCos(scores,p.vec)})).sort((a,b)=>b.s-a.s);
+  let best=null,bestSim=-Infinity;PROFILES.forEach(p=>{const s=pfCos(scores,p.vec_val);if(s>bestSim){bestSim=s;best=p}});
+  pfResult={scores,profile:best,similarity_val:bestSim,job:pfJob};saveDraft();
+  const allSim=PROFILES.map(p=>({p,s:pfCos(scores,p.vec_val)})).sort((a,b)=>b.s-a.s);
   const vals=DIMS.map(d=>scores[d]),mn=Math.min(...vals);const shifted={};DIMS.forEach(d=>shifted[d]=scores[d]-mn);const mx=Math.max(...DIMS.map(d=>shifted[d]),.01);const norm={};DIMS.forEach(d=>norm[d]=shifted[d]/mx);
   const sz=280,cx=sz/2,cy=sz/2,r=sz*.34,as=Math.PI*2/DIMS.length;const pt=(i,v)=>({x:cx+r*v*Math.cos(as*i-Math.PI/2),y:cy+r*v*Math.sin(as*i-Math.PI/2)});
   let svg=`<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><defs><linearGradient id="rg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E8B931" stop-opacity=".3"/><stop offset="50%" stop-color="#7B68C8" stop-opacity=".2"/><stop offset="100%" stop-color="#4A9B8E" stop-opacity=".3"/></linearGradient></defs>`;
@@ -1290,12 +1290,12 @@ function pfFinish(){
   DIMS.forEach((d,i)=>{const p=pt(i,1.22);svg+=`<text x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="middle" fill="${DIM_META[d].color}" font-size="11" font-weight="600">${DIM_META[d].icon} ${DIM_META[d].label}</text>`});svg+=`</svg>`;
   const sorted=[...DIMS].sort((a,b)=>scores[b]-scores[a]);
   const barsH=sorted.map(d=>`<div style="display:flex;align-items:center;gap:12px"><span style="width:72px;font-size:13px;color:${DIM_META[d].color};font-weight:600;text-align:right">${DIM_META[d].icon} ${DIM_META[d].label}</span><div style="flex:1;height:26px;background:rgba(255,255,255,.03);border-radius:4px;overflow:hidden;position:relative"><div style="height:100%;width:${norm[d]*100}%;background:linear-gradient(90deg,${DIM_META[d].color}33,${DIM_META[d].color}99);border-radius:4px"></div><span class="mono" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:rgba(255,255,255,.45)">${scores[d]>=0?'+':''}${scores[d].toFixed(2)}</span></div></div>`).join('');
-  const simH=allSim.map(({p,s})=>`<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.4)"><span class="mono" style="width:90px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.type}</span><div style="flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(0,((s+1)/2)*100)}%;background:linear-gradient(90deg,rgba(232,185,49,.3),rgba(232,185,49,.8));border-radius:3px"></div></div><span class="mono" style="width:40px">${(s*100).toFixed(0)}%</span></div>`).join('');
-  const scenarioKey=pfJob?.scenario||'tech';const jobFit=best.jobFit?.[scenarioKey]||best.jobFit?.tech;const jobLabel=pfJob?.label||'기술';
-  document.getElementById('pfWrap').innerHTML=`<div class="pf-result"><div class="slideup" style="text-align:center;margin-bottom:36px"><div class="mono" style="font-size:11px;letter-spacing:4px;color:rgba(232,185,49,.6);text-transform:uppercase;margin-bottom:16px">Your Career DNA</div><h2 style="font-size:28px;font-weight:700;color:#f0ede6;margin-bottom:6px">${best.type}</h2><span class="mono" style="font-size:11px;color:rgba(255,255,255,.25)">cosine similarity: ${(bestSim*100).toFixed(1)}% · ${jobLabel} 직군</span></div><div class="slideup" style="display:flex;justify-content:center;margin-bottom:28px">${svg}</div><div class="slideup" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">${barsH}</div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(232,185,49,.7)">분석</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${best.desc}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(123,104,200,.7)">${jobLabel} 직군에서의 적합 경로</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${jobFit.fit}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(212,100,78,.7)">${jobLabel} 직군 주의점</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${jobFit.caution}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(255,255,255,.35)">전체 프로필 유사도</h3><div style="display:flex;flex-direction:column;gap:8px">${simH}</div></div><button class="pf-to-compare" onclick="pfToCompare()">이 가치관으로 회사 비교하기<span class="sub">${best.type} · ${jobLabel} → 추천 기준: ${PRIORITIES.find(p=>p.key===best.mapPri)?.label||''}</span></button><div style="text-align:center;margin-top:1rem"><button class="back" onclick="pfInit()" style="margin:0">다시 측정하기</button></div></div>`;
+  const simH=allSim.map(({p,s})=>`<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.4)"><span class="mono" style="width:90px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.profile_nm}</span><div style="flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(0,((s+1)/2)*100)}%;background:linear-gradient(90deg,rgba(232,185,49,.3),rgba(232,185,49,.8));border-radius:3px"></div></div><span class="mono" style="width:40px">${(s*100).toFixed(0)}%</span></div>`).join('');
+  const scenarioKey=pfJob?.scenario_cd||'tech';const profile_job_fits=best.profile_job_fits?.[scenarioKey]||best.profile_job_fits?.tech;const jobLabel=pfJob?.job_nm||'기술';
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-result"><div class="slideup" style="text-align:center;margin-bottom:36px"><div class="mono" style="font-size:11px;letter-spacing:4px;color:rgba(232,185,49,.6);text-transform:uppercase;margin-bottom:16px">Your Career DNA</div><h2 style="font-size:28px;font-weight:700;color:#f0ede6;margin-bottom:6px">${best.profile_nm}</h2><span class="mono" style="font-size:11px;color:rgba(255,255,255,.25)">cosine similarity_val:${(bestSim*100).toFixed(1)}% · ${jobLabel} 직군</span></div><div class="slideup" style="display:flex;justify-content:center;margin-bottom:28px">${svg}</div><div class="slideup" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">${barsH}</div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(232,185,49,.7)">분석</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${best.profile_desc_ctnt}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(123,104,200,.7)">${jobLabel} 직군에서의 적합 경로</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${profile_job_fits.fit}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(212,100,78,.7)">${jobLabel} 직군 주의점</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${profile_job_fits.caution}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(255,255,255,.35)">전체 프로필 유사도</h3><div style="display:flex;flex-direction:column;gap:8px">${simH}</div></div><button class="pf-to-compare" onclick="pfToCompare()">이 가치관으로 회사 비교하기<span class="sub">${best.profile_nm} · ${jobLabel} → 추천 기준: ${PRIORITIES.find(p=>p.key===best.map_priority_cd)?.label||''}</span></button><div style="text-align:center;margin-top:1rem"><button class="back" onclick="pfInit()" style="margin:0">다시 측정하기</button></div></div>`;
 }
 function pfToCompare(){
-  if(pfResult?.profile?.mapPri)curPri=pfResult.profile.mapPri;
+  if(pfResult?.profile?.map_priority_cd)curPri=pfResult.profile.map_priority_cd;
   if(pfResult?.scores){
     const dimToPri={compensation:'salary',security:'salary',growth:'benefits',autonomy:'wlb',flexibility:'wlb',impact:'salary'};
     const sorted=[...DIMS].sort((a,b)=>pfResult.scores[a]-pfResult.scores[b]);
@@ -1305,7 +1305,7 @@ function pfToCompare(){
   const a=document.getElementById('priAuto');
   if(pfResult){
     const sacLabel=curSacrifice?PRIORITIES.find(p=>p.key===curSacrifice)?.label:'';
-    a.innerHTML=`🎯 <strong>${pfResult.profile.type}</strong> (${pfResult.job?.label||''} 직군) 가치관 분석 결과, 최우선: <strong>${PRIORITIES.find(p=>p.key===curPri)?.label}</strong>${sacLabel?`, 포기 가능: <strong>${sacLabel}</strong>`:''} — 다른 기준을 선택해도 됩니다.`;
+    a.innerHTML=`🎯 <strong>${pfResult.profile.profile_nm}</strong> (${pfResult.job?.label||''} 직군) 가치관 분석 결과, 최우선: <strong>${PRIORITIES.find(p=>p.key===curPri)?.label}</strong>${sacLabel?`, 포기 가능: <strong>${sacLabel}</strong>`:''} — 다른 기준을 선택해도 됩니다.`;
     a.classList.add('show');
   }
 }
@@ -1405,20 +1405,20 @@ function updateSelSummary(){
 function renderPriPreview(k){const pv=PRI_PREVIEW[k],pri=PRIORITIES.find(p=>p.key===k);if(!pv||!pri)return;const el=document.getElementById('priPreview'),inner=document.getElementById('priPvInner');inner.innerHTML=`<div class="pri-pv-head"><span class="pri-pv-icon">${pri.icon}</span><div class="pri-pv-title"><span>${pv.title}</span>을 최우선으로<br>비교하겠습니다.</div></div><div class="pri-pv-checks">${pv.checks.map(c=>`<div class="pri-pv-check"><span class="pri-pv-check-icon">✓</span><span>${c}</span></div>`).join('')}</div><div class="pri-pv-tip"><span class="pri-pv-tip-icon">📌</span><span>${pv.tip}</span></div>`;el.classList.remove('open');requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')))}
 
 // ━━ SEARCH ━━
-function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}','${esc(c.id)}')"><div class="si-logo">${esc(c.logo||c.name[0])}</div><div class="si-info"><div class="si-name">${esc(c.name)}</div><div class="si-meta">${esc(c.industry||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
-function doSearch(s){const q=document.getElementById(s==='a'?'sA':'sB').value.trim();const el=document.getElementById(s==='a'?'rA':'rB');if(q.length<1){el.classList.remove('open');return}if(!API_BASE){const ql=q.toLowerCase();const m=DB.filter(c=>c.name.toLowerCase().includes(ql)||(c.aliases||[]).some(a=>a.toLowerCase().includes(ql)));_renderSR(s,el,m);return}clearTimeout(_searchTimers[s]);el.innerHTML='<div class="sr-empty">검색 중...</div>';el.classList.add('open');_searchTimers[s]=setTimeout(async()=>{const r=await apiFetch('/companies/search?q='+encodeURIComponent(q));_renderSR(s,el,r||[])},300)}
-async function selComp(s,id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c={...raw,workStyle:raw.work_style||{},benefits:(raw.benefits||[]).map(b=>({...b,qual:!!b.qual}))}}else{c=DB.find(x=>x.id===id);if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.name;const typeEl=document.getElementById(s==='a'?'tA':'tB');typeEl.value=c.type;const typeFd=typeEl.closest('.fd');if(typeFd)typeFd.classList.remove('has-error');const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:true}));renderBen(s);
-  const ws=c.workStyle||{};const type=c.type;
-  const preset=WORK_PRESETS[type]||{};
+function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}',${c.comp_id})"><div class="si-logo">${esc(c.logo_nm||c.comp_nm[0])}</div><div class="si-info"><div class="si-name">${esc(c.comp_nm)}</div><div class="si-meta">${esc(c.industry_nm||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
+function doSearch(s){const q=document.getElementById(s==='a'?'sA':'sB').value.trim();const el=document.getElementById(s==='a'?'rA':'rB');if(q.length<1){el.classList.remove('open');return}if(!API_BASE){const ql=q.toLowerCase();const m=DB.filter(c=>c.comp_nm.toLowerCase().includes(ql)||(c.aliases||[]).some(a=>a.toLowerCase().includes(ql)));_renderSR(s,el,m);return}clearTimeout(_searchTimers[s]);el.innerHTML='<div class="sr-empty">검색 중...</div>';el.classList.add('open');_searchTimers[s]=setTimeout(async()=>{const r=await apiFetch('/companies/search?q='+encodeURIComponent(q));_renderSR(s,el,r||[])},300)}
+async function selComp(s,comp_id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+comp_id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c={...raw,benefits:(raw.benefits||[]).map(b=>({...b,qual_yn:!!b.qual_yn}))}}else{c=DB.find(x=>x.comp_id===comp_id);if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.comp_nm;const typeEl=document.getElementById(s==='a'?'tA':'tB');typeEl.value=c.comp_tp_cd;const typeFd=typeEl.closest('.fd');if(typeFd)typeFd.classList.remove('has-error');const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:true}));renderBen(s);
+  const ws=c.work_style_val||{};const tp_cd=c.comp_tp_cd;
+  const preset=WORK_PRESETS[tp_cd]||{};
   setWS(s,'ot',preset.ot||'mid');
   setWS(s,'wage',preset.wage||'inclusive');
   setWS(s,'remote',ws.remote&&ws.unlimitedPTO?'free':ws.remote?'hybrid':preset.remote||'none');
   setWS(s,'flex',ws.flex?'flexible':preset.flex||'none');
   const pr=document.getElementById('wsPr'+s.toUpperCase());
-  pr.innerHTML=`✓ <strong>${esc(c.name)}</strong> DB 근무방식 + ${TYPE_LABELS[type]} 평균 추정 적용`;pr.classList.add('show');
+  pr.innerHTML=`✓ <strong>${esc(c.comp_nm)}</strong> DB 근무방식 + ${TYPE_LABELS[tp_cd]} 평균 추정 적용`;pr.classList.add('show');
   calc();saveDraft()}
 function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc();saveDraft()}
-function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const type=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[type];const label=TYPE_LABELS[type]||type;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,type);calc();saveDraft()}
+function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const tp_cd=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[tp_cd];const label=TYPE_LABELS[tp_cd]||tp_cd;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b,checked:b.default_checked_yn}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,tp_cd);calc();saveDraft()}
 
 // ━━ BENEFITS ━━
 function renderBen(s){renderBenCompare()}
@@ -1430,33 +1430,33 @@ function renderBenCompare(){
   const cats=Object.keys(CAT_LABELS);
   const catData=[];
   cats.forEach(cat=>{
-    const aItems=listA.map((b,i)=>({...b,idx:i})).filter(b=>b.cat===cat);
-    const bItems=listB.map((b,i)=>({...b,idx:i})).filter(b=>b.cat===cat);
+    const aItems=listA.map((b,i)=>({...b,idx:i})).filter(b=>b.benefit_ctgr_cd===cat);
+    const bItems=listB.map((b,i)=>({...b,idx:i})).filter(b=>b.benefit_ctgr_cd===cat);
     if(!aItems.length&&!bItems.length)return;
     const aCk=aItems.filter(b=>b.checked).length,bCk=bItems.filter(b=>b.checked).length;
-    catData.push({cat,aItems,bItems,aCk,bCk});
+    catData.push({benefit_ctgr_cd:cat,aItems,bItems,aCk,bCk});
   });
   if(!catData.length){el.innerHTML='';return}
   const maxCnt=Math.max(...catData.map(d=>Math.max(d.aCk,d.bCk)),1);
-  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
   let h='';
   catData.forEach(d=>{
     const barA=d.aCk>0?Math.max(10,d.aCk/maxCnt*100):0;
     const barB=d.bCk>0?Math.max(10,d.bCk/maxCnt*100):0;
-    h+=`<div class="bg" id="bgc_${d.cat}">`;
+    h+=`<div class="bg" id="bgc_${d.benefit_ctgr_cd}">`;
     h+=`<div class="bg-header" onclick="this.parentElement.classList.toggle('bg-open')">`;
-    h+=`<span class="bg-cnt cnt-a" id="bgCntA_${d.cat}">${d.aCk}개</span>`;
-    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="bgBarA_${d.cat}" style="width:${barA}%"></div></div>`;
-    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span><span class="bg-chevron">▼</span></div>`;
-    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="bgBarB_${d.cat}" style="width:${barB}%"></div></div>`;
-    h+=`<span class="bg-cnt cnt-b" id="bgCntB_${d.cat}">${d.bCk}개</span>`;
+    h+=`<span class="bg-cnt cnt-a" id="bgCntA_${d.benefit_ctgr_cd}">${d.aCk}개</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="bgBarA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span><span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="bgBarB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="bgCntB_${d.benefit_ctgr_cd}">${d.bCk}개</span>`;
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
-    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}</span></div>`});
+    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${b.idx},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
     if(!d.aItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
-    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${b.idx},this.checked)"><span class="bi-n">${esc(b.name)}</span></div>`});
+    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${b.idx},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
     if(!d.bItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
@@ -1465,11 +1465,11 @@ function renderBenCompare(){
   const bc=document.getElementById('bcCompare');
   if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
 }
-function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].cat);calc();saveDraft()}
-function setBenV(s,i,v){benS[s][i].val=Number(v)||0;calc();saveDraft()}
+function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].benefit_ctgr_cd);calc();saveDraft()}
+function setBenV(s,i,v){benS[s][i].benefit_amt=Number(v)||0;calc();saveDraft()}
 function updBenCatBfly(cat){
-  const aCk=(benS.a||[]).filter(b=>b.cat===cat&&b.checked).length;
-  const bCk=(benS.b||[]).filter(b=>b.cat===cat&&b.checked).length;
+  const aCk=(benS.a||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
+  const bCk=(benS.b||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
   const maxCnt=Math.max(aCk,bCk,1);
   const cntA=document.getElementById('bgCntA_'+cat),cntB=document.getElementById('bgCntB_'+cat);
   const barA=document.getElementById('bgBarA_'+cat),barB=document.getElementById('bgBarB_'+cat);
@@ -1477,10 +1477,10 @@ function updBenCatBfly(cat){
   if(barA)barA.style.width=(aCk>0?Math.max(10,aCk/maxCnt*100):0)+'%';
   if(barB)barB.style.width=(bCk>0?Math.max(10,bCk/maxCnt*100):0)+'%';
   const totalA=(benS.a||[]).filter(b=>b.checked).length,totalB=(benS.b||[]).filter(b=>b.checked).length;
-  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
   const bc=document.getElementById('bcCompare');if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
 }
-function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.val;if(!b.qual)net+=b.val}});return{ben,net}}
+function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.benefit_amt;if(!b.qual_yn)net+=b.benefit_amt}});return{ben,net}}
 
 // ━━ Salary helpers ━━
 function getSalRange(){const v=document.getElementById('salA').value;if(!v)return{min:0,max:0,mid:0};const[lo,hi]=v.split('-').map(Number);return{min:lo,max:hi,mid:Math.round((lo+hi)/2)}}
@@ -1498,24 +1498,24 @@ function calc(){const salA=getSalRange(),salB=getOfferRange();const bA=getBenTot
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function fW(v){return Math.abs(v)>=10000?(v/10000).toFixed(1)+'억원':Math.round(v).toLocaleString()+'만원'}
-function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.cat===cat)t+=b.val});return t}
+function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.benefit_ctgr_cd===cat)t+=b.benefit_amt});return t}
 
 function renderBenCatCompare(nA,nB){
-  const listA=(benS.a||[]).filter(b=>b.checked&&!b.qual),listB=(benS.b||[]).filter(b=>b.checked&&!b.qual);
+  const listA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn),listB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn);
   if(!listA.length&&!listB.length)return'';
-  const idxMapA={},idxMapB={};(benS.a||[]).forEach((b,i)=>{idxMapA[b.key]=i});(benS.b||[]).forEach((b,i)=>{idxMapB[b.key]=i});
+  const idxMapA={},idxMapB={};(benS.a||[]).forEach((b,i)=>{idxMapA[b.benefit_cd]=i});(benS.b||[]).forEach((b,i)=>{idxMapB[b.benefit_cd]=i});
   const cats=Object.keys(CAT_LABELS);
   const catData=[];
   cats.forEach(cat=>{
-    const aItems=listA.filter(b=>b.cat===cat),bItems=listB.filter(b=>b.cat===cat);
+    const aItems=listA.filter(b=>b.benefit_ctgr_cd===cat),bItems=listB.filter(b=>b.benefit_ctgr_cd===cat);
     if(!aItems.length&&!bItems.length)return;
-    const aKeys=new Set(aItems.map(b=>b.key)),bKeys=new Set(bItems.map(b=>b.key));
+    const aKeys=new Set(aItems.map(b=>b.benefit_cd)),bKeys=new Set(bItems.map(b=>b.benefit_cd));
     const allKeys=[...new Set([...aKeys,...bKeys])];
     const details=allKeys.map(k=>{
-      const a=aItems.find(b=>b.key===k),b_=bItems.find(b=>b.key===k);
-      return{key:k,name:a?.name||b_?.name||k,inA:!!a,inB:!!b_,valA:a?.val||0,valB:b_?.val||0,idxA:idxMapA[k]??-1,idxB:idxMapB[k]??-1};
+      const a=aItems.find(b=>b.benefit_cd===k),b_=bItems.find(b=>b.benefit_cd===k);
+      return{key:k,name:a?.benefit_nm||b_?.benefit_nm||k,inA:!!a,inB:!!b_,valA:a?.benefit_amt||0,valB:b_?.benefit_amt||0,idxA:idxMapA[k]??-1,idxB:idxMapB[k]??-1};
     });
-    catData.push({cat,sumA:aItems.reduce((s,b)=>s+b.val,0),sumB:bItems.reduce((s,b)=>s+b.val,0),details});
+    catData.push({benefit_ctgr_cd:cat,sumA:aItems.reduce((s,b)=>s+b.benefit_amt,0),sumB:bItems.reduce((s,b)=>s+b.benefit_amt,0),details});
   });
   if(!catData.length)return'';
   const maxSum=Math.max(...catData.map(d=>Math.max(d.sumA,d.sumB)),1);
@@ -1526,16 +1526,16 @@ function renderBenCatCompare(nA,nB){
     const barB=d.sumB>0?Math.max(10,d.sumB/maxSum*100):0;
     const diff=d.sumB-d.sumA;
     let diffBadge='';
-    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptDiff_${d.cat}">+${fV(diff)}</span>`;
-    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptDiff_${d.cat}">${fV(diff)}</span>`;
-    else diffBadge=`<span class="bg-diff eq" id="rptDiff_${d.cat}">동일</span>`;
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptDiff_${d.benefit_ctgr_cd}">+${fV(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptDiff_${d.benefit_ctgr_cd}">${fV(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptDiff_${d.benefit_ctgr_cd}">동일</span>`;
     h+=`<div class="bg" onclick="if(event.target.tagName!==\'INPUT\')this.classList.toggle('bg-open')">`;
     h+=`<div class="bg-header">`;
-    h+=`<span class="bg-cnt cnt-a" id="rptSumA_${d.cat}">${d.sumA>0?fV(d.sumA):'-'}</span>`;
-    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptBarA_${d.cat}" style="width:${barA}%"></div></div>`;
-    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
-    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptBarB_${d.cat}" style="width:${barB}%"></div></div>`;
-    h+=`<span class="bg-cnt cnt-b" id="rptSumB_${d.cat}">${d.sumB>0?fV(d.sumB):'-'}</span>`;
+    h+=`<span class="bg-cnt cnt-a" id="rptSumA_${d.benefit_ctgr_cd}">${d.sumA>0?fV(d.sumA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptBarA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptBarB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptSumB_${d.benefit_ctgr_cd}">${d.sumB>0?fV(d.sumB):'-'}</span>`;
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
@@ -1552,25 +1552,25 @@ function renderBenCatCompare(nA,nB){
     if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
-  const totA=listA.reduce((s,b)=>s+b.val,0),totB=listB.reduce((s,b)=>s+b.val,0),totD=totB-totA;
+  const totA=listA.reduce((s,b)=>s+b.benefit_amt,0),totB=listB.reduce((s,b)=>s+b.benefit_amt,0),totD=totB-totA;
   h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptTotA">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptTotDiff">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b" id="rptTotB">${fV(totB)}</span></div>`;
   h+='</div>';
   return h;
 }
 function updRptBenVal(s,idx,v){
-  if(idx<0)return;benS[s][idx].val=Number(v)||0;
+  if(idx<0)return;benS[s][idx].benefit_amt=Number(v)||0;
   const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
   const cats=Object.keys(CAT_LABELS);
   let maxSum=0;
   cats.forEach(cat=>{
-    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
-    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
     if(sA>maxSum)maxSum=sA;if(sB>maxSum)maxSum=sB;
   });
   if(!maxSum)maxSum=1;
   cats.forEach(cat=>{
-    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
-    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual&&b.cat===cat).reduce((t,b)=>t+b.val,0);
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
     const elSA=document.getElementById('rptSumA_'+cat),elSB=document.getElementById('rptSumB_'+cat);
     const elBA=document.getElementById('rptBarA_'+cat),elBB=document.getElementById('rptBarB_'+cat);
     const elD=document.getElementById('rptDiff_'+cat);
@@ -1579,22 +1579,22 @@ function updRptBenVal(s,idx,v){
     if(elBB)elBB.style.width=(sB>0?Math.max(10,sB/maxSum*100):0)+'%';
     if(elD){const d=sB-sA;elD.textContent=d===0?'동일':d>0?'+'+fV(d):fV(d);elD.className='bg-diff '+(d>0?'pos':d<0?'neg':'eq')}
   });
-  const totA=(benS.a||[]).filter(b=>b.checked&&!b.qual).reduce((t,b)=>t+b.val,0);
-  const totB=(benS.b||[]).filter(b=>b.checked&&!b.qual).reduce((t,b)=>t+b.val,0);
+  const totA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn).reduce((t,b)=>t+b.benefit_amt,0);
+  const totB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn).reduce((t,b)=>t+b.benefit_amt,0);
   const totD=totB-totA;
   const elTA=document.getElementById('rptTotA'),elTB=document.getElementById('rptTotB'),elTD=document.getElementById('rptTotDiff');
   if(elTA)elTA.textContent=fV(totA);if(elTB)elTB.textContent=fV(totB);
   if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
 }
 function renderQualCompare(nA,nB){
-  const listA=(benS.a||[]).filter(b=>b.checked&&b.qual),listB=(benS.b||[]).filter(b=>b.checked&&b.qual);
+  const listA=(benS.a||[]).filter(b=>b.checked&&b.qual_yn),listB=(benS.b||[]).filter(b=>b.checked&&b.qual_yn);
   if(!listA.length&&!listB.length)return'';
   const cats=Object.keys(CAT_LABELS);
   const catData=[];
   cats.forEach(cat=>{
-    const aItems=listA.filter(b=>b.cat===cat),bItems=listB.filter(b=>b.cat===cat);
+    const aItems=listA.filter(b=>b.benefit_ctgr_cd===cat),bItems=listB.filter(b=>b.benefit_ctgr_cd===cat);
     if(!aItems.length&&!bItems.length)return;
-    catData.push({cat,cntA:aItems.length,cntB:bItems.length,itemsA:aItems,itemsB:bItems});
+    catData.push({benefit_ctgr_cd:cat,cntA:aItems.length,cntB:bItems.length,itemsA:aItems,itemsB:bItems});
   });
   if(!catData.length)return'';
   const maxCnt=Math.max(...catData.map(d=>Math.max(d.cntA,d.cntB)),1);
@@ -1605,23 +1605,23 @@ function renderQualCompare(nA,nB){
     const barB=d.cntB>0?Math.max(10,d.cntB/maxCnt*100):0;
     const diff=d.cntB-d.cntA;
     let diffBadge='';
-    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptQ_diff_${d.cat}">+${fC(diff)}</span>`;
-    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptQ_diff_${d.cat}">${fC(diff)}</span>`;
-    else diffBadge=`<span class="bg-diff eq" id="rptQ_diff_${d.cat}">동일</span>`;
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptQ_diff_${d.benefit_ctgr_cd}">+${fC(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptQ_diff_${d.benefit_ctgr_cd}">${fC(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptQ_diff_${d.benefit_ctgr_cd}">동일</span>`;
     h+=`<div class="bg" onclick="this.classList.toggle('bg-open')">`;
     h+=`<div class="bg-header">`;
-    h+=`<span class="bg-cnt cnt-a" id="rptQ_sA_${d.cat}">${d.cntA>0?fC(d.cntA):'-'}</span>`;
-    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptQ_bA_${d.cat}" style="width:${barA}%"></div></div>`;
-    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.cat]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
-    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptQ_bB_${d.cat}" style="width:${barB}%"></div></div>`;
-    h+=`<span class="bg-cnt cnt-b" id="rptQ_sB_${d.cat}">${d.cntB>0?fC(d.cntB):'-'}</span>`;
+    h+=`<span class="bg-cnt cnt-a" id="rptQ_sA_${d.benefit_ctgr_cd}">${d.cntA>0?fC(d.cntA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptQ_bA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptQ_bB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptQ_sB_${d.benefit_ctgr_cd}">${d.cntB>0?fC(d.cntB):'-'}</span>`;
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
-    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qualText||b.name)}</span></div>`})}
+    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span></div>`})}
     else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
-    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qualText||b.name)}</span></div>`})}
+    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span></div>`})}
     else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
     h+=`</div></div></div></div>`;
   });
@@ -1654,8 +1654,8 @@ function compare(){
   const hrsA=getWSHours('a'),hrsB=getWSHours('b');
   const otPayA=getOTPay('a'),otPayB=getOTPay('b');
   const wA=wsState.a,wB=wsState.b;
-  const nA=matched.a?matched.a.name:'현직',nB=matched.b?matched.b.name:'이직처';
-  const wsA=matched.a?.workStyle||{},wsB=matched.b?.workStyle||{};
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
+  const wsA=matched.a?.work_style_val||{},wsB=matched.b?.work_style_val||{};
   const pri=PRIORITIES.find(p=>p.key===curPri);
   const effDiffMid=effB.mid-effA.mid,salDiffMid=salB.mid-salA.mid;
   const effDiffMin=effB.min-effA.min,effDiffMax=effB.max-effA.max;
@@ -1668,7 +1668,7 @@ function compare(){
     html+=`<div style="display:flex;gap:.75rem;margin-bottom:1rem"><div style="flex:1;padding:.65rem .85rem;background:var(--purple-d);border:1px solid rgba(139,108,246,.2);border-radius:8px;text-align:center"><div style="font-size:.58rem;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">최우선</div><div style="font-size:.82rem;font-weight:700;color:var(--t1)">${pri.icon} ${pri.label}</div></div><div style="flex:1;padding:.65rem .85rem;background:var(--red-d);border:1px solid rgba(239,80,80,.2);border-radius:8px;text-align:center"><div style="font-size:.58rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">포기 가능</div><div style="font-size:.82rem;font-weight:700;color:var(--t1)">${sacObj.icon} ${sacObj.label}</div></div></div>`;
   }
 
-  if(pfResult){html+=`<div class="callout gold" style="margin-bottom:1rem"><span class="callout-icon">🎯</span><span><strong>${pfResult.profile.type}</strong> 가치관이 반영된 리포트입니다. 상위 가치: ${DIMS.filter(d=>pfResult.scores[d]>0).sort((a,b)=>pfResult.scores[b]-pfResult.scores[a]).slice(0,3).map(d=>`<strong style="color:${DIM_META[d].color}">${DIM_META[d].label}</strong>`).join(', ')}</span></div>`}
+  if(pfResult){html+=`<div class="callout gold" style="margin-bottom:1rem"><span class="callout-icon">🎯</span><span><strong>${pfResult.profile.profile_nm}</strong> 가치관이 반영된 리포트입니다. 상위 가치: ${DIMS.filter(d=>pfResult.scores[d]>0).sort((a,b)=>pfResult.scores[b]-pfResult.scores[a]).slice(0,3).map(d=>`<strong style="color:${DIM_META[d].color}">${DIM_META[d].label}</strong>`).join(', ')}</span></div>`}
 
   // Verdict card helper
   function vdCard(icon,title,p1Label,p1Winner,p1Details,p2Label,p2Winner,p2Details,chooseText){
@@ -1856,7 +1856,7 @@ function compare(){
 
   if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 금전 환산 가능 복지</div><div class="cmp-body">${catHtml}</div></div>`}
   // Qualitative benefits
-  const qualA=(benS.a||[]).filter(b=>b.checked&&b.qual),qualB=(benS.b||[]).filter(b=>b.checked&&b.qual);
+  const qualA=(benS.a||[]).filter(b=>b.checked&&b.qual_yn),qualB=(benS.b||[]).filter(b=>b.checked&&b.qual_yn);
   if(qualA.length||qualB.length){const qualHtml=renderQualCompare(nA,nB);if(qualHtml)html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">${qualHtml}</div></div>`}
 
   // [FIX] 3년 투영 — 변수 섀도잉 수정 (barWA/barWB)
@@ -1946,9 +1946,9 @@ function compare(){
   const _hvA=hrsA>0?Math.round((_totalA)*10000/(hrsA*52)):0,_hvB=hrsB>0?Math.round((_totalB)*10000/(hrsB*52)):0;
   if(_td!==0)_pts.push('<strong>총 보상</strong> '+_mVal+' — '+(_td>0?nB:nA)+'이 유리');
   if(_hvA&&_hvB&&_hvA!==_hvB)_pts.push('<strong>시간당 가치</strong> '+(_hvA>_hvB?nA:nB)+'이 우세 · 실질 효율 기준');
-  if(curPri)_pts.push('<strong>'+pri.label+'</strong> 기준 비교 · '+(pfJob?pfJob.label+' 직무':'직무 미지정'));
+  if(curPri)_pts.push('<strong>'+pri.label+'</strong> 기준 비교 · '+(pfJob?pfJob.job_nm+' 직무':'직무 미지정'));
   if(!_pts.length)_pts.push(nA+' vs '+nB+' 비교 결과');
-  window._lastFeedData={feed_headline:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail:pri.label+' 기준 비교',feed_metric_val:_mVal,feed_metric_label:'총 보상 차이',feed_metric_type:_mType,feed_job_category:pfJob?pfJob.label:null,feed_points:_pts};
+  window._lastFeedData={feed_headline_ctnt:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail_ctnt:pri.label+' 기준 비교',feed_metric_val_ctnt:_mVal,feed_metric_label_nm:'총 보상 차이',feed_metric_type_cd:_mType,feed_job_ctgr_nm:pfJob?pfJob.job_nm:null,feed_points_val:_pts};
   html+=`<div id="saveStatus" style="text-align:center;padding:.5rem;margin-top:.5rem;font-size:.75rem;color:var(--t4)">비교 결과 저장 중...</div>`;
   document.getElementById('report').innerHTML=html;
   document.getElementById('report').classList.add('visible');
@@ -2019,7 +2019,7 @@ async function admLoadCompanies(page,q,type){
   h+='</div><button class="adm-btn primary" onclick="admEditCompany(null)">+ 회사 추가</button></div>';
   h+='<table class="adm-tbl"><thead><tr><th>회사명</th><th>유형</th><th>산업</th><th>복지</th><th>별명</th><th>작업</th></tr></thead><tbody>';
   if(d.items&&d.items.length){
-    h+=d.items.map(co=>`<tr><td><strong>${esc(co.name)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.type]||co.type||'-')}</td><td>${esc(co.industry||'-')}</td><td>${co.benefit_count??0}건</td><td>${co.alias_count??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany('${co.id}')">편집</button> <button class="adm-btn" onclick="admEditBenefits('${co.id}','${esc(co.name)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany('${co.id}','${esc(co.name)}')">삭제</button></td></tr>`).join('');
+    h+=d.items.map(co=>`<tr><td><strong>${esc(co.comp_nm)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.comp_tp_cd]||co.comp_tp_cd||'-')}</td><td>${esc(co.industry_nm||'-')}</td><td>${co.benefit_no??0}건</td><td>${co.alias_no??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany('${co.comp_id}')">편집</button> <button class="adm-btn" onclick="admEditBenefits('${co.comp_id}','${esc(co.comp_nm)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany('${co.comp_id}','${esc(co.comp_nm)}')">삭제</button></td></tr>`).join('');
   }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:2rem">회사가 없습니다.</td></tr>';
   h+='</tbody></table>';
   h+=admPagination(d.total,d.page,d.page_size,'admLoadCompanies');
@@ -2035,17 +2035,17 @@ async function admDelCompany(id,name){
 
 async function admEditCompany(id){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
-  let co={name:'',type_id:'',industry:'',logo:'',work_style:'',careers_benefit_url:'',aliases:[]};
+  let co={comp_nm:'',comp_tp_cd:'',industry_nm:'',logo_nm:'',work_style_val:'',careers_benefit_url:'',aliases:[]};
   if(id){
     const d=await apiFetch('/admin/companies/'+id+'/benefits');
     const detail=await apiFetch('/companies/'+id);
     if(detail){co={...co,...detail};co.aliases=detail.aliases||[]}
   }
   let h=`<h3>${id?'회사 편집':'회사 추가'}</h3>`;
-  h+=`<div class="adm-fd"><label>회사명</label><input id="admCoName" value="${esc(co.name)}"></div>`;
-  h+=`<div class="adm-fd"><label>유형</label><select id="admCoType"><option value="">선택</option>${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${co.type===k||co.type_id===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
-  h+=`<div class="adm-fd"><label>산업</label><input id="admCoInd" value="${esc(co.industry||'')}"></div>`;
-  h+=`<div class="adm-fd"><label>로고 URL</label><input id="admCoLogo" value="${esc(co.logo||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>회사명</label><input id="admCoName" value="${esc(co.comp_nm)}"></div>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCoType"><option value="">선택</option>${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${co.comp_tp_cd===k||co.type_id===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+  h+=`<div class="adm-fd"><label>산업</label><input id="admCoInd" value="${esc(co.industry_nm||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>로고 URL</label><input id="admCoLogo" value="${esc(co.logo_nm||'')}"></div>`;
   h+=`<div class="adm-fd"><label>근무 형태</label><input id="admCoWS" value="${esc(co.work_style||'')}" placeholder="hybrid, remote, onsite"></div>`;
   h+=`<div class="adm-fd"><label>채용/복지 URL</label><input id="admCoURL" value="${esc(co.careers_benefit_url||'')}"></div>`;
   h+=`<div class="adm-fd"><label>별명 (쉼표 구분)</label><input id="admCoAlias" value="${esc((co.aliases||[]).join(', '))}"></div>`;
@@ -2063,7 +2063,7 @@ async function admSaveCompany(id){
   const aliasStr=document.getElementById('admCoAlias').value.trim();
   const aliases=aliasStr?aliasStr.split(',').map(a=>a.trim()).filter(Boolean):[];
   if(!name){alert('회사명을 입력하세요.');return}
-  const body={name,type_id,industry,logo,work_style,careers_benefit_url};
+  const body={comp_nm:name,comp_tp_cd:type_id,industry_nm:industry,logo_nm:logo,work_style_val:work_style,careers_benefit_url};
   if(id){
     await apiFetch('/admin/companies/'+id,{method:'PUT',body:JSON.stringify(body)});
     if(aliases.length||aliasStr==='')await apiFetch('/admin/companies/'+id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
@@ -2088,7 +2088,7 @@ function admRenderBenModal(id,name,bens){
   let h=`<h3>${esc(name)} — 복지 편집</h3>`;
   h+='<div style="overflow-x:auto"><table class="adm-tbl"><thead><tr><th>key</th><th>이름</th><th>금액(만원)</th><th>카테고리</th><th>뱃지</th><th>자격조건</th><th>삭제</th></tr></thead><tbody id="admBenRows">';
   if(bens.length){
-    h+=bens.map((bn,i)=>`<tr id="admBR${i}"><td><input style="width:80px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.key||'')}" data-f="key" data-i="${i}"></td><td><input style="width:100px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.name||'')}" data-f="name" data-i="${i}"></td><td><input type="number" style="width:70px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${bn.val||0}" data-f="val" data-i="${i}"></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="cat" data-i="${i}">${ADM_CAT_OPTS.map(([k,l])=>`<option value="${k}"${bn.cat===k?' selected':''}>${l}</option>`).join('')}</select></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="badge" data-i="${i}"><option value="">-</option>${ADM_BADGE_OPTS.map(([k,l])=>`<option value="${k}"${bn.badge===k?' selected':''}>${l}</option>`).join('')}</select></td><td style="text-align:center"><input type="checkbox" data-f="qual" data-i="${i}"${bn.qual?' checked':''}></td><td><button class="adm-btn danger" onclick="admRemoveBenRow(${i})" style="padding:2px 8px">×</button></td></tr>`).join('');
+    h+=bens.map((bn,i)=>`<tr id="admBR${i}"><td><input style="width:80px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.key||'')}" data-f="key" data-i="${i}"></td><td><input style="width:100px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.name||'')}" data-f="name" data-i="${i}"></td><td><input type="number" style="width:70px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${bn.benefit_amt||0}" data-f="val" data-i="${i}"></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="cat" data-i="${i}">${ADM_CAT_OPTS.map(([k,l])=>`<option value="${k}"${bn.benefit_ctgr_cd===k?' selected':''}>${l}</option>`).join('')}</select></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="badge" data-i="${i}"><option value="">-</option>${ADM_BADGE_OPTS.map(([k,l])=>`<option value="${k}"${bn.badge===k?' selected':''}>${l}</option>`).join('')}</select></td><td style="text-align:center"><input type="checkbox" data-f="qual" data-i="${i}"${bn.qual_yn?' checked':''}></td><td><button class="adm-btn danger" onclick="admRemoveBenRow(${i})" style="padding:2px 8px">×</button></td></tr>`).join('');
   }else h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:1rem">복지 항목이 없습니다.</td></tr>';
   h+='</tbody></table></div>';
   h+=`<div style="display:flex;gap:8px;justify-content:space-between;margin-top:1rem"><button class="adm-btn" onclick="admAddBenRow()">+ 항목 추가</button><div style="display:flex;gap:8px"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveBenefits('${id}')">일괄 저장</button></div></div>`;
@@ -2136,8 +2136,8 @@ async function admLoadUsers(page,q){
   h+='<table class="adm-tbl"><thead><tr><th>이메일</th><th>이름</th><th>직군</th><th>역할</th><th>가입일</th></tr></thead><tbody>';
   if(d.items&&d.items.length){
     h+=d.items.map(u=>{
-      const dt=u.created_at?new Date(u.created_at).toLocaleDateString('ko-KR'):'';
-      return `<tr><td>${esc(u.email)}</td><td>${esc(u.name||'-')}</td><td>${esc(u.job_name||'-')}</td><td><select style="font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" onchange="admChangeRole(${u.id},this.value)"><option value="user"${u.role==='user'?' selected':''}>user</option><option value="admin"${u.role==='admin'?' selected':''}>admin</option></select></td><td>${esc(dt)}</td></tr>`;
+      const dt=u.ins_dtm?new Date(u.ins_dtm).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${esc(u.email_addr)}</td><td>${esc(u.mbr_nm||'-')}</td><td>${esc(u.job_nm||'-')}</td><td><select style="font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" onchange="admChangeRole(${u.mbr_id},this.value)"><option value="user"${u.role_cd==='user'?' selected':''}>user</option><option value="admin"${u.role_cd==='admin'?' selected':''}>admin</option></select></td><td>${esc(dt)}</td></tr>`;
     }).join('');
   }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:2rem">사용자가 없습니다.</td></tr>';
   h+='</tbody></table>';
@@ -2170,7 +2170,7 @@ async function admLoadCases(){
   h+='<table class="adm-tbl"><thead><tr><th>A</th><th>B</th><th>유형</th><th>활성</th><th>작업</th></tr></thead><tbody>';
   const items=Array.isArray(d)?d:(d.items||[]);
   if(items.length){
-    h+=items.map(cs=>`<tr><td>${esc(cs.title_a)}</td><td>${esc(cs.title_b)}</td><td>${esc(cs.case_type||'-')}</td><td>${cs.is_active?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
+    h+=items.map(cs=>`<tr><td>${esc(cs.title_a_nm)}</td><td>${esc(cs.title_b_nm)}</td><td>${esc(cs.case_type_cd||'-')}</td><td>${cs.active_yn?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
   }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:1rem">인기사례가 없습니다.</td></tr>';
   h+='</tbody></table>';
   el.innerHTML=h;
@@ -2178,7 +2178,7 @@ async function admLoadCases(){
 
 async function admEditCase(id){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
-  let cs={case_type:'company',title_a:'',type_a:'large',sub_a:'',title_b:'',type_b:'large',sub_b:'',points:[],is_active:true};
+  let cs={case_type_cd:'company',title_a_nm:'',comp_a_tp_cd:'large',sub_a_nm:'',title_b_nm:'',comp_b_tp_cd:'large',sub_b_nm:'',points_val:[],active_yn:true};
   if(id){
     const all=await apiFetch('/admin/popular-cases');
     const items=Array.isArray(all)?all:(all?.items||[]);
@@ -2186,28 +2186,28 @@ async function admEditCase(id){
   }
   const pts=(cs.points||[]).join('\n');
   let h=`<h3>${id?'인기사례 편집':'인기사례 추가'}</h3>`;
-  h+=`<div class="adm-fd"><label>유형</label><select id="admCsType"><option value="company"${cs.case_type==='company'?' selected':''}>company</option><option value="situation"${cs.case_type==='situation'?' selected':''}>situation</option></select></div>`;
-  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>A 제목</label><input id="admCsTA" value="${esc(cs.title_a)}"></div><div class="adm-fd" style="flex:1"><label>A 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.type_a===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
-  h+=`<div class="adm-fd"><label>A 서브</label><input id="admCsSA" value="${esc(cs.sub_a||'')}"></div>`;
-  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>B 제목</label><input id="admCsTB" value="${esc(cs.title_b)}"></div><div class="adm-fd" style="flex:1"><label>B 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.type_b===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
-  h+=`<div class="adm-fd"><label>B 서브</label><input id="admCsSB" value="${esc(cs.sub_b||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCsType"><option value="company"${cs.case_type_cd==='company'?' selected':''}>company</option><option value="situation"${cs.case_type_cd==='situation'?' selected':''}>situation</option></select></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>A 제목</label><input id="admCsTA" value="${esc(cs.title_a_nm)}"></div><div class="adm-fd" style="flex:1"><label>A 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.comp_a_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>A 서브</label><input id="admCsSA" value="${esc(cs.sub_a_nm||'')}"></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>B 제목</label><input id="admCsTB" value="${esc(cs.title_b_nm)}"></div><div class="adm-fd" style="flex:1"><label>B 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.comp_b_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>B 서브</label><input id="admCsSB" value="${esc(cs.sub_b_nm||'')}"></div>`;
   h+=`<div class="adm-fd"><label>포인트 (줄바꿈 구분)</label><textarea id="admCsPts" rows="4" style="resize:vertical">${esc(pts)}</textarea></div>`;
-  h+=`<div class="adm-fd"><label><input type="checkbox" id="admCsAct"${cs.is_active?' checked':''}> 활성</label></div>`;
+  h+=`<div class="adm-fd"><label><input type="checkbox" id="admCsAct"${cs.active_yn?' checked':''}> 활성</label></div>`;
   h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCase(${id||'null'})">저장</button></div>`;
   b.innerHTML=h;m.classList.add('open');
 }
 
 async function admSaveCase(id){
   const body={
-    case_type:document.getElementById('admCsType').value,
-    title_a:document.getElementById('admCsTA').value.trim(),
-    type_a:document.getElementById('admCsTyA').value,
-    sub_a:document.getElementById('admCsSA').value.trim(),
-    title_b:document.getElementById('admCsTB').value.trim(),
-    type_b:document.getElementById('admCsTyB').value,
-    sub_b:document.getElementById('admCsSB').value.trim(),
+    case_type_cd:document.getElementById('admCsType').value,
+    title_a_nm:document.getElementById('admCsTA').value.trim(),
+    comp_a_tp_cd:document.getElementById('admCsTyA').value,
+    sub_a_nm:document.getElementById('admCsSA').value.trim(),
+    title_b_nm:document.getElementById('admCsTB').value.trim(),
+    comp_b_tp_cd:document.getElementById('admCsTyB').value,
+    sub_b_nm:document.getElementById('admCsSB').value.trim(),
     points:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
-    is_active:document.getElementById('admCsAct').checked
+    active_yn:document.getElementById('admCsAct').checked
   };
   if(id)await apiFetch('/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
   else await apiFetch('/admin/popular-cases',{method:'POST',body:JSON.stringify(body)});
@@ -2228,8 +2228,8 @@ async function admLoadFeed(){
   const items=d.items||[];
   if(items.length){
     h+=items.map(f=>{
-      const dt=f.created_at?new Date(f.created_at).toLocaleDateString('ko-KR'):'';
-      return `<tr><td>${f.id}</td><td>${esc(f.company_a_display||f.company_a_name||'-')}</td><td>${esc(f.company_b_display||f.company_b_name||'-')}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((f.headline||f.summary||'').slice(0,50))}</td><td>${esc(dt)}</td><td><button class="adm-btn danger" onclick="admDelFeed(${f.id})">삭제</button></td></tr>`;
+      const dt=f.ins_dtm?new Date(f.ins_dtm).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${f.feed_id}</td><td>${esc(f.comp_a_disp_nm||f.comp_a_nm||'-')}</td><td>${esc(f.comp_b_disp_nm||f.comp_b_nm||'-')}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((f.headline_ctnt||f.detail_ctnt||'').slice(0,50))}</td><td>${esc(dt)}</td><td><button class="adm-btn danger" onclick="admDelFeed(${f.feed_id})">삭제</button></td></tr>`;
     }).join('');
   }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:1rem">피드가 없습니다.</td></tr>';
   h+='</tbody></table>';
@@ -2261,11 +2261,11 @@ async function admLoadStats(days){
   // 일별 비교 건수
   h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">일별 비교 건수</h4>';
   if(cmpStats&&cmpStats.length){
-    const maxC=Math.max(...cmpStats.map(x=>x.comparison_count||0),1);
+    const maxC=Math.max(...cmpStats.map(x=>x.comparison_no||0),1);
     h+=cmpStats.map(x=>{
       const dt=(x.stat_date||x.date||'').slice(5);
-      const pct=Math.round(((x.comparison_count||0)/maxC)*100);
-      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--blue)"></div><span class="adm-bar-val">${x.comparison_count||0}</span></div>`;
+      const pct=Math.round(((x.comparison_no||0)/maxC)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--blue)"></div><span class="adm-bar-val">${x.comparison_no||0}</span></div>`;
     }).join('');
   }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
   h+='</div>';
@@ -2311,28 +2311,28 @@ function admPagination(total,page,pageSize,callback){
 
 // ━━ APP (navigation + init) ━━
 
-function go(id,skipHistory){if(id==='s-admin'&&AUTH_USER?.role!=='admin'){go('s-landing');return}document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(id==='s-admin')admInit();if(!skipHistory)history.pushState({screen:id},'')}
+function go(id,skipHistory){if(id==='s-admin'&&AUTH_USER?.role_cd!=='admin'){go('s-landing');return}document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(id==='s-admin')admInit();if(!skipHistory)history.pushState({screen:id},'')}
 window.addEventListener('popstate',e=>{const id=e.state&&e.state.screen||'s-landing';go(id,true)})
 
 document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.getElementById(s==='a'?'sA':'sB').parentElement;if(!w.contains(e.target))document.getElementById(s==='a'?'rA':'rB').classList.remove('open')})});
 
 // ━━ LANDING SOCIAL FEED ━━
 const FALLBACK_POP=[
-  {id:1,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'네이버',type_b:'large',sub_b:'대기업',points:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_count:12341,comparison_count:847},
-  {id:2,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'삼성전자',type_b:'large',sub_b:'대기업',points:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_count:9823,comparison_count:623},
-  {id:3,case_type:'company',title_a:'토스',type_a:'startup',sub_a:'핀테크',title_b:'카카오뱅크',type_b:'large',sub_b:'인터넷은행',points:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_count:5432,comparison_count:298},
-  {id:4,case_type:'company',title_a:'라인',type_a:'large',sub_a:'글로벌 IT',title_b:'카카오',type_b:'large',sub_b:'대기업',points:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_count:4821,comparison_count:245},
-  {id:5,case_type:'company',title_a:'삼성전자',type_a:'large',sub_a:'대기업',title_b:'SK하이닉스',type_b:'large',sub_b:'대기업',points:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_count:4512,comparison_count:231},
-  {id:6,case_type:'company',title_a:'배달의민족',type_a:'large',sub_a:'플랫폼',title_b:'당근',type_b:'startup',sub_b:'플랫폼',points:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_count:3987,comparison_count:198},
-  {id:7,case_type:'company',title_a:'현대자동차',type_a:'large',sub_a:'대기업',title_b:'LG에너지솔루션',type_b:'large',sub_b:'대기업',points:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_count:3654,comparison_count:187},
-  {id:8,case_type:'company',title_a:'네이버',type_a:'large',sub_a:'대기업',title_b:'구글코리아',type_b:'foreign',sub_b:'외국계',points:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_count:3421,comparison_count:176},
-  {id:9,case_type:'company',title_a:'카카오',type_a:'large',sub_a:'대기업',title_b:'토스',type_b:'startup',sub_b:'핀테크',points:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_count:3198,comparison_count:165},
-  {id:10,case_type:'company',title_a:'쿠팡',type_a:'large',sub_a:'대기업',title_b:'마켓컬리',type_b:'startup',sub_b:'이커머스',points:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_count:2876,comparison_count:142}
+  {id:1,case_type_cd:'company',title_a_nm:'쿠팡',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'네이버',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_no:12341,comparison_no:847},
+  {id:2,case_type_cd:'company',title_a_nm:'카카오',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'삼성전자',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_no:9823,comparison_no:623},
+  {id:3,case_type_cd:'company',title_a_nm:'토스',comp_a_tp_cd:'startup',sub_a_nm:'핀테크',title_b_nm:'카카오뱅크',comp_b_tp_cd:'large',sub_b_nm:'인터넷은행',points_val:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_no:5432,comparison_no:298},
+  {id:4,case_type_cd:'company',title_a_nm:'라인',comp_a_tp_cd:'large',sub_a_nm:'글로벌 IT',title_b_nm:'카카오',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_no:4821,comparison_no:245},
+  {id:5,case_type_cd:'company',title_a_nm:'삼성전자',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'SK하이닉스',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_no:4512,comparison_no:231},
+  {id:6,case_type_cd:'company',title_a_nm:'배달의민족',comp_a_tp_cd:'large',sub_a_nm:'플랫폼',title_b_nm:'당근',comp_b_tp_cd:'startup',sub_b_nm:'플랫폼',points_val:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_no:3987,comparison_no:198},
+  {id:7,case_type_cd:'company',title_a_nm:'현대자동차',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'LG에너지솔루션',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_no:3654,comparison_no:187},
+  {id:8,case_type_cd:'company',title_a_nm:'네이버',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'구글코리아',comp_b_tp_cd:'foreign',sub_b_nm:'외국계',points_val:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_no:3421,comparison_no:176},
+  {id:9,case_type_cd:'company',title_a_nm:'카카오',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'토스',comp_b_tp_cd:'startup',sub_b_nm:'핀테크',points_val:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_no:3198,comparison_no:165},
+  {id:10,case_type_cd:'company',title_a_nm:'쿠팡',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'마켓컬리',comp_b_tp_cd:'startup',sub_b_nm:'이커머스',points_val:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_no:2876,comparison_no:142}
 ];
 const FALLBACK_FEED=[
-  {id:1,job_name:'개발자',emoji:'👨‍💻',company_a_display:'카카오',type_a:'large',company_b_display:'토스',type_b:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
-  {id:2,job_name:'기획자',emoji:'📋',company_a_display:'네이버',type_a:'large',company_b_display:'쿠팡',type_b:'large',headline:'네이버 잔류 vs 쿠팡 이직 비교 결과 — 총 보상 +12.1% 이직이 유리',summary:'연봉 +800만 + RSU 차이 → 포괄임금 야근 감안해도 총 보상 우위',pct_val:'+12.1%',pct_label:'총 보상 차이',pct_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
-  {id:3,job_name:'디자이너',emoji:'🎨',company_a_display:'삼성전자',type_a:'large',company_b_display:'당근',type_b:'startup',headline:'삼성전자 잔류 vs 당근 이직 비교 결과 — 시간당 가치 -5.2% 잔류가 유리',summary:'복지 포함 시 삼성이 연 450만원 유리 · 안정성 + 퇴직금 차이 큼',pct_val:'-5.2%',pct_label:'시간당 가치',pct_type:'down',created_at:new Date(Date.now()-7200000).toISOString()}
+  {id:1,job_name:'개발자',emoji:'👨‍💻',comp_a_disp_nm:'카카오',comp_a_tp_cd:'large',comp_b_disp_nm:'토스',comp_b_tp_cd:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
+  {id:2,job_name:'기획자',emoji:'📋',comp_a_disp_nm:'네이버',comp_a_tp_cd:'large',comp_b_disp_nm:'쿠팡',comp_b_tp_cd:'large',headline:'네이버 잔류 vs 쿠팡 이직 비교 결과 — 총 보상 +12.1% 이직이 유리',summary:'연봉 +800만 + RSU 차이 → 포괄임금 야근 감안해도 총 보상 우위',pct_val:'+12.1%',pct_label:'총 보상 차이',pct_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
+  {id:3,job_name:'디자이너',emoji:'🎨',comp_a_disp_nm:'삼성전자',comp_a_tp_cd:'large',comp_b_disp_nm:'당근',comp_b_tp_cd:'startup',headline:'삼성전자 잔류 vs 당근 이직 비교 결과 — 시간당 가치 -5.2% 잔류가 유리',summary:'복지 포함 시 삼성이 연 450만원 유리 · 안정성 + 퇴직금 차이 큼',pct_val:'-5.2%',pct_label:'시간당 가치',pct_type:'down',created_at:new Date(Date.now()-7200000).toISOString()}
 ];
 let _popData=null,_popFilter='all';
 let pingTimer=null;
@@ -2352,16 +2352,16 @@ async function loadLanding(){
 
 function renderPopular(data){
   const grid=document.getElementById('popGrid');if(!grid)return;
-  const filtered=(_popFilter==='all'?data:data.filter(c=>c.case_type===_popFilter)).slice(0,10);
+  const filtered=(_popFilter==='all'?data:data.filter(c=>c.case_type_cd===_popFilter)).slice(0,10);
   const tagMap={company:'🏢 회사 직접 비교',scenario:'🔀 시나리오'};
   grid.innerHTML=filtered.map((c,i)=>{
-    const tag=tagMap[c.case_type]||'비교';
+    const tag=tagMap[c.case_type_cd]||'비교';
     const pts=(c.points||[]).map(p=>{const s=esc(String(p));return`<div class="pc-point">• ${s.replace(/&lt;strong&gt;/g,'<strong>').replace(/&lt;\/strong&gt;/g,'</strong>')}</div>`}).join('');
-    const views=c.view_count?'📊 '+(c.view_count).toLocaleString()+'회':'';
-    const ctype=esc(c.case_type);
+    const views=c.view_no?'📊 '+(c.view_no).toLocaleString()+'회':'';
+    const ctype=esc(c.case_type_cd);
     return `<div class="pop-card type-${ctype}" data-pop-idx="${i}">
       <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
-      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.title_a)}</span><span class="pc-sub">${esc(c.sub_a||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.title_b)}</span><span class="pc-sub">${esc(c.sub_b||'')}</span></div></div>
+      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.title_a_nm)}</span><span class="pc-sub">${esc(c.sub_a_nm||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.title_b_nm)}</span><span class="pc-sub">${esc(c.sub_b_nm||'')}</span></div></div>
       <div class="pc-points">${pts}</div>
     </div>`}).join('');
   grid.onclick=e=>{const card=e.target.closest('[data-pop-idx]');if(!card)return;startFromCase(filtered[Number(card.dataset.popIdx)])};
@@ -2377,13 +2377,13 @@ function filterPop(type,btn){
 function renderFeed(data){
   const el=document.getElementById('feedList');if(!el)return;
   el.innerHTML=data.slice(0,10).map(f=>{
-    const emoji=esc(f.emoji||'💼'),job=esc(f.job_name||f.job_category||''),a=esc(f.company_a_display||''),b=esc(f.company_b_display||'');
-    const raw=esc(f.headline||`${f.company_a_display||''} vs ${f.company_b_display||''}`);
+    const emoji=esc(f.emoji||'💼'),job=esc(f.job_ctgr_nm||f.job_ctgr_nm||''),a=esc(f.comp_a_disp_nm||''),b=esc(f.comp_b_disp_nm||'');
+    const raw=esc(f.headline_ctnt||`${f.comp_a_disp_nm||''} vs ${f.comp_b_disp_nm||''}`);
     const dashIdx=raw.indexOf(' — ');
     let vsTitle=(dashIdx>=0?raw.slice(0,dashIdx):raw).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
     let desc=dashIdx>=0?raw.slice(dashIdx+3):'';
     desc=desc.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
-    const summary=esc(f.summary||f.detail||''),pv=esc(f.pct_val||f.metric_val||''),pl=esc(f.pct_label||f.metric_label||''),pt=/^(up|down|neu)$/.test(f.pct_type||f.metric_type||'')?f.pct_type||f.metric_type:'neu';
+    const summary=esc(f.detail_ctnt||f.detail||''),pv=esc(f.metric_val_ctnt||f.metric_val_ctnt||''),pl=esc(f.metric_label_nm||f.metric_label_nm||''),pt=/^(up|down|neu)$/.test(f.metric_type_cd||f.metric_type_cd||'')?f.metric_type_cd||f.metric_type_cd:'neu';
     return `<div class="result-item">
       <div class="ri-avatar">${emoji}</div>
       <div class="ri-body">
@@ -2391,7 +2391,7 @@ function renderFeed(data){
         <div class="ri-title">${vsTitle}</div>
         ${desc?`<div class="ri-summary">${desc}</div>`:''}
         ${summary?`<div class="ri-summary">${summary}</div>`:''}
-        <div class="ri-time">${timeAgo(f.created_at)}</div>
+        <div class="ri-time">${timeAgo(f.ins_dtm)}</div>
       </div>
       ${pv?`<div class="ri-right"><div class="ri-pct ${pt}">${pv}</div><div class="ri-pct-label">${pl}</div></div>`:''}
     </div>`;
@@ -2415,15 +2415,15 @@ function updateCompareCount(){
 }
 
 async function startFromCase(c){
-  if(c.id)apiFetch('/landing/popular/'+c.id+'/view',{method:'POST'}).then(r=>{if(r&&r.view_count){const item=(_popData||[]).find(x=>x.id===c.id);if(item)item.view_count=r.view_count}});
+  if(c.id)apiFetch('/landing/popular/'+c.id+'/view',{method:'POST'}).then(r=>{if(r&&r.view_no){const item=(_popData||[]).find(x=>x.id===c.id);if(item)item.view_no=r.view_no}});
   go('s-input');
-  if(c.case_type==='company'){
+  if(c.case_type_cd==='company'){
     async function findAndSel(s,name){
       if(!name)return;
       if(API_BASE){const r=await apiFetch('/companies/search?q='+encodeURIComponent(name));if(r&&r.length){await selComp(s,r[0].id);return}}
       const loc=DB.find(x=>x.name===name);if(loc)await selComp(s,loc.id);else document.getElementById(s==='a'?'sA':'sB').value=name;
     }
-    await Promise.all([findAndSel('a',c.title_a),findAndSel('b',c.title_b)]);
+    await Promise.all([findAndSel('a',c.title_a_nm),findAndSel('b',c.title_b_nm)]);
   }
 }
 
@@ -2441,9 +2441,9 @@ async function loadRefData(){
   if(!API_BASE)return;
   const ref=await apiFetch('/reference/all');
   if(!ref)return;
-  if(ref.jobGroups?.length)JOB_GROUPS=ref.jobGroups;
+  if(ref.job_groups?.length)JOB_GROUPS=ref.job_groups;
   if(ref.questions?.length)Q_BASE=ref.questions;
-  if(ref.questionDescs&&Object.keys(ref.questionDescs).length)Q_DESC=ref.questionDescs;
+  if(ref.question_descs&&Object.keys(ref.question_descs).length)Q_DESC=ref.question_descs;
   if(ref.profiles?.length)PROFILES=ref.profiles;
 }
 loadRefData();

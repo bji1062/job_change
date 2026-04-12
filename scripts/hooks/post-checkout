@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# post-checkout hook — 브랜치 전환 시 server/.env 를 브랜치별로 자동 교체
+#
+# 동작:
+#   claude/oracle-server-setup-c1LNU  → server/.env → server/.env.oracle
+#   claude/refactor-db-schema-Viv3D   → server/.env → server/.env.refactor
+#   그 외 브랜치                       → 변경하지 않음
+#
+# 전제:
+#   - server/.env.oracle / server/.env.refactor 파일이 미리 존재해야 함
+#     (server/.env.oracle.example / .env.refactor.example 을 복사해서 생성)
+#
+# git post-checkout 파라미터:
+#   $1 = prev_head, $2 = new_head, $3 = 1(branch checkout) | 0(file checkout)
+
+set -e
+
+prev_head="$1"
+new_head="$2"
+branch_checkout="$3"
+
+# 파일 체크아웃이면 무시 (브랜치 전환만 처리)
+if [ "$branch_checkout" != "1" ]; then
+  exit 0
+fi
+
+# 저장소 루트로 이동 (훅은 .git/hooks 안에서 실행될 수 있음)
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+case "$branch" in
+  claude/oracle-server-setup-c1LNU)
+    target="server/.env.oracle"
+    label="oracle (DB: JOB)"
+    ;;
+  claude/refactor-db-schema-Viv3D)
+    target="server/.env.refactor"
+    label="refactor (DB: jobchoice)"
+    ;;
+  *)
+    # 매핑되지 않은 브랜치는 건드리지 않음
+    exit 0
+    ;;
+esac
+
+if [ ! -f "$target" ]; then
+  echo "[post-checkout] WARNING: $target not found."
+  echo "                cp $target.example $target 로 생성 후 값을 채워주세요."
+  exit 0
+fi
+
+ln -sf "$(basename "$target")" server/.env
+echo "[post-checkout] server/.env → $target  ($label)"

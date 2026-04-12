@@ -160,19 +160,19 @@ async def oauth_callback(provider: str, code: str = Query(...), state: str = Que
             raise HTTPException(status_code=502, detail="사용자 정보 조회 실패")
         userinfo = info_resp.json()
 
-    provider_id, email, name, email_verified = _parse_userinfo(provider, userinfo)
+    provider_id, email_addr, mbr_nm, email_verified = _parse_userinfo(provider, userinfo)
 
     # 3. DB 사용자 조회/생성 (이메일 미검증 시 자동 연동 차단)
-    user = await find_or_create_social_user(provider, provider_id, email, name, email_verified=email_verified)
+    user = await find_or_create_social_user(provider, provider_id, email_addr, mbr_nm, email_verified=email_verified)
 
     # 4. JWT 발급 후 프론트엔드로 리다이렉트
-    cev = 1 if user.get("company_email_verification_yn") == 'Y' else 0
-    token = create_token(user["id"], user["role"], cev=bool(cev))
+    cev = 1 if user.get("comp_email_vrfc_yn") == 'Y' else 0
+    token = create_token(user["mbr_id"], user["role_cd"], cev=bool(cev))
     redirect_params = urlencode({
         "token": token,
-        "uid": user["id"],
-        "name": user["name"] or "",
-        "role": user["role"],
+        "mbr_id": user["mbr_id"],
+        "mbr_nm": user["mbr_nm"] or "",
+        "role_cd": user["role_cd"],
         "cev": cev,
     })
     return RedirectResponse(url=f"{config.OAUTH_REDIRECT_BASE}/?{redirect_params}")
@@ -181,40 +181,42 @@ async def oauth_callback(provider: str, code: str = Query(...), state: str = Que
 # ━━ 회사 이메일 인증 ━━
 
 @router.post("/company-email/request")
-async def request_company_email(req: CompanyEmailReq, user_id: int = Depends(get_current_user)):
-    if not is_company_email(req.email):
+async def request_company_email(req: CompanyEmailReq, mbr_id: int = Depends(get_current_user)):
+    if not is_company_email(req.email_addr):
         raise HTTPException(status_code=400, detail="회사 이메일만 사용 가능합니다")
 
     # 이전 미인증 토큰 무효화
     await database.execute(
-        "UPDATE email_verifications SET verified_at=NOW() WHERE user_id=%s AND verified_at IS NULL",
-        (user_id,),
+        "UPDATE TEMAIL_VERIFICATION SET VERIFIED_DTM=NOW() WHERE MBR_ID=%s AND VERIFIED_DTM IS NULL",
+        (mbr_id,),
     )
     token = secrets.token_urlsafe(48)
     await database.execute(
-        "INSERT INTO email_verifications (user_id, email, token, expires_at) VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
-        (user_id, req.email, token),
+        "INSERT INTO TEMAIL_VERIFICATION (MBR_ID, EMAIL_ADDR, TOKEN_VAL, EXPIRES_DTM) VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
+        (mbr_id, req.email_addr, token),
     )
-    await send_verification_email(req.email, token)
+    await send_verification_email(req.email_addr, token)
     return {"ok": True, "message": "인증 이메일을 발송했습니다"}
 
 
 @router.get("/company-email/verify")
 async def verify_company_email(token: str = Query(...)):
     row = await database.fetch_one(
-        "SELECT id, user_id, email FROM email_verifications WHERE token=%s AND verified_at IS NULL AND expires_at > NOW()",
+        """SELECT VERIFY_ID AS verify_id, MBR_ID AS mbr_id, EMAIL_ADDR AS email_addr
+           FROM TEMAIL_VERIFICATION
+           WHERE TOKEN_VAL=%s AND VERIFIED_DTM IS NULL AND EXPIRES_DTM > NOW()""",
         (token,),
     )
     if not row:
         raise HTTPException(status_code=400, detail="유효하지 않거나 만료된 인증 링크")
 
     await database.execute(
-        "UPDATE email_verifications SET verified_at=NOW() WHERE id=%s",
-        (row["id"],),
+        "UPDATE TEMAIL_VERIFICATION SET VERIFIED_DTM=NOW() WHERE VERIFY_ID=%s",
+        (row["verify_id"],),
     )
     await database.execute(
-        "UPDATE users SET company_email=%s, company_email_verification_yn='Y' WHERE id=%s",
-        (row["email"], row["user_id"]),
+        "UPDATE TMEMBER SET COMP_EMAIL_ADDR=%s, COMP_EMAIL_VRFC_YN='Y' WHERE MBR_ID=%s",
+        (row["email_addr"], row["mbr_id"]),
     )
     return RedirectResponse(url=f"{config.OAUTH_REDIRECT_BASE}/?email_verified=1")
 
@@ -222,10 +224,14 @@ async def verify_company_email(token: str = Query(...)):
 # ━━ 내 정보 조회 ━━
 
 @router.get("/me")
-async def get_me(user_id: int = Depends(get_current_user)):
+async def get_me(mbr_id: int = Depends(get_current_user)):
     user = await database.fetch_one(
-        "SELECT id, email, name, role, login_auth_provider, company_email, company_email_verification_yn FROM users WHERE id=%s",
-        (user_id,),
+        """SELECT MBR_ID AS mbr_id, EMAIL_ADDR AS email_addr, MBR_NM AS mbr_nm,
+                  ROLE_CD AS role_cd, LOGIN_PROVIDER_CD AS login_provider_cd,
+                  COMP_EMAIL_ADDR AS comp_email_addr,
+                  COMP_EMAIL_VRFC_YN AS comp_email_vrfc_yn
+           FROM TMEMBER WHERE MBR_ID=%s""",
+        (mbr_id,),
     )
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")

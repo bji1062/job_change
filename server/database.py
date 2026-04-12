@@ -23,44 +23,54 @@ async def init_pool():
     await _ensure_tables()
 
 async def _ensure_tables():
-    """comparison_feed, popular_cases, daily_stats 테이블이 없으면 자동 생성."""
+    """TCOMPARISON_FEED, TPOPULAR_CASE, TDAILY_STAT 테이블이 없으면 자동 생성."""
     ddl = [
-        """CREATE TABLE IF NOT EXISTS comparison_feed (
-          id BIGINT AUTO_INCREMENT PRIMARY KEY,
-          comparison_id BIGINT NOT NULL,
-          job_category VARCHAR(30),
-          company_a_display VARCHAR(100),
-          type_a VARCHAR(20) NOT NULL,
-          company_b_display VARCHAR(100),
-          type_b VARCHAR(20) NOT NULL,
-          headline VARCHAR(300) NOT NULL,
-          detail VARCHAR(500),
-          metric_val VARCHAR(30),
-          metric_label VARCHAR(30),
-          metric_type VARCHAR(10) DEFAULT 'neu',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (comparison_id) REFERENCES comparisons(id) ON DELETE CASCADE,
-          INDEX idx_feed_created (created_at DESC)
+        """CREATE TABLE IF NOT EXISTS TCOMPARISON_FEED (
+          FEED_ID INT AUTO_INCREMENT PRIMARY KEY,
+          COMPARISON_ID INT NOT NULL,
+          JOB_CTGR_NM VARCHAR(30),
+          COMP_A_DISP_NM VARCHAR(100),
+          COMP_A_TP_CD VARCHAR(20) NOT NULL,
+          COMP_B_DISP_NM VARCHAR(100),
+          COMP_B_TP_CD VARCHAR(20) NOT NULL,
+          HEADLINE_CTNT VARCHAR(300) NOT NULL,
+          DETAIL_CTNT VARCHAR(500),
+          METRIC_VAL_CTNT VARCHAR(30),
+          METRIC_LABEL_NM VARCHAR(30),
+          METRIC_TYPE_CD VARCHAR(10) DEFAULT 'neu',
+          INS_ID INT,
+          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          MOD_ID INT,
+          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (COMPARISON_ID) REFERENCES TCOMPARISON(COMPARISON_ID) ON DELETE CASCADE,
+          INDEX idx_feed_ins (INS_DTM DESC)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-        """CREATE TABLE IF NOT EXISTS daily_stats (
-          stat_date DATE PRIMARY KEY,
-          comparison_count INT DEFAULT 0
+        """CREATE TABLE IF NOT EXISTS TDAILY_STAT (
+          STAT_DT DATE PRIMARY KEY,
+          COMPARISON_NO INT DEFAULT 0,
+          INS_ID INT,
+          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          MOD_ID INT,
+          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-        """CREATE TABLE IF NOT EXISTS popular_cases (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          case_type VARCHAR(20) NOT NULL,
-          title_a VARCHAR(50) NOT NULL,
-          type_a VARCHAR(20) NOT NULL,
-          sub_a VARCHAR(30),
-          title_b VARCHAR(50) NOT NULL,
-          type_b VARCHAR(20) NOT NULL,
-          sub_b VARCHAR(30),
-          points JSON,
-          view_count INT DEFAULT 0,
-          comparison_count INT DEFAULT 0,
-          is_active BOOLEAN DEFAULT TRUE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_active_count (is_active, comparison_count DESC)
+        """CREATE TABLE IF NOT EXISTS TPOPULAR_CASE (
+          CASE_ID INT AUTO_INCREMENT PRIMARY KEY,
+          CASE_TYPE_CD VARCHAR(20) NOT NULL,
+          TITLE_A_NM VARCHAR(50) NOT NULL,
+          TYPE_A_CD VARCHAR(20) NOT NULL,
+          SUB_A_NM VARCHAR(30),
+          TITLE_B_NM VARCHAR(50) NOT NULL,
+          TYPE_B_CD VARCHAR(20) NOT NULL,
+          SUB_B_NM VARCHAR(30),
+          POINTS_VAL JSON,
+          VIEW_NO INT DEFAULT 0,
+          COMPARISON_NO INT DEFAULT 0,
+          ACTIVE_YN BOOLEAN DEFAULT TRUE,
+          INS_ID INT,
+          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          MOD_ID INT,
+          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_active_comparison (ACTIVE_YN, COMPARISON_NO DESC)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     ]
     async with pool.acquire() as conn:

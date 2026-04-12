@@ -1,19 +1,19 @@
 from pydantic import BaseModel, EmailStr
 
 class RegisterReq(BaseModel):
-    email: EmailStr
+    email_addr: EmailStr
     password: str
-    name: str | None = None
+    mbr_nm: str | None = None
     job_nm: str
 
 class LoginReq(BaseModel):
-    email: EmailStr
+    email_addr: EmailStr
     password: str
 
 class TokenResp(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user_id: int
-    name: str | None = None
-    role: str = "user"
-    company_email_verified: bool = False
+    mbr_id: int
+    mbr_nm: str | None = None
+    role_cd: str = "user"
+    comp_email_vrfc_yn: bool = False
