@@ -1,27 +1,27 @@
 from pydantic import BaseModel
 
 class Job(BaseModel):
-    id: str
-    label: str
-    icon: str
-    scenario: str
+    job_cd: str
+    job_nm: str
+    icon_nm: str
+    scenario_cd: str
 
 class JobGroup(BaseModel):
-    groupLabel: str
-    color: str
+    job_group_nm: str
+    color_cd: str
     jobs: list[Job]
 
 class Profile(BaseModel):
-    id: str
-    type: str
-    desc: str
-    mapPri: str
-    vec: dict
-    jobFit: dict
+    profile_cd: str
+    profile_nm: str
+    profile_desc_ctnt: str
+    map_priority_cd: str
+    vec_val: dict
+    profile_job_fits: dict
 
 class ProfilerResultReq(BaseModel):
-    job_id: str | None = None
-    scores: dict
-    profile_id: str
-    similarity: float
-    answers: list[dict]
+    job_cd: str | None = None
+    scores_val: dict
+    profile_cd: str
+    similarity_val: float
+    answers_val: list[dict]

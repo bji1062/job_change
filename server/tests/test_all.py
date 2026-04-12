@@ -80,15 +80,15 @@ def test_convert_row_decimal():
 
 def test_register_req():
     from models.user import RegisterReq
-    r = RegisterReq(email="test@example.com", password="abc123", job_nm="백엔드 개발")
-    assert r.email == "test@example.com"
-    assert r.name is None
+    r = RegisterReq(email_addr="test@example.com", password="abc123", job_nm="백엔드 개발")
+    assert r.email_addr == "test@example.com"
+    assert r.mbr_nm is None
 
 
 def test_register_req_invalid_email():
     from models.user import RegisterReq
     try:
-        RegisterReq(email="not-email", password="abc", job_nm="x")
+        RegisterReq(email_addr="not-email", password="abc", job_nm="x")
         assert False, "should raise"
     except Exception:
         pass
@@ -96,51 +96,51 @@ def test_register_req_invalid_email():
 
 def test_token_resp_defaults():
     from models.user import TokenResp
-    t = TokenResp(access_token="abc", user_id=1, name="홍")
+    t = TokenResp(access_token="abc", mbr_id=1, mbr_nm="홍")
     assert t.token_type == "bearer"
 
 
 def test_comparison_req_minimal():
     from models.comparison import ComparisonReq
-    c = ComparisonReq(type_a="large", type_b="startup", priority_key="salary")
-    assert c.company_a_name is None
-    assert c.salary_rate is None
+    c = ComparisonReq(comp_a_tp_cd="large", comp_b_tp_cd="startup", priority_cd="salary")
+    assert c.comp_a_nm is None
+    assert c.salary_rate_val is None
 
 
 def test_comparison_req_full():
     from models.comparison import ComparisonReq
     c = ComparisonReq(
-        company_a_name="삼성", type_a="large", salary_a_min=5000,
-        company_b_name="토스", type_b="startup", salary_rate=20,
-        priority_key="salary", feed_points=["p1", "p2"]
+        comp_a_nm="삼성", comp_a_tp_cd="large", salary_a_min_amt=5000,
+        comp_b_nm="토스", comp_b_tp_cd="startup", salary_rate_val=20,
+        priority_cd="salary", feed_points_val=["p1", "p2"]
     )
-    assert c.feed_points == ["p1", "p2"]
+    assert c.feed_points_val == ["p1", "p2"]
 
 
 def test_profiler_result_req():
     from models.profiler import ProfilerResultReq
     p = ProfilerResultReq(
-        scores={"compensation": 8}, profile_id="balanced",
-        similarity=0.85, answers=[{"q": 1, "choice": "a"}]
+        scores_val={"compensation": 8}, profile_cd="balanced",
+        similarity_val=0.85, answers_val=[{"q": 1, "choice": "a"}]
     )
-    assert p.job_id is None
+    assert p.job_cd is None
 
 
 def test_benefit_upsert_defaults():
     from models.company import BenefitUpsert
-    b = BenefitUpsert(key="meal", name="식대", val=180, cat="work_env")
-    assert b.badge == "est"
-    assert b.sortOrder == 0
+    b = BenefitUpsert(benefit_cd="meal", benefit_nm="식대", benefit_amt=180, benefit_ctgr_cd="work_env")
+    assert b.badge_cd == "est"
+    assert b.sort_order_no == 0
 
 
 def test_popular_case_defaults():
     from models.landing import PopularCase
     pc = PopularCase(
-        id=1, case_type="company", title_a="삼성", type_a="large",
-        title_b="토스", type_b="startup"
+        case_id=1, case_type_cd="company", title_a_nm="삼성", type_a_cd="large",
+        title_b_nm="토스", type_b_cd="startup"
     )
-    assert pc.view_count == 0
-    assert pc.comparison_count == 0
+    assert pc.view_no == 0
+    assert pc.comparison_no == 0
 
 
 # ━━ FASTAPI INTEGRATION ━━
@@ -160,10 +160,10 @@ def test_protected_endpoints_require_auth():
     client = TestClient(main.app, raise_server_exceptions=False)
     assert client.get("/api/v1/comparisons").status_code in (401, 403)
     assert client.post("/api/v1/comparisons", json={
-        "type_a": "large", "type_b": "startup", "priority_key": "salary"
+        "comp_a_tp_cd": "large", "comp_b_tp_cd": "startup", "priority_cd": "salary"
     }).status_code in (401, 403)
     assert client.post("/api/v1/profiler/results", json={
-        "scores": {}, "profile_id": "b", "similarity": 0.5, "answers": []
+        "scores_val": {}, "profile_cd": "b", "similarity_val": 0.5, "answers_val": []
     }).status_code in (401, 403)
 
 
@@ -173,7 +173,7 @@ def test_validation_errors():
     client = TestClient(main.app, raise_server_exceptions=False)
     assert client.get("/api/v1/companies/search").status_code == 422
     assert client.post("/api/v1/auth/register", json={
-        "email": "invalid", "password": "abc", "job_nm": "dev"
+        "email_addr": "invalid", "password": "abc", "job_nm": "dev"
     }).status_code == 422
     assert client.post("/api/v1/auth/login", json={}).status_code == 422
 

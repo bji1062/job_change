@@ -19,10 +19,10 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_ctx.verify(plain, hashed)
 
 
-def create_token(user_id: int, role: str = "user", cev: bool = False) -> str:
+def create_token(mbr_id: int, role_cd: str = "user", cev: bool = False) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=config.JWT_EXPIRE_HOURS)
     return jwt.encode(
-        {"sub": str(user_id), "role": role, "cev": cev, "exp": exp},
+        {"sub": str(mbr_id), "role_cd": role_cd, "cev": cev, "exp": exp},
         config.JWT_SECRET,
         algorithm="HS256",
     )
@@ -44,71 +44,75 @@ def decode_token_full(token: str) -> dict | None:
 
 
 async def find_or_create_social_user(
-    provider: str, provider_id: str, email: str | None, name: str | None,
+    provider_cd: str, provider_user_id: str, email_addr: str | None, social_nm: str | None,
     email_verified: bool = False
 ) -> dict:
-    """소셜 로그인 사용자 조회 또는 생성. 반환: {id, email, name, role, company_email_verification_yn}"""
+    """소셜 로그인 사용자 조회 또는 생성. 반환: {mbr_id, email_addr, mbr_nm, role_cd, comp_email_vrfc_yn}"""
     # 1. TSOCIAL_ACCOUNT에서 기존 연동 조회
     sa = await database.fetch_one(
-        "SELECT MBR_ID AS user_id FROM TSOCIAL_ACCOUNT WHERE PROVIDER_CD=%s AND PROVIDER_USER_ID=%s",
-        (provider, provider_id),
+        "SELECT MBR_ID AS mbr_id FROM TSOCIAL_ACCOUNT WHERE PROVIDER_CD=%s AND PROVIDER_USER_ID=%s",
+        (provider_cd, provider_user_id),
     )
     if sa:
         user = await database.fetch_one(
-            "SELECT MBR_ID AS id, EMAIL_ADDR AS email, MBR_NM AS name, ROLE_CD AS role, COMP_EMAIL_VRFC_YN AS company_email_verification_yn FROM TMEMBER WHERE MBR_ID=%s",
-            (sa["user_id"],),
+            """SELECT MBR_ID AS mbr_id, EMAIL_ADDR AS email_addr, MBR_NM AS mbr_nm,
+                      ROLE_CD AS role_cd, COMP_EMAIL_VRFC_YN AS comp_email_vrfc_yn
+               FROM TMEMBER WHERE MBR_ID=%s""",
+            (sa["mbr_id"],),
         )
         if user:
             return {
-                "id": user["id"],
-                "email": user["email"],
-                "name": user["name"],
-                "role": user.get("role") or "user",
-                "company_email_verification_yn": user.get("company_email_verification_yn", "N"),
+                "mbr_id": user["mbr_id"],
+                "email_addr": user["email_addr"],
+                "mbr_nm": user["mbr_nm"],
+                "role_cd": user.get("role_cd") or "user",
+                "comp_email_vrfc_yn": user.get("comp_email_vrfc_yn", "N"),
             }
 
     # 2. 이메일로 기존 사용자 조회 (이메일이 검증된 경우만 자동 연동)
-    if email and email_verified:
+    if email_addr and email_verified:
         user = await database.fetch_one(
-            "SELECT MBR_ID AS id, EMAIL_ADDR AS email, MBR_NM AS name, ROLE_CD AS role, COMP_EMAIL_VRFC_YN AS company_email_verification_yn FROM TMEMBER WHERE EMAIL_ADDR=%s",
-            (email,),
+            """SELECT MBR_ID AS mbr_id, EMAIL_ADDR AS email_addr, MBR_NM AS mbr_nm,
+                      ROLE_CD AS role_cd, COMP_EMAIL_VRFC_YN AS comp_email_vrfc_yn
+               FROM TMEMBER WHERE EMAIL_ADDR=%s""",
+            (email_addr,),
         )
         if user:
             # TSOCIAL_ACCOUNT 연동 추가
             await database.execute(
                 "INSERT INTO TSOCIAL_ACCOUNT (MBR_ID, PROVIDER_CD, PROVIDER_USER_ID, EMAIL_ADDR, SOCIAL_NM) VALUES (%s,%s,%s,%s,%s)",
-                (user["id"], provider, provider_id, email, name),
+                (user["mbr_id"], provider_cd, provider_user_id, email_addr, social_nm),
             )
             return {
-                "id": user["id"],
-                "email": user["email"],
-                "name": user["name"],
-                "role": user.get("role") or "user",
-                "company_email_verification_yn": user.get("company_email_verification_yn", "N"),
+                "mbr_id": user["mbr_id"],
+                "email_addr": user["email_addr"],
+                "mbr_nm": user["mbr_nm"],
+                "role_cd": user.get("role_cd") or "user",
+                "comp_email_vrfc_yn": user.get("comp_email_vrfc_yn", "N"),
             }
 
     # 3. 신규 사용자 생성
-    use_email = email or f"{provider}_{provider_id}@social.local"
-    user_id = await database.execute(
+    use_email = email_addr or f"{provider_cd}_{provider_user_id}@social.local"
+    mbr_id = await database.execute(
         "INSERT INTO TMEMBER (EMAIL_ADDR, PWD_HASH_VAL, MBR_NM, LOGIN_PROVIDER_CD) VALUES (%s, NULL, %s, %s)",
-        (use_email, name, provider),
+        (use_email, social_nm, provider_cd),
     )
     await database.execute(
         "INSERT INTO TSOCIAL_ACCOUNT (MBR_ID, PROVIDER_CD, PROVIDER_USER_ID, EMAIL_ADDR, SOCIAL_NM) VALUES (%s,%s,%s,%s,%s)",
-        (user_id, provider, provider_id, email, name),
+        (mbr_id, provider_cd, provider_user_id, email_addr, social_nm),
     )
     return {
-        "id": user_id,
-        "email": use_email,
-        "name": name,
-        "role": "user",
-        "company_email_verification_yn": "N",
+        "mbr_id": mbr_id,
+        "email_addr": use_email,
+        "mbr_nm": social_nm,
+        "role_cd": "user",
+        "comp_email_vrfc_yn": "N",
     }
 
 
-def is_company_email(email: str) -> bool:
+def is_company_email(email_addr: str) -> bool:
     """개인 이메일 도메인이 아니면 회사 이메일로 판단"""
-    domain = email.rsplit("@", 1)[-1].lower()
+    domain = email_addr.rsplit("@", 1)[-1].lower()
     return domain not in config.PERSONAL_DOMAINS
 
 

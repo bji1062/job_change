@@ -17,18 +17,18 @@ from services.auth_service import create_token
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _user_token(user_id: int = 1, cev: bool = False) -> dict:
+def _user_token(mbr_id: int = 1, cev: bool = False) -> dict:
     """Return Authorization header with regular user JWT."""
-    token = create_token(user_id, role="user", cev=cev)
+    token = create_token(mbr_id, role_cd="user", cev=cev)
     return {"Authorization": f"Bearer {token}"}
 
-def _verified_user_token(user_id: int = 1) -> dict:
+def _verified_user_token(mbr_id: int = 1) -> dict:
     """Return Authorization header with company-email-verified user JWT."""
-    return _user_token(user_id, cev=True)
+    return _user_token(mbr_id=mbr_id, cev=True)
 
-def _admin_token(user_id: int = 99) -> dict:
+def _admin_token(mbr_id: int = 99) -> dict:
     """Return Authorization header with admin JWT."""
-    token = create_token(user_id, role="admin")
+    token = create_token(mbr_id, role_cd="admin")
     return {"Authorization": f"Bearer {token}"}
 
 def _client():
@@ -110,19 +110,15 @@ def test_oauth_me_invalid_token_returns_401():
     assert r.status_code == 401
 
 
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 1, "email": "user@test.com", "name": "Tester",
-    "role": "user", "login_auth_provider": "kakao",
-    "company_email": None, "company_email_verification_yn": "N",
-})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"mbr_id": 1, "email_addr": "user@test.com", "mbr_nm": "Tester", "role_cd": "user", "login_provider_cd": "kakao", "comp_email_addr": None, "comp_email_vrfc_yn": "N"})
 def test_oauth_me_with_valid_token(mock_fetch):
     """GET /oauth/me with valid token returns 200 and user info."""
     c = _client()
-    r = c.get("/api/v1/oauth/me", headers=_user_token(user_id=1))
+    r = c.get("/api/v1/oauth/me", headers=_user_token(mbr_id=1))
     assert r.status_code == 200
     data = r.json()
-    assert data["id"] == 1
-    assert data["email"] == "user@test.com"
+    assert data["mbr_id"] == 1
+    assert data["email_addr"] == "user@test.com"
 
 
 # ━━ COMPANY EMAIL REQUEST ━━
@@ -130,7 +126,7 @@ def test_oauth_me_with_valid_token(mock_fetch):
 def test_company_email_request_without_token_returns_403():
     """POST /oauth/company-email/request without token returns 403."""
     c = _client()
-    r = c.post("/api/v1/oauth/company-email/request", json={"email": "user@samsung.com"})
+    r = c.post("/api/v1/oauth/company-email/request", json={"email_addr": "user@samsung.com"})
     assert r.status_code == 403
 
 
@@ -139,8 +135,8 @@ def test_company_email_request_personal_email_returns_400():
     c = _client()
     r = c.post(
         "/api/v1/oauth/company-email/request",
-        json={"email": "user@gmail.com"},
-        headers=_user_token(user_id=1),
+        json={"email_addr": "user@gmail.com"},
+        headers=_user_token(mbr_id=1),
     )
     assert r.status_code == 400
     assert "회사 이메일" in r.json()["detail"]
@@ -153,8 +149,8 @@ def test_company_email_request_success(mock_exec, mock_send):
     c = _client()
     r = c.post(
         "/api/v1/oauth/company-email/request",
-        json={"email": "user@samsung.com"},
-        headers=_user_token(user_id=1),
+        json={"email_addr": "user@samsung.com"},
+        headers=_user_token(mbr_id=1),
     )
     assert r.status_code == 200
     assert r.json()["ok"] is True
@@ -169,8 +165,8 @@ def test_company_email_rejects_naver(mock_exec, mock_send):
     c = _client()
     r = c.post(
         "/api/v1/oauth/company-email/request",
-        json={"email": "user@naver.com"},
-        headers=_user_token(user_id=1),
+        json={"email_addr": "user@naver.com"},
+        headers=_user_token(mbr_id=1),
     )
     assert r.status_code == 400
 
@@ -188,7 +184,7 @@ def test_company_email_verify_invalid_token(mock_fetch):
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 10, "user_id": 1, "email": "user@samsung.com",
+    "verify_id": 10, "mbr_id": 1, "email_addr": "user@samsung.com",
 })
 def test_company_email_verify_success(mock_fetch, mock_exec):
     """GET /oauth/company-email/verify with valid token updates user and redirects."""
@@ -212,7 +208,7 @@ def test_benefits_upsert_no_token_returns_403():
     c = _client()
     r = c.put(
         "/api/v1/companies/1/benefits",
-        json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
+        json=[{"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100, "benefit_ctgr_cd": "work_env"}],
     )
     assert r.status_code == 403
 
@@ -222,16 +218,15 @@ def test_benefits_upsert_unverified_user_returns_403():
     c = _client()
     r = c.put(
         "/api/v1/companies/1/benefits",
-        json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
-        headers=_user_token(user_id=1, cev=False),
+        json=[{"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100, "benefit_ctgr_cd": "work_env"}],
+        headers=_user_token(mbr_id=1, cev=False),
     )
     assert r.status_code == 403
     assert "이메일 인증" in r.json()["detail"]
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"key": "meal", "name": "Meal", "val": 100.0, "cat": "work_env",
-     "badge": "est", "note": None, "qual": 0, "qualText": None},
+    {"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100.0, "benefit_ctgr_cd": "work_env", "badge_cd": "est", "note_ctnt": None, "qual_yn": 0, "qual_desc_ctnt": None},
 ])
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
@@ -240,16 +235,15 @@ def test_benefits_upsert_verified_user_succeeds(mock_one, mock_exec, mock_all):
     c = _client()
     r = c.put(
         "/api/v1/companies/1/benefits",
-        json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
-        headers=_verified_user_token(user_id=1),
+        json=[{"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100, "benefit_ctgr_cd": "work_env"}],
+        headers=_verified_user_token(mbr_id=1),
     )
     assert r.status_code == 200
     assert r.json()["count"] == 1
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"key": "meal", "name": "Meal", "val": 100.0, "cat": "work_env",
-     "badge": "est", "note": None, "qual": 0, "qualText": None},
+    {"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100.0, "benefit_ctgr_cd": "work_env", "badge_cd": "est", "note_ctnt": None, "qual_yn": 0, "qual_desc_ctnt": None},
 ])
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
@@ -258,7 +252,7 @@ def test_benefits_upsert_admin_succeeds(mock_one, mock_exec, mock_all):
     c = _client()
     r = c.put(
         "/api/v1/companies/1/benefits",
-        json=[{"key": "meal", "name": "Meal", "val": 100, "cat": "work_env"}],
+        json=[{"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100, "benefit_ctgr_cd": "work_env"}],
         headers=_admin_token(),
     )
     assert r.status_code == 200
@@ -267,46 +261,40 @@ def test_benefits_upsert_admin_succeeds(mock_one, mock_exec, mock_all):
 
 # ━━ AUTH LOGIN COMPAT ━━
 
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 1, "password_hash": "$2b$12$test_hash", "name": "Tester",
-    "role": "user", "company_email_verification_yn": "N",
-})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"mbr_id": 1, "pwd_hash_val": "$2b$12$test_hash", "mbr_nm": "Tester", "role_cd": "user", "comp_email_vrfc_yn": "N"})
 @patch("routers.auth.verify_password", return_value=True)
 def test_login_email_password_works(mock_verify, mock_fetch):
     """POST /auth/login with correct email/password returns token."""
     c = _client()
-    r = c.post("/api/v1/auth/login", json={"email": "user@test.com", "password": "pass123"})
+    r = c.post("/api/v1/auth/login", json={"email_addr": "user@test.com", "password": "pass123"})
     assert r.status_code == 200
     data = r.json()
     assert "access_token" in data
-    assert data["user_id"] == 1
-    assert "company_email_verified" in data
+    assert data["mbr_id"] == 1
+    assert "comp_email_vrfc_yn" in data
 
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 2, "password_hash": None, "name": "Social User",
-    "role": "user", "company_email_verification_yn": "N",
+    "mbr_id": 2, "pwd_hash_val": None, "mbr_nm": "Social User",
+    "role_cd": "user", "comp_email_vrfc_yn": "N",
 })
 def test_login_social_account_no_password_returns_401(mock_fetch):
-    """POST /auth/login for social account (password_hash=NULL) returns 401."""
+    """POST /auth/login for social account (pwd_hash_val=NULL) returns 401."""
     c = _client()
-    r = c.post("/api/v1/auth/login", json={"email": "social@test.com", "password": "anything"})
+    r = c.post("/api/v1/auth/login", json={"email_addr": "social@test.com", "password": "anything"})
     assert r.status_code == 401
     assert "Invalid credentials" in r.json()["detail"]
 
 
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 1, "password_hash": "$2b$12$test_hash", "name": "Verified",
-    "role": "user", "company_email_verification_yn": "Y",
-})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"mbr_id": 1, "pwd_hash_val": "$2b$12$test_hash", "mbr_nm": "Verified", "role_cd": "user", "comp_email_vrfc_yn": "Y"})
 @patch("routers.auth.verify_password", return_value=True)
 def test_login_returns_cev_true_when_verified(mock_verify, mock_fetch):
-    """POST /auth/login includes company_email_verified=true in response."""
+    """POST /auth/login includes comp_email_vrfc_yn=true in response."""
     c = _client()
-    r = c.post("/api/v1/auth/login", json={"email": "v@samsung.com", "password": "pass"})
+    r = c.post("/api/v1/auth/login", json={"email_addr": "v@samsung.com", "password": "pass"})
     assert r.status_code == 200
     data = r.json()
-    assert data["company_email_verified"] is True
+    assert data["comp_email_vrfc_yn"] is True
 
 
 # ━━ FRONTEND PATH VALIDATION ━━
@@ -380,7 +368,7 @@ def test_parse_userinfo_google():
 def test_oauth_me_user_not_found_returns_404(mock_fetch):
     """GET /oauth/me returns 404 if user deleted from DB."""
     c = _client()
-    r = c.get("/api/v1/oauth/me", headers=_user_token(user_id=999))
+    r = c.get("/api/v1/oauth/me", headers=_user_token(mbr_id=999))
     assert r.status_code == 404
 
 
@@ -400,7 +388,7 @@ def test_company_email_request_invalid_email_format():
     c = _client()
     r = c.post(
         "/api/v1/oauth/company-email/request",
-        json={"email": "not-an-email"},
+        json={"email_addr": "not-an-email"},
         headers=_user_token(),
     )
     assert r.status_code == 422
@@ -413,7 +401,7 @@ def test_company_email_request_custom_domain_succeeds(mock_exec, mock_send):
     c = _client()
     r = c.post(
         "/api/v1/oauth/company-email/request",
-        json={"email": "dev@toss.im"},
+        json={"email_addr": "dev@toss.im"},
         headers=_user_token(),
     )
     assert r.status_code == 200
@@ -430,26 +418,23 @@ def test_company_email_verify_missing_token_param():
 # ━━ TOKEN RESP MODEL ━━
 
 def test_token_resp_includes_cev_field():
-    """TokenResp model includes company_email_verified field with default False."""
+    """TokenResp model includes comp_email_vrfc_yn field with default False."""
     from models.user import TokenResp
-    t = TokenResp(access_token="tok", user_id=1, name="A", company_email_verified=True)
-    assert t.company_email_verified is True
-    t2 = TokenResp(access_token="tok", user_id=2, name="B")
-    assert t2.company_email_verified is False
+    t = TokenResp(access_token="tok", mbr_id=1, mbr_nm="A", comp_email_vrfc_yn=True)
+    assert t.comp_email_vrfc_yn is True
+    t2 = TokenResp(access_token="tok", mbr_id=2, mbr_nm="B")
+    assert t2.comp_email_vrfc_yn is False
 
 
 # ━━ LOGIN: WRONG PASSWORD ━━
 
-@patch("database.fetch_one", new_callable=AsyncMock, return_value={
-    "id": 1, "password_hash": "$2b$12$somehash", "name": "User",
-    "role": "user", "company_email_verification_yn": "N",
-})
+@patch("database.fetch_one", new_callable=AsyncMock, return_value={"mbr_id": 1, "pwd_hash_val": "$2b$12$somehash", "mbr_nm": "User", "role_cd": "user", "comp_email_vrfc_yn": "N"})
 @patch("routers.auth.verify_password", return_value=False)
 def test_login_wrong_password_returns_401(mock_verify, mock_fetch):
     """POST /auth/login with wrong password returns 401."""
     c = _client()
     r = c.post("/api/v1/auth/login", json={
-        "email": "user@example.com",
+        "email_addr": "user@example.com",
         "password": "wrong_password",
     })
     assert r.status_code == 401
@@ -476,7 +461,7 @@ def test_is_company_email_accepts_corporate():
 def test_create_token_includes_cev_claim():
     """create_token with cev=True sets cev=True in JWT payload."""
     from services.auth_service import create_token, decode_token_full
-    token = create_token(1, role="user", cev=True)
+    token = create_token(1, role_cd="user", cev=True)
     payload = decode_token_full(token)
     assert payload is not None
     assert payload["cev"] is True
@@ -485,7 +470,7 @@ def test_create_token_includes_cev_claim():
 def test_create_token_cev_defaults_false():
     """create_token without cev sets cev=False in JWT payload."""
     from services.auth_service import create_token, decode_token_full
-    token = create_token(1, role="user")
+    token = create_token(1, role_cd="user")
     payload = decode_token_full(token)
     assert payload is not None
     assert payload["cev"] is False

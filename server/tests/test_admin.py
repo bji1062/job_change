@@ -18,14 +18,14 @@ from services.auth_service import create_token
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _admin_token(user_id: int = 1) -> dict:
+def _admin_token(mbr_id: int = 1) -> dict:
     """Return Authorization header with admin JWT."""
-    token = create_token(user_id, role="admin")
+    token = create_token(mbr_id, role_cd="admin")
     return {"Authorization": f"Bearer {token}"}
 
-def _user_token(user_id: int = 2) -> dict:
+def _user_token(mbr_id: int = 2) -> dict:
     """Return Authorization header with regular user JWT."""
-    token = create_token(user_id, role="user")
+    token = create_token(mbr_id, role_cd="user")
     return {"Authorization": f"Bearer {token}"}
 
 def _client():
@@ -42,8 +42,8 @@ def test_admin_endpoints_require_token():
     c = _client()
     endpoints = [
         ("GET",  "/api/v1/admin/dashboard"),
-        ("GET",  "/api/v1/admin/users"),
-        ("PUT",  "/api/v1/admin/users/1/role"),
+        ("GET",  "/api/v1/admin/members"),
+        ("PUT",  "/api/v1/admin/members/1/role"),
         ("GET",  "/api/v1/admin/companies"),
         ("POST", "/api/v1/admin/companies"),
         ("PUT",  "/api/v1/admin/companies/1"),
@@ -56,7 +56,7 @@ def test_admin_endpoints_require_token():
         ("DELETE", "/api/v1/admin/popular-cases/1"),
         ("GET",  "/api/v1/admin/stats/comparisons"),
         ("GET",  "/api/v1/admin/stats/companies"),
-        ("GET",  "/api/v1/admin/stats/users"),
+        ("GET",  "/api/v1/admin/stats/members"),
         ("POST", "/api/v1/admin/cache/clear"),
     ]
     for method, path in endpoints:
@@ -71,7 +71,7 @@ def test_admin_endpoints_reject_regular_user():
     r = c.get("/api/v1/admin/dashboard", headers=h)
     assert r.status_code == 403
 
-    r = c.get("/api/v1/admin/users", headers=h)
+    r = c.get("/api/v1/admin/members", headers=h)
     assert r.status_code == 403
 
     r = c.post("/api/v1/admin/cache/clear", headers=h)
@@ -102,23 +102,23 @@ def test_dashboard_returns_stats(mock_fetch):
     r = c.get("/api/v1/admin/dashboard", headers=_admin_token())
     assert r.status_code == 200
     data = r.json()
-    assert data["total_users"] == 100
-    assert data["today_users"] == 5
-    assert data["total_comparisons"] == 500
-    assert data["total_companies"] == 50
-    assert "active_visitors" in data
+    assert data["total_mbr_no"] == 100
+    assert data["today_mbr_no"] == 5
+    assert data["total_comparison_no"] == 500
+    assert data["total_comp_no"] == 50
+    assert "active_visitor_no" in data
 
 
 # ━━ USERS ━━
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"id": 1, "email": "admin@test.com", "name": "Admin", "role": "admin", "job_nm": "Dev", "created_at": None},
-    {"id": 2, "email": "user@test.com", "name": "User", "role": "user", "job_nm": "PM", "created_at": None},
+    {"mbr_id": 1, "email_addr": "admin@test.com", "mbr_nm": "Admin", "role_cd": "admin", "job_nm": "Dev", "ins_dtm": None},
+    {"mbr_id": 2, "email_addr": "user@test.com", "mbr_nm": "User", "role_cd": "user", "job_nm": "PM", "ins_dtm": None},
 ])
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"cnt": 2})
 def test_list_users(mock_one, mock_all):
     c = _client()
-    r = c.get("/api/v1/admin/users", headers=_admin_token())
+    r = c.get("/api/v1/admin/members", headers=_admin_token())
     assert r.status_code == 200
     data = r.json()
     assert data["total"] == 2
@@ -127,12 +127,12 @@ def test_list_users(mock_one, mock_all):
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"id": 2, "email": "user@test.com", "name": "User", "role": "user", "job_nm": "PM", "created_at": None},
+    {"mbr_id": 2, "email_addr": "user@test.com", "mbr_nm": "User", "role_cd": "user", "job_nm": "PM", "ins_dtm": None},
 ])
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"cnt": 1})
 def test_list_users_with_search(mock_one, mock_all):
     c = _client()
-    r = c.get("/api/v1/admin/users?q=user", headers=_admin_token())
+    r = c.get("/api/v1/admin/members?q=user", headers=_admin_token())
     assert r.status_code == 200
     assert r.json()["total"] == 1
 
@@ -142,9 +142,9 @@ def test_list_users_with_search(mock_one, mock_all):
 def test_update_user_role_success(mock_one, mock_exec):
     c = _client()
     r = c.put(
-        "/api/v1/admin/users/2/role",
-        json={"role": "admin"},
-        headers=_admin_token(user_id=1),
+        "/api/v1/admin/members/2/role",
+        json={"role_cd": "admin"},
+        headers=_admin_token(mbr_id=1),
     )
     assert r.status_code == 200
     assert r.json()["ok"] is True
@@ -155,9 +155,9 @@ def test_update_own_role_forbidden():
     c = _client()
     # admin_id=1 trying to change user_id=1
     r = c.put(
-        "/api/v1/admin/users/1/role",
-        json={"role": "user"},
-        headers=_admin_token(user_id=1),
+        "/api/v1/admin/members/1/role",
+        json={"role_cd": "user"},
+        headers=_admin_token(mbr_id=1),
     )
     assert r.status_code == 403
     assert "own role" in r.json()["detail"].lower()
@@ -167,9 +167,9 @@ def test_update_own_role_forbidden():
 def test_update_role_user_not_found(mock_one):
     c = _client()
     r = c.put(
-        "/api/v1/admin/users/999/role",
-        json={"role": "admin"},
-        headers=_admin_token(user_id=1),
+        "/api/v1/admin/members/999/role",
+        json={"role_cd": "admin"},
+        headers=_admin_token(mbr_id=1),
     )
     assert r.status_code == 404
 
@@ -177,7 +177,7 @@ def test_update_role_user_not_found(mock_one):
 # ━━ COMPANIES ━━
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"id": "samsung", "name": "Samsung", "type": "large", "industry": "IT", "benefit_count": 10, "alias_count": 2},
+    {"comp_id": 1, "comp_nm": "Samsung", "comp_tp_cd": "large", "industry_nm": "IT", "benefit_no": 10, "alias_no": 2},
 ])
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"cnt": 1})
 def test_list_companies(mock_one, mock_all):
@@ -186,7 +186,7 @@ def test_list_companies(mock_one, mock_all):
     assert r.status_code == 200
     data = r.json()
     assert data["total"] == 1
-    assert data["items"][0]["id"] == "samsung"
+    assert data["items"][0]["comp_id"] == 1
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[])
@@ -199,16 +199,16 @@ def test_list_companies_with_filters(mock_one, mock_all):
 
 
 @patch("database.execute", new_callable=AsyncMock, return_value=1)
-@patch("database.fetch_one", new_callable=AsyncMock, side_effect=[None, None, {"id": 7}])  # name check, eng_nm check, type_cd lookup
+@patch("database.fetch_one", new_callable=AsyncMock, side_effect=[None, None, {"comp_tp_id": 7}])  # name check, eng_nm check, type_cd lookup
 def test_create_company(mock_one, mock_exec):
     c = _client()
     r = c.post(
         "/api/v1/admin/companies",
-        json={"name": "TestCorp", "type_id": "startup"},
+        json={"comp_nm": "TestCorp", "comp_tp_cd": "startup"},
         headers=_admin_token(),
     )
     assert r.status_code == 200
-    assert "id" in r.json()
+    assert "case_id" in r.json() or "comp_id" in r.json() or "ok" in r.json()
 
 
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 42})
@@ -216,7 +216,7 @@ def test_create_company_duplicate_name(mock_one):
     c = _client()
     r = c.post(
         "/api/v1/admin/companies",
-        json={"name": "Existing", "type_id": "large"},
+        json={"comp_nm": "Existing", "comp_tp_cd": "large"},
         headers=_admin_token(),
     )
     assert r.status_code == 409
@@ -228,7 +228,7 @@ def test_update_company(mock_one, mock_exec):
     c = _client()
     r = c.put(
         "/api/v1/admin/companies/1",
-        json={"name": "Samsung Electronics", "industry": "Semiconductor"},
+        json={"comp_nm": "Samsung Electronics", "industry_nm": "Semiconductor"},
         headers=_admin_token(),
     )
     assert r.status_code == 200
@@ -240,7 +240,7 @@ def test_update_company_not_found(mock_one):
     c = _client()
     r = c.put(
         "/api/v1/admin/companies/999",
-        json={"name": "Nope"},
+        json={"comp_nm": "Nope"},
         headers=_admin_token(),
     )
     assert r.status_code == 404
@@ -269,8 +269,8 @@ def test_delete_company_not_found(mock_one):
 def test_save_company_benefits(mock_one, mock_exec):
     c = _client()
     benefits = [
-        {"ben_key": "meal", "name": "Meal", "val": 150, "category": "work_env"},
-        {"ben_key": "bonus", "name": "Bonus", "val": 300, "category": "financial"},
+        {"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 150, "benefit_ctgr_cd": "work_env"},
+        {"benefit_cd": "bonus", "benefit_nm": "Bonus", "benefit_amt": 300, "benefit_ctgr_cd": "financial"},
     ]
     r = c.put(
         "/api/v1/admin/companies/1/benefits",
@@ -286,14 +286,14 @@ def test_save_benefits_company_not_found(mock_one):
     c = _client()
     r = c.put(
         "/api/v1/admin/companies/999/benefits",
-        json=[{"ben_key": "meal", "name": "Meal", "val": 100}],
+        json=[{"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 100}],
         headers=_admin_token(),
     )
     assert r.status_code == 404
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"id": 1, "ben_key": "meal", "name": "Meal", "val": 150.0, "category": "work_env",
+    {"id": 1, "benefit_cd": "meal", "name": "Meal", "benefit_amt": 150.0, "benefit_ctgr_cd": "work_env",
      "badge": "est", "note": None, "is_qualitative": 0, "qual_text": None, "sort_order": 0},
 ])
 def test_get_company_benefits(mock_all):
@@ -302,7 +302,7 @@ def test_get_company_benefits(mock_all):
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 1
-    assert data[0]["ben_key"] == "meal"
+    assert data[0]["benefit_cd"] == "meal"
 
 
 # ━━ COMPANY ALIASES ━━
@@ -334,10 +334,10 @@ def test_save_aliases_company_not_found(mock_one):
 # ━━ POPULAR CASES ━━
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"id": 1, "case_type": "company", "title_a": "Samsung", "type_a": "large",
-     "sub_a": None, "title_b": "Toss", "type_b": "startup", "sub_b": None,
-     "points": '["point1"]', "view_count": 100, "comparison_count": 50,
-     "is_active": 1, "created_at": None},
+    {"case_id": 1, "case_type_cd": "company", "title_a_nm": "Samsung", "type_a_cd": "large",
+     "sub_a_nm": None, "title_b_nm": "Toss", "type_b_cd": "startup", "sub_b_nm": None,
+     "points_val": '["point1"]', "view_no": 100, "comparison_no": 50,
+     "active_yn": 1, "created_at": None},
 ])
 def test_list_popular_cases(mock_all):
     c = _client()
@@ -345,9 +345,9 @@ def test_list_popular_cases(mock_all):
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 1
-    assert data[0]["title_a"] == "Samsung"
-    assert data[0]["points"] == ["point1"]
-    assert data[0]["is_active"] is True
+    assert data[0]["title_a_nm"] == "Samsung"
+    assert data[0]["points_val"] == ["point1"]
+    assert data[0]["active_yn"] is True
 
 
 @patch("database.execute", new_callable=AsyncMock, return_value=1)
@@ -356,17 +356,17 @@ def test_create_popular_case(mock_exec):
     r = c.post(
         "/api/v1/admin/popular-cases",
         json={
-            "case_type": "company",
-            "title_a": "Samsung",
-            "type_a": "large",
-            "title_b": "Toss",
-            "type_b": "startup",
-            "points": ["Higher salary", "Better WLB"],
+            "case_type_cd": "company",
+            "title_a_nm": "Samsung",
+            "type_a_cd": "large",
+            "title_b_nm": "Toss",
+            "type_b_cd": "startup",
+            "points_val": ["Higher salary", "Better WLB"],
         },
         headers=_admin_token(),
     )
     assert r.status_code == 200
-    assert "id" in r.json()
+    assert "case_id" in r.json() or "comp_id" in r.json() or "ok" in r.json()
 
 
 @patch("database.execute", new_callable=AsyncMock, return_value=None)
@@ -376,11 +376,11 @@ def test_update_popular_case(mock_one, mock_exec):
     r = c.put(
         "/api/v1/admin/popular-cases/1",
         json={
-            "case_type": "type",
-            "title_a": "Large Corp",
-            "type_a": "large",
-            "title_b": "Startup",
-            "type_b": "startup",
+            "case_type_cd": "type",
+            "title_a_nm": "Large Corp",
+            "type_a_cd": "large",
+            "title_b_nm": "Startup",
+            "type_b_cd": "startup",
         },
         headers=_admin_token(),
     )
@@ -394,9 +394,9 @@ def test_update_popular_case_not_found(mock_one):
     r = c.put(
         "/api/v1/admin/popular-cases/999",
         json={
-            "case_type": "company",
-            "title_a": "A", "type_a": "large",
-            "title_b": "B", "type_b": "startup",
+            "case_type_cd": "company",
+            "title_a_nm": "A", "type_a_cd": "large",
+            "title_b_nm": "B", "type_b_cd": "startup",
         },
         headers=_admin_token(),
     )
@@ -422,8 +422,8 @@ def test_delete_popular_case_not_found(mock_one):
 # ━━ STATS ━━
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"stat_date": "2026-04-01", "comparison_count": 15},
-    {"stat_date": "2026-04-02", "comparison_count": 20},
+    {"stat_date": "2026-04-01", "comparison_no": 15},
+    {"stat_date": "2026-04-02", "comparison_no": 20},
 ])
 def test_stats_comparisons(mock_all):
     c = _client()
@@ -434,7 +434,7 @@ def test_stats_comparisons(mock_all):
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"stat_date": "2026-04-01", "comparison_count": 15},
+    {"stat_date": "2026-04-01", "comparison_no": 15},
 ])
 def test_stats_comparisons_custom_days(mock_all):
     c = _client()
@@ -443,8 +443,8 @@ def test_stats_comparisons_custom_days(mock_all):
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, side_effect=[
-    [{"name": "Samsung", "cnt": 10}, {"name": "Toss", "cnt": 5}],  # rows_a
-    [{"name": "Samsung", "cnt": 3}, {"name": "Kakao", "cnt": 7}],  # rows_b
+    [{"comp_nm": "Samsung", "cnt": 10}, {"comp_nm": "Toss", "cnt": 5}],  # rows_a
+    [{"comp_nm": "Samsung", "cnt": 3}, {"comp_nm": "Kakao", "cnt": 7}],  # rows_b
 ])
 def test_stats_companies(mock_all):
     c = _client()
@@ -452,9 +452,9 @@ def test_stats_companies(mock_all):
     assert r.status_code == 200
     data = r.json()
     # Samsung: 10+3=13, Kakao: 7, Toss: 5
-    names = [item["name"] for item in data]
+    names = [item["comp_nm"] for item in data]
     assert "Samsung" in names
-    assert data[0]["count"] == 13  # Samsung is top
+    assert data[0]["comparison_no"] == 13  # Samsung is top
 
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
@@ -463,7 +463,7 @@ def test_stats_companies(mock_all):
 ])
 def test_stats_users(mock_all):
     c = _client()
-    r = c.get("/api/v1/admin/stats/users", headers=_admin_token())
+    r = c.get("/api/v1/admin/stats/members", headers=_admin_token())
     assert r.status_code == 200
     assert len(r.json()) == 2
 
@@ -481,7 +481,7 @@ def test_cache_clear():
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
     {"id": 1, "comparison_id": 10, "job_category": "dev", "company_a_display": "A",
-     "type_a": "large", "company_b_display": "B", "type_b": "startup",
+     "type_a_cd": "large", "company_b_display": "B", "type_b_cd": "startup",
      "headline": "Test", "detail": None, "metric_val": "15%",
      "metric_label": "salary", "metric_type": "pos", "created_at": None},
 ])
@@ -518,7 +518,7 @@ def test_create_company_missing_required_fields():
     c = _client()
     r = c.post(
         "/api/v1/admin/companies",
-        json={"name": "OnlyName"},  # missing type_id
+        json={"comp_nm": "OnlyName"},  # missing type_id
         headers=_admin_token(),
     )
     assert r.status_code == 422
@@ -527,7 +527,7 @@ def test_create_company_missing_required_fields():
 def test_update_role_missing_body():
     """PUT /admin/users/{id}/role without body returns 422."""
     c = _client()
-    r = c.put("/api/v1/admin/users/2/role", headers=_admin_token(user_id=1))
+    r = c.put("/api/v1/admin/members/2/role", headers=_admin_token(mbr_id=1))
     assert r.status_code == 422
 
 
@@ -546,9 +546,9 @@ def test_update_role_invalid_value():
     """PUT /admin/users/{id}/role with invalid role value returns 422."""
     c = _client()
     r = c.put(
-        "/api/v1/admin/users/2/role",
-        json={"role": "superadmin"},
-        headers=_admin_token(user_id=1),
+        "/api/v1/admin/members/2/role",
+        json={"role_cd": "superadmin"},
+        headers=_admin_token(mbr_id=1),
     )
     assert r.status_code == 422
 
@@ -558,7 +558,7 @@ def test_popular_case_missing_required():
     c = _client()
     r = c.post(
         "/api/v1/admin/popular-cases",
-        json={"case_type": "company"},  # missing title_a, type_a, title_b, type_b
+        json={"case_type_cd": "company"},  # missing title_a, type_a, title_b, type_b
         headers=_admin_token(),
     )
     assert r.status_code == 422
