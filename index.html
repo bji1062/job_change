@@ -1985,13 +1985,13 @@ async function admLoadDash(){
   if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">데이터를 불러올 수 없습니다.</div>';return}
   admData.dash=d;
   const cards=[
-    ['총 사용자',d.total_users,d.today_users?'+'+d.today_users+' 오늘':'','up'],
-    ['오늘 가입',d.today_users??0,'',''],
-    ['총 비교',d.total_comparisons,d.today_comparisons?'+'+d.today_comparisons+' 오늘':'','up'],
-    ['오늘 비교',d.today_comparisons??0,'',''],
-    ['등록 회사',d.total_companies,'',''],
-    ['복지 보유',d.companies_with_benefits,'',''],
-    ['활성 방문',d.active_visitors??0,'','']
+    ['총 사용자',d.total_mbr_no,d.today_mbr_no?'+'+d.today_mbr_no+' 오늘':'','up'],
+    ['오늘 가입',d.today_mbr_no??0,'',''],
+    ['총 비교',d.total_comparison_no,d.today_comparison_no?'+'+d.today_comparison_no+' 오늘':'','up'],
+    ['오늘 비교',d.today_comparison_no??0,'',''],
+    ['등록 회사',d.total_comp_no,'',''],
+    ['복지 보유',d.comp_with_benefit_no,'',''],
+    ['활성 방문',d.active_visitor_no??0,'','']
   ];
   let h='<div class="adm-section"><h4>대시보드</h4><div class="adm-cards">';
   h+=cards.map(([lb,v,delta,dir])=>`<div class="adm-card"><div class="adm-val">${v!=null?Number(v).toLocaleString():'-'}</div><div class="adm-label">${esc(lb)}</div>${delta?`<div class="adm-delta ${dir}">${esc(delta)}</div>`:''}</div>`).join('');
@@ -2401,10 +2401,10 @@ function renderFeed(data){
 function renderStats(s){
   if(!s)return;
   const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
-  if(v&&s.active_visitors!=null)v.textContent=s.active_visitors;
-  if(c&&s.total_comparisons!=null){
+  if(v&&s.active_visitor_no!=null)v.textContent=s.active_visitor_no;
+  if(c&&s.total_comparison_no!=null){
     const local=parseInt(localStorage.getItem('jc_compare_count'))||0;
-    c.textContent=Math.max(s.total_comparisons,local);
+    c.textContent=Math.max(s.total_comparison_no,local);
   }
 }
 function updateCompareCount(){
