@@ -212,9 +212,17 @@ def test_visitor_tracking():
 
 def test_scrape_resolve_company_id():
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+    from unittest.mock import patch, MagicMock
+    # cli_id 가 있으면 그대로 반환 (DB 조회 안 함)
     from scrape_benefits import resolve_company_id
-    assert resolve_company_id("삼성전자", None) == "samsung"
     assert resolve_company_id("anything", "custom") == "custom"
+    # DB 조회 mock (pymysql 은 함수 내부 import 이므로 pymysql.connect 를 직접 패치)
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value = mock_cur
+    mock_cur.fetchone.return_value = ("samsung_elec",)
+    with patch("pymysql.connect", return_value=mock_conn):
+        assert resolve_company_id("삼성전자", None) == "samsung_elec"
 
 
 def test_scrape_escape_sql():
