@@ -28,27 +28,29 @@ from pathlib import Path
 
 
 # ━━ 복지 키워드 → (ben_key, category) 매핑 ━━
-# 카테고리: financial, work_env, wellness, time, growth, family, life
+# 카테고리: compensation, perks, work_env, health, time, growth, family, life, culture
 BENEFIT_KEYWORDS = [
-    # ━━ financial (보상·금전) ━━
-    (r"복지\s*포인트|복리\s*포인트|선택.{0,2}복[리지]|카페테리아\s*포인트|업무\s*지원비|통신비", "welfare_point", "financial"),
-    (r"경조사|경조금|명절", "event", "financial"),
-    (r"성과급|인센티브|보너스", "bonus", "financial"),
-    (r"자사주|RSU|스톡옵션|주식\s*매입|주식\s*보상", "stock", "financial"),
-    (r"할인.*구매|임직원.*할인|사내.*매장|자사.*제품|서비스\s*이용권", "discount", "financial"),
-    (r"주택.*대출|주택자금|사내\s*대출|전세.*대출|대출.*이자|대출.*지원", "housing_loan", "financial"),
-    (r"기숙사|사택|숙소", "dormitory", "financial"),
+    # ━━ compensation (보상) ━━
+    (r"성과급|인센티브|보너스", "bonus", "compensation"),
+    (r"자사주|RSU|스톡옵션|주식\s*매입|주식\s*보상", "stock", "compensation"),
+    # ━━ perks (금전·지원) ━━
+    (r"복지\s*포인트|복리\s*포인트|선택.{0,2}복[리지]|카페테리아\s*포인트|업무\s*지원비|통신비", "welfare_point", "perks"),
+    (r"할인.*구매|임직원.*할인|사내.*매장|자사.*제품|서비스\s*이용권", "discount", "perks"),
+    (r"주택.*대출|주택자금|사내\s*대출|전세.*대출|대출.*이자|대출.*지원", "housing_loan", "perks"),
+    (r"기숙사|사택|숙소", "dormitory", "perks"),
+    # ━━ family (경조·가족) ━━
+    (r"경조사|경조금|명절", "event", "family"),
     # ━━ work_env (근무환경) ━━
     (r"식대|식당|식사|중식|조식|석식|세\s*끼|카페|캔틴", "meal", "work_env"),
     (r"교통비|주차|통근|셔틀", "transport", "work_env"),
     (r"업무\s*기기|노트북|모니터|장비.*지원|가구|허먼밀러|스탠딩\s*데스크", "work_tools", "work_env"),
-    # ━━ wellness (건강·의료) ━━
-    (r"건강\s*검진|종합\s*검진|심리\s*검진", "health_check", "wellness"),
-    (r"의료비|의료.*보험|실손|진단비|의료.*상담", "medical", "wellness"),
-    (r"단체\s*보험|생명\s*보험|상해\s*보험", "insurance", "wellness"),
-    (r"심리\s*상담|EAP|마음\s*건강|심리\s*센터", "mental", "wellness"),
-    (r"피트니스|헬스장|체력단련|수영장|트레이너", "fitness", "wellness"),
-    (r"부속의원|사내\s*병원|치과|한의원|약국|물리\s*치료|재활|근골격|이비인후|비뇨", "clinic", "wellness"),
+    # ━━ health (건강·의료) ━━
+    (r"건강\s*검진|종합\s*검진|심리\s*검진", "health_check", "health"),
+    (r"의료비|의료.*보험|실손|진단비|의료.*상담", "medical", "health"),
+    (r"단체\s*보험|생명\s*보험|상해\s*보험", "insurance", "health"),
+    (r"심리\s*상담|EAP|마음\s*건강|심리\s*센터", "mental", "health"),
+    (r"피트니스|헬스장|체력단련|수영장|트레이너", "fitness", "health"),
+    (r"부속의원|사내\s*병원|치과|한의원|약국|물리\s*치료|재활|근골격|이비인후|비뇨", "clinic", "health"),
     # ━━ time (시간·휴가) ━━
     (r"리프레시|안식.*휴가|장기.*휴가|워케이션|휴가비|휴가.*지원금", "refresh_leave", "time"),
     (r"유연.*근무|재택|원격|플렉스|자율\s*출퇴근|자율\s*근무|해외\s*근무", "flex_work", "time"),
@@ -329,7 +331,7 @@ def generate_sql(
         lines.append(",\n".join(value_lines) + ";")
     else:
         lines.append("  -- [NOTE] 자동 파싱된 항목 없음 — raw 텍스트를 참고하여 수동 작성 필요")
-        lines.append(f"  ({comp_id_subq}, 'placeholder', 'placeholder', 0, 'financial', 'est', NULL, FALSE, NULL, 0);")
+        lines.append(f"  ({comp_id_subq}, 'placeholder', 'placeholder', 0, 'perks', 'est', NULL, FALSE, NULL, 0);")
 
     return "\n".join(lines) + "\n"
 

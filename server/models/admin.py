@@ -41,7 +41,7 @@ class BenefitItem(BaseModel):
     benefit_cd: str
     benefit_nm: str
     benefit_amt: int = 0
-    benefit_ctgr_cd: str = "financial"
+    benefit_ctgr_cd: str = "perks"
     badge_cd: str = "est"
     note_ctnt: str | None = None
     qual_yn: bool = False

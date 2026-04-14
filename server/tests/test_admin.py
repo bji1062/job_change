@@ -270,7 +270,7 @@ def test_save_company_benefits(mock_one, mock_exec):
     c = _client()
     benefits = [
         {"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 150, "benefit_ctgr_cd": "work_env"},
-        {"benefit_cd": "bonus", "benefit_nm": "Bonus", "benefit_amt": 300, "benefit_ctgr_cd": "financial"},
+        {"benefit_cd": "bonus", "benefit_nm": "Bonus", "benefit_amt": 300, "benefit_ctgr_cd": "compensation"},
     ]
     r = c.put(
         "/api/v1/admin/companies/1/benefits",
