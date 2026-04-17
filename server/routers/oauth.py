@@ -166,14 +166,16 @@ async def oauth_callback(provider: str, code: str = Query(...), state: str = Que
     user = await find_or_create_social_user(provider, provider_id, email_addr, mbr_nm, email_verified=email_verified)
 
     # 4. JWT 발급 후 프론트엔드로 리다이렉트
-    cev = 1 if user.get("comp_email_vrfc_yn") == 'Y' else 0
-    token = create_token(user["mbr_id"], user["role_cd"], cev=bool(cev))
+    verified = user.get("comp_email_vrfc_yn") == 'Y'
+    vrfc_comp_id = user.get("vrfc_comp_id")
+    cev = int(vrfc_comp_id) if verified and vrfc_comp_id is not None else None
+    token = create_token(user["mbr_id"], user["role_cd"], cev=cev)
     redirect_params = urlencode({
         "token": token,
         "mbr_id": user["mbr_id"],
         "mbr_nm": user["mbr_nm"] or "",
         "role_cd": user["role_cd"],
-        "cev": cev,
+        "cev": 1 if verified else 0,
     })
     return RedirectResponse(url=f"{config.OAUTH_REDIRECT_BASE}/?{redirect_params}")
 
@@ -185,6 +187,12 @@ async def request_company_email(req: CompanyEmailReq, mbr_id: int = Depends(get_
     if not is_company_email(req.email_addr):
         raise HTTPException(status_code=400, detail="회사 이메일만 사용 가능합니다")
 
+    comp = await database.fetch_one(
+        "SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (req.comp_id,)
+    )
+    if not comp:
+        raise HTTPException(status_code=404, detail="존재하지 않는 회사입니다")
+
     # 이전 미인증 토큰 무효화
     await database.execute(
         "UPDATE TEMAIL_VERIFICATION SET VERIFIED_DTM=NOW() WHERE MBR_ID=%s AND VERIFIED_DTM IS NULL",
@@ -192,8 +200,8 @@ async def request_company_email(req: CompanyEmailReq, mbr_id: int = Depends(get_
     )
     token = secrets.token_urlsafe(48)
     await database.execute(
-        "INSERT INTO TEMAIL_VERIFICATION (MBR_ID, EMAIL_ADDR, TOKEN_VAL, EXPIRES_DTM) VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
-        (mbr_id, req.email_addr, token),
+        "INSERT INTO TEMAIL_VERIFICATION (MBR_ID, COMP_ID, EMAIL_ADDR, TOKEN_VAL, EXPIRES_DTM) VALUES (%s, %s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
+        (mbr_id, req.comp_id, req.email_addr, token),
     )
     await send_verification_email(req.email_addr, token)
     return {"ok": True, "message": "인증 이메일을 발송했습니다"}
@@ -202,7 +210,8 @@ async def request_company_email(req: CompanyEmailReq, mbr_id: int = Depends(get_
 @router.get("/company-email/verify")
 async def verify_company_email(token: str = Query(...)):
     row = await database.fetch_one(
-        """SELECT VERIFY_ID AS verify_id, MBR_ID AS mbr_id, EMAIL_ADDR AS email_addr
+        """SELECT VERIFY_ID AS verify_id, MBR_ID AS mbr_id, COMP_ID AS comp_id,
+                  EMAIL_ADDR AS email_addr
            FROM TEMAIL_VERIFICATION
            WHERE TOKEN_VAL=%s AND VERIFIED_DTM IS NULL AND EXPIRES_DTM > NOW()""",
         (token,),
@@ -215,8 +224,8 @@ async def verify_company_email(token: str = Query(...)):
         (row["verify_id"],),
     )
     await database.execute(
-        "UPDATE TMEMBER SET COMP_EMAIL_ADDR=%s, COMP_EMAIL_VRFC_YN='Y' WHERE MBR_ID=%s",
-        (row["email_addr"], row["mbr_id"]),
+        "UPDATE TMEMBER SET COMP_EMAIL_ADDR=%s, COMP_EMAIL_VRFC_YN='Y', VRFC_COMP_ID=%s WHERE MBR_ID=%s",
+        (row["email_addr"], row["comp_id"], row["mbr_id"]),
     )
     return RedirectResponse(url=f"{config.OAUTH_REDIRECT_BASE}/?email_verified=1")
 

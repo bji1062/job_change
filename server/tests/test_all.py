@@ -136,8 +136,9 @@ def test_benefit_upsert_defaults():
 def test_popular_case_defaults():
     from models.landing import PopularCase
     pc = PopularCase(
-        case_id=1, case_type_cd="company", title_a_nm="삼성", type_a_cd="large",
-        title_b_nm="토스", type_b_cd="startup"
+        case_id=1, case_type_cd="company",
+        current_comp_nm="삼성", current_comp_tp_cd="large",
+        offer_comp_nm="토스", offer_comp_tp_cd="startup"
     )
     assert pc.view_no == 0
     assert pc.comparison_no == 0

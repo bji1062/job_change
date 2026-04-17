@@ -877,11 +877,15 @@ function openAuth(){document.getElementById('authOverlay').classList.add('open')
 function closeAuth(){document.getElementById('authOverlay').classList.remove('open');if(window._saveRetry){window._saveRetry();window._saveRetry=null}}
 function socialLogin(provider){window.location.href=API_BASE+'/api/v1/oauth/'+provider+'/login'}
 async function requestCompanyEmail(){
+  const cand=(matched.a&&matched.a.comp_id)||(matched.b&&matched.b.comp_id)||null;
+  if(!cand){alert('먼저 검색으로 본인 회사를 선택해주세요. (현직 또는 이직처 칸)');return;}
+  const compNm=(matched.a&&matched.a.comp_id===cand?matched.a.comp_nm:matched.b.comp_nm);
+  if(!confirm(`'${compNm}' 회사 이메일로 인증하시겠습니까?`))return;
   const email=prompt('회사 이메일을 입력하세요 (개인 이메일 제외)');
   if(!email)return;
-  const r=await apiFetch('/oauth/company-email/request',{method:'POST',body:JSON.stringify({email:email})});
+  const r=await apiFetch('/oauth/company-email/request',{method:'POST',body:JSON.stringify({email_addr:email,comp_id:cand})});
   if(r&&r.ok)alert('인증 이메일을 발송했습니다. 24시간 내에 인증해주세요.');
-  else alert(r?.message||'회사 이메일만 사용 가능합니다. (gmail, naver 등 제외)');
+  else alert(r?.message||r?.detail||'회사 이메일만 사용 가능합니다. (gmail, naver 등 제외)');
 }
 function toggleAuthMode(){
   authIsRegister=!authIsRegister;
@@ -2170,7 +2174,7 @@ async function admLoadCases(){
   h+='<table class="adm-tbl"><thead><tr><th>A</th><th>B</th><th>유형</th><th>활성</th><th>작업</th></tr></thead><tbody>';
   const items=Array.isArray(d)?d:(d.items||[]);
   if(items.length){
-    h+=items.map(cs=>`<tr><td>${esc(cs.title_a_nm)}</td><td>${esc(cs.title_b_nm)}</td><td>${esc(cs.case_type_cd||'-')}</td><td>${cs.active_yn?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
+    h+=items.map(cs=>`<tr><td>${esc(cs.current_comp_nm)}</td><td>${esc(cs.offer_comp_nm)}</td><td>${esc(cs.case_type_cd||'-')}</td><td>${cs.active_yn?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
   }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:1rem">인기사례가 없습니다.</td></tr>';
   h+='</tbody></table>';
   el.innerHTML=h;
@@ -2178,7 +2182,7 @@ async function admLoadCases(){
 
 async function admEditCase(id){
   const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
-  let cs={case_type_cd:'company',title_a_nm:'',comp_a_tp_cd:'large',sub_a_nm:'',title_b_nm:'',comp_b_tp_cd:'large',sub_b_nm:'',points_val:[],active_yn:true};
+  let cs={case_type_cd:'company',current_comp_nm:'',current_comp_tp_cd:'large',current_sub_nm:'',offer_comp_nm:'',offer_comp_tp_cd:'large',offer_sub_nm:'',points_val:[],active_yn:true};
   if(id){
     const all=await apiFetch('/admin/popular-cases');
     const items=Array.isArray(all)?all:(all?.items||[]);
@@ -2187,10 +2191,10 @@ async function admEditCase(id){
   const pts=(cs.points||[]).join('\n');
   let h=`<h3>${id?'인기사례 편집':'인기사례 추가'}</h3>`;
   h+=`<div class="adm-fd"><label>유형</label><select id="admCsType"><option value="company"${cs.case_type_cd==='company'?' selected':''}>company</option><option value="situation"${cs.case_type_cd==='situation'?' selected':''}>situation</option></select></div>`;
-  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>A 제목</label><input id="admCsTA" value="${esc(cs.title_a_nm)}"></div><div class="adm-fd" style="flex:1"><label>A 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.comp_a_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
-  h+=`<div class="adm-fd"><label>A 서브</label><input id="admCsSA" value="${esc(cs.sub_a_nm||'')}"></div>`;
-  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>B 제목</label><input id="admCsTB" value="${esc(cs.title_b_nm)}"></div><div class="adm-fd" style="flex:1"><label>B 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.comp_b_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
-  h+=`<div class="adm-fd"><label>B 서브</label><input id="admCsSB" value="${esc(cs.sub_b_nm||'')}"></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>현직 제목</label><input id="admCsTA" value="${esc(cs.current_comp_nm)}"></div><div class="adm-fd" style="flex:1"><label>현직 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.current_comp_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>현직 서브</label><input id="admCsSA" value="${esc(cs.current_sub_nm||'')}"></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>이직처 제목</label><input id="admCsTB" value="${esc(cs.offer_comp_nm)}"></div><div class="adm-fd" style="flex:1"><label>이직처 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.offer_comp_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>이직처 서브</label><input id="admCsSB" value="${esc(cs.offer_sub_nm||'')}"></div>`;
   h+=`<div class="adm-fd"><label>포인트 (줄바꿈 구분)</label><textarea id="admCsPts" rows="4" style="resize:vertical">${esc(pts)}</textarea></div>`;
   h+=`<div class="adm-fd"><label><input type="checkbox" id="admCsAct"${cs.active_yn?' checked':''}> 활성</label></div>`;
   h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCase(${id||'null'})">저장</button></div>`;
@@ -2200,13 +2204,13 @@ async function admEditCase(id){
 async function admSaveCase(id){
   const body={
     case_type_cd:document.getElementById('admCsType').value,
-    title_a_nm:document.getElementById('admCsTA').value.trim(),
-    comp_a_tp_cd:document.getElementById('admCsTyA').value,
-    sub_a_nm:document.getElementById('admCsSA').value.trim(),
-    title_b_nm:document.getElementById('admCsTB').value.trim(),
-    comp_b_tp_cd:document.getElementById('admCsTyB').value,
-    sub_b_nm:document.getElementById('admCsSB').value.trim(),
-    points:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
+    current_comp_nm:document.getElementById('admCsTA').value.trim(),
+    current_comp_tp_cd:document.getElementById('admCsTyA').value,
+    current_sub_nm:document.getElementById('admCsSA').value.trim(),
+    offer_comp_nm:document.getElementById('admCsTB').value.trim(),
+    offer_comp_tp_cd:document.getElementById('admCsTyB').value,
+    offer_sub_nm:document.getElementById('admCsSB').value.trim(),
+    points_val:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
     active_yn:document.getElementById('admCsAct').checked
   };
   if(id)await apiFetch('/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
@@ -2318,21 +2322,21 @@ document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.get
 
 // ━━ LANDING SOCIAL FEED ━━
 const FALLBACK_POP=[
-  {id:1,case_type_cd:'company',title_a_nm:'쿠팡',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'네이버',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_no:12341,comparison_no:847},
-  {id:2,case_type_cd:'company',title_a_nm:'카카오',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'삼성전자',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_no:9823,comparison_no:623},
-  {id:3,case_type_cd:'company',title_a_nm:'토스',comp_a_tp_cd:'startup',sub_a_nm:'핀테크',title_b_nm:'카카오뱅크',comp_b_tp_cd:'large',sub_b_nm:'인터넷은행',points_val:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_no:5432,comparison_no:298},
-  {id:4,case_type_cd:'company',title_a_nm:'라인',comp_a_tp_cd:'large',sub_a_nm:'글로벌 IT',title_b_nm:'카카오',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_no:4821,comparison_no:245},
-  {id:5,case_type_cd:'company',title_a_nm:'삼성전자',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'SK하이닉스',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_no:4512,comparison_no:231},
-  {id:6,case_type_cd:'company',title_a_nm:'배달의민족',comp_a_tp_cd:'large',sub_a_nm:'플랫폼',title_b_nm:'당근',comp_b_tp_cd:'startup',sub_b_nm:'플랫폼',points_val:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_no:3987,comparison_no:198},
-  {id:7,case_type_cd:'company',title_a_nm:'현대자동차',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'LG에너지솔루션',comp_b_tp_cd:'large',sub_b_nm:'대기업',points_val:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_no:3654,comparison_no:187},
-  {id:8,case_type_cd:'company',title_a_nm:'네이버',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'구글코리아',comp_b_tp_cd:'foreign',sub_b_nm:'외국계',points_val:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_no:3421,comparison_no:176},
-  {id:9,case_type_cd:'company',title_a_nm:'카카오',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'토스',comp_b_tp_cd:'startup',sub_b_nm:'핀테크',points_val:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_no:3198,comparison_no:165},
-  {id:10,case_type_cd:'company',title_a_nm:'쿠팡',comp_a_tp_cd:'large',sub_a_nm:'대기업',title_b_nm:'마켓컬리',comp_b_tp_cd:'startup',sub_b_nm:'이커머스',points_val:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_no:2876,comparison_no:142}
+  {id:1,case_type_cd:'company',current_comp_nm:'쿠팡',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'네이버',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_no:12341,comparison_no:847},
+  {id:2,case_type_cd:'company',current_comp_nm:'카카오',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'삼성전자',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_no:9823,comparison_no:623},
+  {id:3,case_type_cd:'company',current_comp_nm:'토스',current_comp_tp_cd:'startup',current_sub_nm:'핀테크',offer_comp_nm:'카카오뱅크',offer_comp_tp_cd:'large',offer_sub_nm:'인터넷은행',points_val:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_no:5432,comparison_no:298},
+  {id:4,case_type_cd:'company',current_comp_nm:'라인',current_comp_tp_cd:'large',current_sub_nm:'글로벌 IT',offer_comp_nm:'카카오',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_no:4821,comparison_no:245},
+  {id:5,case_type_cd:'company',current_comp_nm:'삼성전자',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'SK하이닉스',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_no:4512,comparison_no:231},
+  {id:6,case_type_cd:'company',current_comp_nm:'배달의민족',current_comp_tp_cd:'large',current_sub_nm:'플랫폼',offer_comp_nm:'당근',offer_comp_tp_cd:'startup',offer_sub_nm:'플랫폼',points_val:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_no:3987,comparison_no:198},
+  {id:7,case_type_cd:'company',current_comp_nm:'현대자동차',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'LG에너지솔루션',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_no:3654,comparison_no:187},
+  {id:8,case_type_cd:'company',current_comp_nm:'네이버',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'구글코리아',offer_comp_tp_cd:'foreign',offer_sub_nm:'외국계',points_val:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_no:3421,comparison_no:176},
+  {id:9,case_type_cd:'company',current_comp_nm:'카카오',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'토스',offer_comp_tp_cd:'startup',offer_sub_nm:'핀테크',points_val:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_no:3198,comparison_no:165},
+  {id:10,case_type_cd:'company',current_comp_nm:'쿠팡',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'마켓컬리',offer_comp_tp_cd:'startup',offer_sub_nm:'이커머스',points_val:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_no:2876,comparison_no:142}
 ];
 const FALLBACK_FEED=[
-  {id:1,job_name:'개발자',emoji:'👨‍💻',comp_a_disp_nm:'카카오',comp_a_tp_cd:'large',comp_b_disp_nm:'토스',comp_b_tp_cd:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
-  {id:2,job_name:'기획자',emoji:'📋',comp_a_disp_nm:'네이버',comp_a_tp_cd:'large',comp_b_disp_nm:'쿠팡',comp_b_tp_cd:'large',headline:'네이버 잔류 vs 쿠팡 이직 비교 결과 — 총 보상 +12.1% 이직이 유리',summary:'연봉 +800만 + RSU 차이 → 포괄임금 야근 감안해도 총 보상 우위',pct_val:'+12.1%',pct_label:'총 보상 차이',pct_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
-  {id:3,job_name:'디자이너',emoji:'🎨',comp_a_disp_nm:'삼성전자',comp_a_tp_cd:'large',comp_b_disp_nm:'당근',comp_b_tp_cd:'startup',headline:'삼성전자 잔류 vs 당근 이직 비교 결과 — 시간당 가치 -5.2% 잔류가 유리',summary:'복지 포함 시 삼성이 연 450만원 유리 · 안정성 + 퇴직금 차이 큼',pct_val:'-5.2%',pct_label:'시간당 가치',pct_type:'down',created_at:new Date(Date.now()-7200000).toISOString()}
+  {id:1,job_name:'개발자',emoji:'👨‍💻',comp_a_disp_nm:'카카오',current_comp_tp_cd:'large',comp_b_disp_nm:'토스',offer_comp_tp_cd:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
+  {id:2,job_name:'기획자',emoji:'📋',comp_a_disp_nm:'네이버',current_comp_tp_cd:'large',comp_b_disp_nm:'쿠팡',offer_comp_tp_cd:'large',headline:'네이버 잔류 vs 쿠팡 이직 비교 결과 — 총 보상 +12.1% 이직이 유리',summary:'연봉 +800만 + RSU 차이 → 포괄임금 야근 감안해도 총 보상 우위',pct_val:'+12.1%',pct_label:'총 보상 차이',pct_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
+  {id:3,job_name:'디자이너',emoji:'🎨',comp_a_disp_nm:'삼성전자',current_comp_tp_cd:'large',comp_b_disp_nm:'당근',offer_comp_tp_cd:'startup',headline:'삼성전자 잔류 vs 당근 이직 비교 결과 — 시간당 가치 -5.2% 잔류가 유리',summary:'복지 포함 시 삼성이 연 450만원 유리 · 안정성 + 퇴직금 차이 큼',pct_val:'-5.2%',pct_label:'시간당 가치',pct_type:'down',created_at:new Date(Date.now()-7200000).toISOString()}
 ];
 let _popData=null,_popFilter='all';
 let pingTimer=null;
@@ -2361,7 +2365,7 @@ function renderPopular(data){
     const ctype=esc(c.case_type_cd);
     return `<div class="pop-card type-${ctype}" data-pop-idx="${i}">
       <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
-      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.title_a_nm)}</span><span class="pc-sub">${esc(c.sub_a_nm||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.title_b_nm)}</span><span class="pc-sub">${esc(c.sub_b_nm||'')}</span></div></div>
+      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.current_comp_nm)}</span><span class="pc-sub">${esc(c.current_sub_nm||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.offer_comp_nm)}</span><span class="pc-sub">${esc(c.offer_sub_nm||'')}</span></div></div>
       <div class="pc-points">${pts}</div>
     </div>`}).join('');
   grid.onclick=e=>{const card=e.target.closest('[data-pop-idx]');if(!card)return;startFromCase(filtered[Number(card.dataset.popIdx)])};
@@ -2423,7 +2427,7 @@ async function startFromCase(c){
       if(API_BASE){const r=await apiFetch('/companies/search?q='+encodeURIComponent(name));if(r&&r.length){await selComp(s,r[0].id);return}}
       const loc=DB.find(x=>x.name===name);if(loc)await selComp(s,loc.id);else document.getElementById(s==='a'?'sA':'sB').value=name;
     }
-    await Promise.all([findAndSel('a',c.title_a_nm),findAndSel('b',c.title_b_nm)]);
+    await Promise.all([findAndSel('a',c.current_comp_nm),findAndSel('b',c.offer_comp_nm)]);
   }
 }
 

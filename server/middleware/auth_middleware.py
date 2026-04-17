@@ -10,13 +10,25 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(bearer))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return mbr_id
 
-async def get_verified_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> int:
-    """회사 이메일 인증이 완료된 사용자만 허용 (admin은 면제)"""
+async def get_verified_user_for_comp(
+    comp_id: int,
+    cred: HTTPAuthorizationCredentials = Depends(bearer),
+) -> int:
+    """해당 comp_id 회사의 이메일로 인증된 사용자만 허용 (admin은 면제).
+
+    JWT cev 클레임은 인증된 회사의 comp_id(int). bool 값은 권한 없음으로 간주.
+    """
     payload = decode_token_full(cred.credentials)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    if payload.get("role_cd") != "admin" and not payload.get("cev"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="회사 이메일 인증이 필요합니다")
+    if payload.get("role_cd") == "admin":
+        return int(payload["sub"])
+    cev = payload.get("cev")
+    if isinstance(cev, bool) or not isinstance(cev, int) or cev != comp_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="해당 회사의 이메일 인증이 필요합니다",
+        )
     return int(payload["sub"])
 
 
