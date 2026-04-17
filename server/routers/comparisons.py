@@ -58,30 +58,19 @@ async def create(req: ComparisonReq, mbr_id: int = Depends(get_current_user)):
                 'large': '대기업', 'mid': '중견기업', 'public': '공기업',
                 'startup': '스타트업', 'foreign': '외국계', 'freelance': '프리랜서'
             }
-            # Check if this pair already exists (A vs B or B vs A)
-            existing = await database.fetch_one(
-                """SELECT CASE_ID AS case_id FROM TPOPULAR_CASE
-                   WHERE (TITLE_A_NM=%s AND TITLE_B_NM=%s) OR (TITLE_A_NM=%s AND TITLE_B_NM=%s)
-                   LIMIT 1""",
-                (req.comp_a_nm, req.comp_b_nm,
-                 req.comp_b_nm, req.comp_a_nm))
-            print(f"[popular_cases] existing={existing}")
-            if existing:
-                await database.execute(
-                    "UPDATE TPOPULAR_CASE SET COMPARISON_NO=COMPARISON_NO+1 WHERE CASE_ID=%s",
-                    (existing["case_id"],))
-                print(f"[popular_cases] UPDATE done for case_id={existing['case_id']}")
-            else:
-                points = json.dumps(req.feed_points_val[:3], ensure_ascii=False) if req.feed_points_val else '[]'
-                await database.execute(
-                    """INSERT INTO TPOPULAR_CASE
-                       (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM,
-                        POINTS_VAL, VIEW_NO, COMPARISON_NO)
-                       VALUES ('company',%s,%s,%s,%s,%s,%s,%s,0,1)""",
-                    (req.comp_a_nm, req.comp_a_tp_cd, type_labels.get(req.comp_a_tp_cd, req.comp_a_tp_cd),
-                     req.comp_b_nm, req.comp_b_tp_cd, type_labels.get(req.comp_b_tp_cd, req.comp_b_tp_cd),
-                     points))
-                print(f"[popular_cases] INSERT done: {req.comp_a_nm} vs {req.comp_b_nm}")
+            # 방향성 보존 upsert — (현직, 이직처) 순서 그대로. UNIQUE KEY가 동시성 보장.
+            points = json.dumps(req.feed_points_val[:3], ensure_ascii=False) if req.feed_points_val else '[]'
+            await database.execute(
+                """INSERT INTO TPOPULAR_CASE
+                   (CASE_TYPE_CD, CURRENT_COMP_NM, CURRENT_COMP_TP_CD, CURRENT_SUB_NM,
+                    OFFER_COMP_NM, OFFER_COMP_TP_CD, OFFER_SUB_NM,
+                    POINTS_VAL, VIEW_NO, COMPARISON_NO)
+                   VALUES ('company',%s,%s,%s,%s,%s,%s,%s,0,1)
+                   ON DUPLICATE KEY UPDATE COMPARISON_NO = COMPARISON_NO + 1""",
+                (req.comp_a_nm, req.comp_a_tp_cd, type_labels.get(req.comp_a_tp_cd, req.comp_a_tp_cd),
+                 req.comp_b_nm, req.comp_b_tp_cd, type_labels.get(req.comp_b_tp_cd, req.comp_b_tp_cd),
+                 points))
+            print(f"[popular_cases] UPSERT done: {req.comp_a_nm} vs {req.comp_b_nm}")
             cache.delete("landing_popular")
         except Exception as e:
             print(f"[popular_cases upsert error] {e}")

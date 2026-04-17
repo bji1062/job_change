@@ -28,7 +28,7 @@ from pathlib import Path
 
 
 # ━━ 복지 키워드 → (ben_key, category) 매핑 ━━
-# 카테고리: compensation, perks, work_env, health, time, growth, family, life, culture
+# 카테고리(9종): compensation, flexibility, work_env, time_off, health, family, growth, leisure, perks
 BENEFIT_KEYWORDS = [
     # ━━ compensation (보상) ━━
     (r"성과급|인센티브|보너스", "bonus", "compensation"),
@@ -51,10 +51,11 @@ BENEFIT_KEYWORDS = [
     (r"심리\s*상담|EAP|마음\s*건강|심리\s*센터", "mental", "health"),
     (r"피트니스|헬스장|체력단련|수영장|트레이너", "fitness", "health"),
     (r"부속의원|사내\s*병원|치과|한의원|약국|물리\s*치료|재활|근골격|이비인후|비뇨", "clinic", "health"),
-    # ━━ time (시간·휴가) ━━
-    (r"리프레시|안식.*휴가|장기.*휴가|워케이션|휴가비|휴가.*지원금", "refresh_leave", "time"),
-    (r"유연.*근무|재택|원격|플렉스|자율\s*출퇴근|자율\s*근무|해외\s*근무", "flex_work", "time"),
-    (r"연차|휴직|단축\s*근무", "leave_general", "time"),
+    # ━━ time_off (시간·휴가) ━━
+    (r"리프레시|안식.*휴가|장기.*휴가|워케이션|휴가비|휴가.*지원금", "refresh_leave", "time_off"),
+    (r"연차|휴직|단축\s*근무", "leave_general", "time_off"),
+    # ━━ flexibility (근무유연성) ━━
+    (r"유연.*근무|재택|원격|플렉스|자율\s*출퇴근|자율\s*근무|해외\s*근무", "flex_work", "flexibility"),
     # ━━ growth (성장·커리어) ━━
     (r"어학|외국어|영어", "lang", "growth"),
     (r"사내\s*교육|직무\s*교육|교육\s*지원|외부\s*교육|컨퍼런스|학회|세미나|멘토링|온보딩", "edu_support", "growth"),
@@ -63,11 +64,24 @@ BENEFIT_KEYWORDS = [
     (r"학자금|자녀.*교육", "child_edu", "family"),
     (r"출산|육아|임신|보육|어린이집|난임|가족\s*돌봄", "parenting", "family"),
     (r"결혼|웨딩|예식", "wedding", "family"),
-    # ━━ life (라이프스타일) ━━
-    (r"동호회|동아리|사내.*클럽|커뮤니티|활동비", "club", "life"),
-    (r"도서|북카페|라이브러리", "library", "life"),
-    (r"여행|휴양|리조트|콘도|워터파크|테마파크|숙박.*지원", "resort", "life"),
+    # ━━ leisure (여가·라이프) ━━
+    (r"동호회|동아리|사내.*클럽|커뮤니티|활동비", "club", "leisure"),
+    (r"도서|북카페|라이브러리", "library", "leisure"),
+    (r"여행|휴양|리조트|콘도|워터파크|테마파크|숙박.*지원", "resort", "leisure"),
 ]
+
+# ━━ 카테고리 화이트리스트 (프론트 CAT_LABELS과 동기화) ━━
+VALID_CATEGORIES = {
+    "compensation", "flexibility", "work_env", "time_off",
+    "health", "family", "growth", "leisure", "perks",
+}
+# BENEFIT_KEYWORDS 정의 직후 정합성 검증
+for _pattern, _key, _ctgr in BENEFIT_KEYWORDS:
+    if _ctgr not in VALID_CATEGORIES:
+        raise ValueError(
+            f"BENEFIT_KEYWORDS에 잘못된 카테고리 '{_ctgr}' (키 '{_key}'). "
+            f"허용: {sorted(VALID_CATEGORIES)}"
+        )
 
 # ━━ 출력 경로 ━━
 BENEFIT_DIR = Path(__file__).resolve().parent.parent / "seed" / "benefit"

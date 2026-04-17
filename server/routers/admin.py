@@ -241,16 +241,17 @@ async def save_company_benefits(
     existing = await database.fetch_one("SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (comp_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    await database.execute("DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s", (comp_id,))
-    for i, b in enumerate(benefits):
-        await database.execute(
-            """INSERT INTO TCOMPANY_BENEFIT
-               (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (comp_id, b.benefit_cd, b.benefit_nm, b.benefit_amt,
-             b.benefit_ctgr_cd, b.badge_cd, b.note_ctnt,
-             b.qual_yn, b.qual_desc_ctnt, b.sort_order_no or i),
-        )
+    async with database.transaction() as tx:
+        await tx.execute("DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s", (comp_id,))
+        for i, b in enumerate(benefits):
+            await tx.execute(
+                """INSERT INTO TCOMPANY_BENEFIT
+                   (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (comp_id, b.benefit_cd, b.benefit_nm, b.benefit_amt,
+                 b.benefit_ctgr_cd, b.badge_cd, b.note_ctnt,
+                 b.qual_yn, b.qual_desc_ctnt, b.sort_order_no or i),
+            )
     cache.delete("reference_all")
     return {"ok": True, "count": len(benefits)}
 
@@ -265,13 +266,14 @@ async def save_company_aliases(
     existing = await database.fetch_one("SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (comp_id,))
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    await database.execute("DELETE FROM TCOMPANY_ALIAS WHERE COMP_ID=%s", (comp_id,))
-    for alias_nm in req.aliases:
-        if alias_nm.strip():
-            await database.execute(
-                "INSERT INTO TCOMPANY_ALIAS (COMP_ID, ALIAS_NM) VALUES (%s, %s)",
-                (comp_id, alias_nm.strip()),
-            )
+    async with database.transaction() as tx:
+        await tx.execute("DELETE FROM TCOMPANY_ALIAS WHERE COMP_ID=%s", (comp_id,))
+        for alias_nm in req.aliases:
+            if alias_nm.strip():
+                await tx.execute(
+                    "INSERT INTO TCOMPANY_ALIAS (COMP_ID, ALIAS_NM) VALUES (%s, %s)",
+                    (comp_id, alias_nm.strip()),
+                )
     cache.delete("reference_all")
     return {"ok": True, "count": len(req.aliases)}
 
@@ -281,8 +283,10 @@ async def save_company_aliases(
 async def list_popular_cases(admin_id: int = Depends(get_admin_user)):
     rows = await database.fetch_all(
         """SELECT CASE_ID AS case_id, CASE_TYPE_CD AS case_type_cd,
-                  TITLE_A_NM AS title_a_nm, TYPE_A_CD AS type_a_cd, SUB_A_NM AS sub_a_nm,
-                  TITLE_B_NM AS title_b_nm, TYPE_B_CD AS type_b_cd, SUB_B_NM AS sub_b_nm,
+                  CURRENT_COMP_NM AS current_comp_nm, CURRENT_COMP_TP_CD AS current_comp_tp_cd,
+                  CURRENT_SUB_NM AS current_sub_nm,
+                  OFFER_COMP_NM AS offer_comp_nm, OFFER_COMP_TP_CD AS offer_comp_tp_cd,
+                  OFFER_SUB_NM AS offer_sub_nm,
                   POINTS_VAL AS points_val, VIEW_NO AS view_no, COMPARISON_NO AS comparison_no,
                   ACTIVE_YN AS active_yn, INS_DTM AS ins_dtm
            FROM TPOPULAR_CASE ORDER BY COMPARISON_NO DESC"""
@@ -300,10 +304,11 @@ async def create_popular_case(req: PopularCaseReq, admin_id: int = Depends(get_a
     points_json = json.dumps(req.points_val, ensure_ascii=False) if req.points_val else "[]"
     case_id = await database.execute(
         """INSERT INTO TPOPULAR_CASE
-           (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM, POINTS_VAL, ACTIVE_YN)
+           (CASE_TYPE_CD, CURRENT_COMP_NM, CURRENT_COMP_TP_CD, CURRENT_SUB_NM,
+            OFFER_COMP_NM, OFFER_COMP_TP_CD, OFFER_SUB_NM, POINTS_VAL, ACTIVE_YN)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-        (req.case_type_cd, req.title_a_nm, req.type_a_cd, req.sub_a_nm,
-         req.title_b_nm, req.type_b_cd, req.sub_b_nm, points_json, req.active_yn),
+        (req.case_type_cd, req.current_comp_nm, req.current_comp_tp_cd, req.current_sub_nm,
+         req.offer_comp_nm, req.offer_comp_tp_cd, req.offer_sub_nm, points_json, req.active_yn),
     )
     cache.delete("landing_popular")
     return {"case_id": case_id}
@@ -316,11 +321,11 @@ async def update_popular_case(case_id: int, req: PopularCaseReq, admin_id: int =
     points_json = json.dumps(req.points_val, ensure_ascii=False) if req.points_val else "[]"
     await database.execute(
         """UPDATE TPOPULAR_CASE
-           SET CASE_TYPE_CD=%s, TITLE_A_NM=%s, TYPE_A_CD=%s, SUB_A_NM=%s,
-               TITLE_B_NM=%s, TYPE_B_CD=%s, SUB_B_NM=%s, POINTS_VAL=%s, ACTIVE_YN=%s
+           SET CASE_TYPE_CD=%s, CURRENT_COMP_NM=%s, CURRENT_COMP_TP_CD=%s, CURRENT_SUB_NM=%s,
+               OFFER_COMP_NM=%s, OFFER_COMP_TP_CD=%s, OFFER_SUB_NM=%s, POINTS_VAL=%s, ACTIVE_YN=%s
            WHERE CASE_ID=%s""",
-        (req.case_type_cd, req.title_a_nm, req.type_a_cd, req.sub_a_nm,
-         req.title_b_nm, req.type_b_cd, req.sub_b_nm, points_json, req.active_yn, case_id),
+        (req.case_type_cd, req.current_comp_nm, req.current_comp_tp_cd, req.current_sub_nm,
+         req.offer_comp_nm, req.offer_comp_tp_cd, req.offer_sub_nm, points_json, req.active_yn, case_id),
     )
     cache.delete("landing_popular")
     return {"ok": True}

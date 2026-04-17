@@ -10,7 +10,25 @@ routing, and response shapes.
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch, MagicMock
+
+
+class _FakeTx:
+    """database.transaction() 컨텍스트 내에서 사용할 execute mock."""
+
+    def __init__(self):
+        self.execute = AsyncMock(return_value=None)
+        self.executemany = AsyncMock(return_value=None)
+
+
+def _patch_tx():
+    """database.transaction 을 mock AsyncContextManager 로 교체."""
+    @asynccontextmanager
+    async def _ctx():
+        yield _FakeTx()
+
+    return patch("database.transaction", _ctx)
 from services.auth_service import create_token
 
 
@@ -272,11 +290,12 @@ def test_save_company_benefits(mock_one, mock_exec):
         {"benefit_cd": "meal", "benefit_nm": "Meal", "benefit_amt": 150, "benefit_ctgr_cd": "work_env"},
         {"benefit_cd": "bonus", "benefit_nm": "Bonus", "benefit_amt": 300, "benefit_ctgr_cd": "compensation"},
     ]
-    r = c.put(
-        "/api/v1/admin/companies/1/benefits",
-        json=benefits,
-        headers=_admin_token(),
-    )
+    with _patch_tx():
+        r = c.put(
+            "/api/v1/admin/companies/1/benefits",
+            json=benefits,
+            headers=_admin_token(),
+        )
     assert r.status_code == 200
     assert r.json()["count"] == 2
 
@@ -311,11 +330,12 @@ def test_get_company_benefits(mock_all):
 @patch("database.fetch_one", new_callable=AsyncMock, return_value={"id": 1})
 def test_save_company_aliases(mock_one, mock_exec):
     c = _client()
-    r = c.put(
-        "/api/v1/admin/companies/1/aliases",
-        json={"aliases": ["Samsung Electronics", "SEC"]},
-        headers=_admin_token(),
-    )
+    with _patch_tx():
+        r = c.put(
+            "/api/v1/admin/companies/1/aliases",
+            json={"aliases": ["Samsung Electronics", "SEC"]},
+            headers=_admin_token(),
+        )
     assert r.status_code == 200
     assert r.json()["count"] == 2
 
@@ -334,8 +354,9 @@ def test_save_aliases_company_not_found(mock_one):
 # ━━ POPULAR CASES ━━
 
 @patch("database.fetch_all", new_callable=AsyncMock, return_value=[
-    {"case_id": 1, "case_type_cd": "company", "title_a_nm": "Samsung", "type_a_cd": "large",
-     "sub_a_nm": None, "title_b_nm": "Toss", "type_b_cd": "startup", "sub_b_nm": None,
+    {"case_id": 1, "case_type_cd": "company",
+     "current_comp_nm": "Samsung", "current_comp_tp_cd": "large", "current_sub_nm": None,
+     "offer_comp_nm": "Toss", "offer_comp_tp_cd": "startup", "offer_sub_nm": None,
      "points_val": '["point1"]', "view_no": 100, "comparison_no": 50,
      "active_yn": 1, "created_at": None},
 ])
@@ -345,7 +366,7 @@ def test_list_popular_cases(mock_all):
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 1
-    assert data[0]["title_a_nm"] == "Samsung"
+    assert data[0]["current_comp_nm"] == "Samsung"
     assert data[0]["points_val"] == ["point1"]
     assert data[0]["active_yn"] is True
 
@@ -357,10 +378,10 @@ def test_create_popular_case(mock_exec):
         "/api/v1/admin/popular-cases",
         json={
             "case_type_cd": "company",
-            "title_a_nm": "Samsung",
-            "type_a_cd": "large",
-            "title_b_nm": "Toss",
-            "type_b_cd": "startup",
+            "current_comp_nm": "Samsung",
+            "current_comp_tp_cd": "large",
+            "offer_comp_nm": "Toss",
+            "offer_comp_tp_cd": "startup",
             "points_val": ["Higher salary", "Better WLB"],
         },
         headers=_admin_token(),
@@ -377,10 +398,10 @@ def test_update_popular_case(mock_one, mock_exec):
         "/api/v1/admin/popular-cases/1",
         json={
             "case_type_cd": "type",
-            "title_a_nm": "Large Corp",
-            "type_a_cd": "large",
-            "title_b_nm": "Startup",
-            "type_b_cd": "startup",
+            "current_comp_nm": "Large Corp",
+            "current_comp_tp_cd": "large",
+            "offer_comp_nm": "Startup",
+            "offer_comp_tp_cd": "startup",
         },
         headers=_admin_token(),
     )
@@ -395,8 +416,8 @@ def test_update_popular_case_not_found(mock_one):
         "/api/v1/admin/popular-cases/999",
         json={
             "case_type_cd": "company",
-            "title_a_nm": "A", "type_a_cd": "large",
-            "title_b_nm": "B", "type_b_cd": "startup",
+            "current_comp_nm": "A", "current_comp_tp_cd": "large",
+            "offer_comp_nm": "B", "offer_comp_tp_cd": "startup",
         },
         headers=_admin_token(),
     )

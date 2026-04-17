@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, Depends, Query
 import database
 from models.company import BenefitUpsert
-from middleware.auth_middleware import get_current_user, get_verified_user
+from middleware.auth_middleware import get_current_user, get_verified_user_for_comp
 
 router = APIRouter()
 
@@ -63,30 +63,30 @@ async def detail(comp_id: int):
     }
 
 @router.put("/{comp_id}/benefits")
-async def upsert_benefits(comp_id: int, items: list[BenefitUpsert], user_id: int = Depends(get_verified_user)):
+async def upsert_benefits(comp_id: int, items: list[BenefitUpsert], user_id: int = Depends(get_verified_user_for_comp)):
     comp = await database.fetch_one(
         "SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (comp_id,)
     )
     if not comp:
         return {"error": "company not found"}
 
-    await database.execute(
-        "DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s",
-        (comp_id,),
-    )
-
-    for i, b in enumerate(items):
-        await database.execute(
-            """INSERT INTO TCOMPANY_BENEFIT
-               (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-               ON DUPLICATE KEY UPDATE
-               BENEFIT_NM=VALUES(BENEFIT_NM), BENEFIT_AMT=VALUES(BENEFIT_AMT), BENEFIT_CTGR_CD=VALUES(BENEFIT_CTGR_CD),
-               BADGE_CD=VALUES(BADGE_CD), NOTE_CTNT=VALUES(NOTE_CTNT), QUAL_YN=VALUES(QUAL_YN),
-               QUAL_DESC_CTNT=VALUES(QUAL_DESC_CTNT), SORT_ORDER_NO=VALUES(SORT_ORDER_NO)""",
-            (comp_id, b.benefit_cd, b.benefit_nm, b.benefit_amt, b.benefit_ctgr_cd, b.badge_cd,
-             b.note_ctnt, b.qual_yn, b.qual_desc_ctnt, b.sort_order_no or i),
+    async with database.transaction() as tx:
+        await tx.execute(
+            "DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s",
+            (comp_id,),
         )
+        for i, b in enumerate(items):
+            await tx.execute(
+                """INSERT INTO TCOMPANY_BENEFIT
+                   (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE
+                   BENEFIT_NM=VALUES(BENEFIT_NM), BENEFIT_AMT=VALUES(BENEFIT_AMT), BENEFIT_CTGR_CD=VALUES(BENEFIT_CTGR_CD),
+                   BADGE_CD=VALUES(BADGE_CD), NOTE_CTNT=VALUES(NOTE_CTNT), QUAL_YN=VALUES(QUAL_YN),
+                   QUAL_DESC_CTNT=VALUES(QUAL_DESC_CTNT), SORT_ORDER_NO=VALUES(SORT_ORDER_NO)""",
+                (comp_id, b.benefit_cd, b.benefit_nm, b.benefit_amt, b.benefit_ctgr_cd, b.badge_cd,
+                 b.note_ctnt, b.qual_yn, b.qual_desc_ctnt, b.sort_order_no or i),
+            )
 
     benefits = await database.fetch_all(
         """SELECT BENEFIT_CD AS benefit_cd, BENEFIT_NM AS benefit_nm,

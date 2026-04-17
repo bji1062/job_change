@@ -50,12 +50,12 @@ class BenefitItem(BaseModel):
 
 class PopularCaseReq(BaseModel):
     case_type_cd: str
-    title_a_nm: str
-    type_a_cd: str
-    sub_a_nm: str | None = None
-    title_b_nm: str
-    type_b_cd: str
-    sub_b_nm: str | None = None
+    current_comp_nm: str
+    current_comp_tp_cd: str
+    current_sub_nm: str | None = None
+    offer_comp_nm: str
+    offer_comp_tp_cd: str
+    offer_sub_nm: str | None = None
     points_val: list[str] | None = None
     active_yn: bool = True
 

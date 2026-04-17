@@ -63,8 +63,10 @@ async def get_popular():
         return cached
     rows = await database.fetch_all(
         """SELECT CASE_ID AS case_id, CASE_TYPE_CD AS case_type_cd,
-                  TITLE_A_NM AS title_a_nm, TYPE_A_CD AS type_a_cd, SUB_A_NM AS sub_a_nm,
-                  TITLE_B_NM AS title_b_nm, TYPE_B_CD AS type_b_cd, SUB_B_NM AS sub_b_nm,
+                  CURRENT_COMP_NM AS current_comp_nm, CURRENT_COMP_TP_CD AS current_comp_tp_cd,
+                  CURRENT_SUB_NM AS current_sub_nm,
+                  OFFER_COMP_NM AS offer_comp_nm, OFFER_COMP_TP_CD AS offer_comp_tp_cd,
+                  OFFER_SUB_NM AS offer_sub_nm,
                   POINTS_VAL AS points_val,
                   VIEW_NO AS view_no, COMPARISON_NO AS comparison_no
            FROM TPOPULAR_CASE WHERE ACTIVE_YN=1

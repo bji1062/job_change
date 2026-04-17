@@ -476,7 +476,8 @@ def seed():
     for pc in POPULAR_CASES:
         cur.execute(
             """INSERT IGNORE INTO TPOPULAR_CASE
-               (CASE_TYPE_CD, TITLE_A_NM, TYPE_A_CD, SUB_A_NM, TITLE_B_NM, TYPE_B_CD, SUB_B_NM,
+               (CASE_TYPE_CD, CURRENT_COMP_NM, CURRENT_COMP_TP_CD, CURRENT_SUB_NM,
+                OFFER_COMP_NM, OFFER_COMP_TP_CD, OFFER_SUB_NM,
                 POINTS_VAL, VIEW_NO, COMPARISON_NO)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             pc,

@@ -1,5 +1,6 @@
 import aiomysql
 import pymysql
+from contextlib import asynccontextmanager
 from decimal import Decimal
 import config
 
@@ -56,12 +57,12 @@ async def _ensure_tables():
         """CREATE TABLE IF NOT EXISTS TPOPULAR_CASE (
           CASE_ID INT AUTO_INCREMENT PRIMARY KEY,
           CASE_TYPE_CD VARCHAR(20) NOT NULL,
-          TITLE_A_NM VARCHAR(50) NOT NULL,
-          TYPE_A_CD VARCHAR(20) NOT NULL,
-          SUB_A_NM VARCHAR(30),
-          TITLE_B_NM VARCHAR(50) NOT NULL,
-          TYPE_B_CD VARCHAR(20) NOT NULL,
-          SUB_B_NM VARCHAR(30),
+          CURRENT_COMP_NM VARCHAR(50) NOT NULL,
+          CURRENT_COMP_TP_CD VARCHAR(20) NOT NULL,
+          CURRENT_SUB_NM VARCHAR(30),
+          OFFER_COMP_NM VARCHAR(50) NOT NULL,
+          OFFER_COMP_TP_CD VARCHAR(20) NOT NULL,
+          OFFER_SUB_NM VARCHAR(30),
           POINTS_VAL JSON,
           VIEW_NO INT DEFAULT 0,
           COMPARISON_NO INT DEFAULT 0,
@@ -70,7 +71,8 @@ async def _ensure_tables():
           INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           MOD_ID INT,
           MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_active_comparison (ACTIVE_YN, COMPARISON_NO DESC)
+          INDEX idx_active_comparison (ACTIVE_YN, COMPARISON_NO DESC),
+          UNIQUE KEY uq_case_pair (CASE_TYPE_CD, CURRENT_COMP_NM, OFFER_COMP_NM)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     ]
     async with pool.acquire() as conn:
@@ -105,3 +107,42 @@ async def execute(sql, args=None):
         async with conn.cursor() as cur:
             await cur.execute(sql, args)
             return cur.lastrowid
+
+
+@asynccontextmanager
+async def transaction():
+    """원자적 다중 쿼리용 트랜잭션 컨텍스트.
+
+    사용 예:
+        async with database.transaction() as tx:
+            await tx.execute("DELETE ...", (id,))
+            await tx.executemany("INSERT ...", rows)
+
+    풀의 autocommit=True를 일시적으로 꺼 BEGIN/COMMIT/ROLLBACK을 수동 관리한다.
+    컨텍스트 블록 내부 예외 발생 시 전체 rollback.
+    """
+    async with pool.acquire() as conn:
+        await conn.begin()
+        try:
+            async with conn.cursor() as cur:
+                tx = _Tx(cur)
+                yield tx
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+class _Tx:
+    """transaction() 블록 내부에서 사용하는 경량 래퍼 — 같은 커서로 다중 쿼리 실행."""
+
+    def __init__(self, cur):
+        self._cur = cur
+
+    async def execute(self, sql, args=None):
+        await self._cur.execute(sql, args)
+        return self._cur.lastrowid
+
+    async def executemany(self, sql, rows):
+        await self._cur.executemany(sql, rows)
+        return self._cur.lastrowid
