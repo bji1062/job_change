@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Literal
 
 from models.types import (
     BadgeCd, BadgeSrcCd, BenefitCtgrCd, CaseTypeCd, CompTpCd, RoleCd,
@@ -68,6 +68,14 @@ class PopularCaseReq(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role_cd: RoleCd
+
+class BenefitPromoteReq(BaseModel):
+    note_ctnt: str | None = None
+
+class BenefitReportResolveReq(BaseModel):
+    # 'resolved' 또는 'rejected' 만 허용 — 'open' 으로 되돌리는 워크플로는 없음.
+    status_cd: Literal["resolved", "rejected"]
+    note_ctnt: str | None = None
 
 class PagedResponse(BaseModel):
     items: list[Any]

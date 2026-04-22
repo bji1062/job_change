@@ -38,3 +38,9 @@ CaseTypeCd = Literal["company", "scenario"]
 
 # Feed metric 방향 (3종) — TCOMPARISON_FEED.METRIC_TYPE_CD
 MetricTypeCd = Literal["up", "down", "neu"]
+
+# 사용자 제보 유형 — TBENEFIT_REPORT.REPORT_TYPE_CD (2026-04-23 P5-3)
+BenefitReportTypeCd = Literal["wrong_amount", "outdated", "missing_field"]
+
+# 제보 처리 상태 — TBENEFIT_REPORT.STATUS_CD
+BenefitReportStatusCd = Literal["open", "resolved", "rejected"]

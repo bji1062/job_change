@@ -252,8 +252,32 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 .bi-v{width:64px;background:var(--bg-1);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:.75rem;text-align:right}
 .bi-v:focus{outline:none;border-color:var(--purple)}
 .bi-u{font-size:.62rem;color:var(--t4);width:16px;flex-shrink:0}
-.bi-badge{font-size:.55rem;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0}
+.bi-badge{font-size:.55rem;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;cursor:help}
 .b-auto{background:var(--purple-d);color:var(--purple)}.b-est{background:var(--amber-d);color:var(--amber)}
+.b-off{background:var(--green-d);color:var(--green)}.b-stl{background:rgba(255,255,255,.06);color:var(--t4);text-decoration:line-through}
+.data-trust{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1rem 1.25rem;margin-top:1rem;font-size:.78rem}
+.data-trust-head{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--t4);margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.data-trust-row{display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid rgba(42,46,58,.3)}
+.data-trust-row:last-child{border-bottom:none}
+.data-trust-label{color:var(--t3)}
+.data-trust-val{font-family:'JetBrains Mono',monospace;font-weight:600}
+.data-trust-pct{color:var(--green)}.data-trust-pct.warn{color:var(--amber)}.data-trust-pct.bad{color:var(--red)}
+.data-trust-foot{font-size:.7rem;color:var(--t4);margin-top:.75rem;line-height:1.5}
+.bi-report-btn{background:transparent;border:1px solid rgba(231,85,82,.3);color:rgba(231,85,82,.8);font-size:.55rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:4px;font-family:inherit;transition:all .15s}
+.bi-report-btn:hover{border-color:var(--red);color:var(--red);background:rgba(231,85,82,.1)}
+.rpt-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.rpt-overlay.open{display:flex}
+.rpt-box{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--rl);padding:1.5rem;width:100%;max-width:440px;animation:fadeUp .25s ease}
+.rpt-box h4{font-size:.95rem;font-weight:700;margin-bottom:.25rem;color:var(--t1)}
+.rpt-box .rpt-sub{font-size:.75rem;color:var(--t3);margin-bottom:1rem}
+.rpt-box label{display:block;font-size:.72rem;color:var(--t3);margin:.85rem 0 .35rem;font-weight:600}
+.rpt-box select,.rpt-box input,.rpt-box textarea{width:100%;padding:.55rem .75rem;background:var(--bg-1);border:1px solid var(--border);border-radius:6px;color:var(--t1);font-family:inherit;font-size:.82rem}
+.rpt-box textarea{resize:vertical;min-height:70px}
+.rpt-box .rpt-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem}
+.rpt-box .rpt-actions button{padding:.5rem 1rem;border-radius:6px;border:none;font-family:inherit;font-size:.8rem;font-weight:600;cursor:pointer}
+.rpt-box .rpt-cancel{background:transparent;color:var(--t3);border:1px solid var(--border)}
+.rpt-box .rpt-submit{background:var(--red);color:#fff}
+.rpt-box .rpt-submit:hover{opacity:.9}
 .bg-val{font-size:.65rem;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--t3);margin-left:auto;flex-shrink:0}
 .bg-diff{font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0}
 .bg-diff.pos{background:var(--green-d);color:var(--green)}.bg-diff.neg{background:var(--red-d);color:var(--red)}.bg-diff.eq{background:rgba(255,255,255,.05);color:var(--t4)}
@@ -816,6 +840,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg-0);co
 </div>
 </div>
 <div class="adm-modal" id="admModal"><div class="adm-modal-box" id="admModalBox"></div></div>
+<div class="rpt-overlay" id="rptOverlay"><div class="rpt-box" id="rptBox"></div></div>
 
 <!-- ━━ AUTH MODAL ━━ -->
 <div class="auth-overlay" id="authOverlay">
@@ -862,16 +887,54 @@ let authIsRegister=false;
   }
 })();
 
-async function apiFetch(path,opts={}){
-  if(!API_BASE)return null;
+// 내부용 — 상세 정보가 필요한 호출자(saveComparison 등)가 쓰는 full 변형.
+// 반환: {ok:boolean, data:any, error:string|null, status:number|0, aborted:boolean}
+// 401 은 자동 로그아웃하고 ok=false, status=401 로 표현 (TOKEN_EXPIRED 로 분기 판단).
+// timeoutMs 미지정 시 10초. raw fetch 쓰지 말고 이걸로 통합.
+async function apiFetchFull(path,opts={}){
+  const timeoutMs=opts.timeoutMs??10000;
+  if(!API_BASE)return{ok:false,data:null,error:'no_api_base',status:0,aborted:false};
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),timeoutMs);
+  const h={'Content-Type':'application/json'};
+  if(AUTH_TOKEN)h['Authorization']='Bearer '+AUTH_TOKEN;
+  // opts 에 headers 가 있으면 그 값으로 Content-Type 대체 가능
+  if(opts.headers)Object.assign(h,opts.headers);
   try{
-    const h={'Content-Type':'application/json'};
-    if(AUTH_TOKEN)h['Authorization']='Bearer '+AUTH_TOKEN;
-    const r=await fetch(API_BASE+'/api/v1'+path,{...opts,headers:h});
-    if(r.status===401){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();return null}
-    if(!r.ok)return null;
-    return await r.json();
-  }catch{return null}
+    const {timeoutMs:_ignore,headers:_h,...rest}=opts;
+    const r=await fetch(API_BASE+'/api/v1'+path,{...rest,headers:h,signal:ctrl.signal});
+    if(r.status===401){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();return{ok:false,data:null,error:'unauthorized',status:401,aborted:false}}
+    let data=null,err=null;
+    try{data=await r.json()}catch{data=null}
+    if(!r.ok)err=(data&&(data.detail||data.error))||('HTTP '+r.status);
+    return{ok:r.ok,data,error:err,status:r.status,aborted:false};
+  }catch(e){
+    const aborted=(e&&e.name==='AbortError');
+    return{ok:false,data:null,error:aborted?'timeout':(e&&e.message)||'network_error',status:0,aborted};
+  }finally{clearTimeout(tid)}
+}
+// 기존 호환 API — data 또는 null 반환. 50+ 호출부 유지. 네트워크/타임아웃 오류는 토스트로 사용자에게 알림.
+async function apiFetch(path,opts={}){
+  const r=await apiFetchFull(path,opts);
+  if(!r.ok){
+    // 401 은 로그아웃 처리만, 토스트는 생략(UI 교체가 있음). 타임아웃/네트워크는 사용자에게 알림.
+    if(r.aborted)showToast('서버 응답이 지연됩니다. 잠시 후 다시 시도해주세요.','error');
+    else if(r.status===0&&r.error!=='no_api_base')showToast('네트워크 연결을 확인해주세요.','error');
+    return null;
+  }
+  return r.data;
+}
+// 경량 토스트 — 상단 우측에 3초 자동 사라짐. type: 'info'|'success'|'error'
+function showToast(msg,type='info'){
+  let c=document.getElementById('_toastBox');
+  if(!c){c=document.createElement('div');c.id='_toastBox';c.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(c)}
+  const t=document.createElement('div');
+  const bg=type==='error'?'rgba(231,85,82,.95)':type==='success'?'rgba(52,199,123,.95)':'rgba(45,48,58,.95)';
+  t.style.cssText=`background:${bg};color:#fff;padding:10px 14px;border-radius:8px;font-size:.8rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:320px;line-height:1.4;opacity:0;transform:translateX(10px);transition:all .2s;pointer-events:auto`;
+  t.textContent=msg;
+  c.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(0)'});
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(10px)';setTimeout(()=>t.remove(),250)},3000);
 }
 function openAuth(){document.getElementById('authOverlay').classList.add('open');document.getElementById('authErr').textContent=''}
 function closeAuth(){document.getElementById('authOverlay').classList.remove('open');if(window._saveRetry){window._saveRetry();window._saveRetry=null}}
@@ -949,27 +1012,19 @@ async function saveComparison(){
   if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
   const body=JSON.stringify(payload);
   const doSave=async()=>{
-    const h={'Content-Type':'application/json','Authorization':'Bearer '+AUTH_TOKEN};
-    const resp=await fetch(API_BASE+'/api/v1/comparisons',{method:'POST',headers:h,body});
-    if(resp.status===401){
-      AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();
-      throw new Error('TOKEN_EXPIRED');
-    }
-    if(!resp.ok){const b=await resp.text().catch(()=>'');throw new Error('HTTP '+resp.status+': '+b.slice(0,200))}
-    return await resp.json();
+    // apiFetchFull 이 401 을 자동 로그아웃 처리하고 status 로 분기 판단 가능.
+    // timeoutMs 는 기본 10s 로 충분.
+    return await apiFetchFull('/comparisons',{method:'POST',body});
   };
-  try{
-    const r=await doSave();
-    if(!r||r.error)throw new Error('서버 오류: '+JSON.stringify(r));
-  }catch(e){
-    if(e.message==='TOKEN_EXPIRED'){
-      // 토큰 만료 → 재로그인 후 자동 재시도
-      await new Promise(resolve=>{window._saveRetry=resolve;openAuth()});
-      if(!AUTH_TOKEN)throw new Error('로그인이 취소되었습니다');
-      const r=await doSave();
-      if(!r||r.error)throw new Error('서버 오류: '+JSON.stringify(r));
-    } else throw e;
+  let r=await doSave();
+  if(!r.ok&&r.status===401){
+    // 토큰 만료 → 재로그인 후 자동 재시도
+    await new Promise(resolve=>{window._saveRetry=resolve;openAuth()});
+    if(!AUTH_TOKEN)throw new Error('로그인이 취소되었습니다');
+    r=await doSave();
   }
+  if(!r.ok)throw new Error(r.error||'서버 오류');
+  if(!r.data||r.data.error)throw new Error('서버 오류: '+JSON.stringify(r.data));
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1469,6 +1524,84 @@ function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').cl
 function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const tp_cd=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[tp_cd];const label=TYPE_LABELS[tp_cd]||tp_cd;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=normalizeCompany({benefits:preset}).benefits;const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,tp_cd);commit()}
 
 // ━━ BENEFITS ━━
+// 배지 상태 판정 — 'off'(공식·유효), 'stl'(공식이지만 만료), 'est'(추정) 3-상태.
+// official + 만료 = stl 로 강등해야 "예전엔 공식, 지금은 재검증 필요" 를 UI 가 전달.
+function badgeState(b){
+  if(!b)return 'est';
+  const bc=b.badge_cd||'est';
+  if(bc!=='official')return 'est';
+  const ex=b.expires_dtm;
+  if(!ex)return 'off';
+  return (new Date(ex).getTime()<Date.now())?'stl':'off';
+}
+function badgeLabel(st){return st==='off'?'공식':st==='stl'?'만료':'추정'}
+function badgeChip(b){
+  const st=badgeState(b);
+  const ver=b&&b.verified_dtm?b.verified_dtm.slice(0,10):'';
+  const tip=st==='off'?('공식 확인 '+(ver||'—')):st==='stl'?('공식이었으나 '+(b.expires_dtm?b.expires_dtm.slice(0,10):'—')+' 만료'):'공개 정보 기반 추정치';
+  return `<span class="bi-badge b-${st}" title="${esc(tip)}">${badgeLabel(st)}</span>`;
+}
+// 배지 상태별 신뢰 계수 — 합계 ± 범위 계산에 사용.
+// official(유효): ±5%, stale(만료): ±15%, est(추정): ±20%.
+function benUncertainty(b){const st=badgeState(b); return st==='off'?0.05:st==='stl'?0.15:0.20}
+// 체크된 금전 복지의 합계 ± 절대값 (만원). qual_yn 항목은 금액이 없으므로 제외.
+function sumBenUncertainty(list){return (list||[]).filter(b=>b.checked&&!b.qual_yn).reduce((acc,b)=>acc+(Number(b.benefit_amt)||0)*benUncertainty(b),0)}
+function fmtPM(v){const f=x=>x>=10000?(x/10000).toFixed(1)+'억':Math.round(x).toLocaleString()+'만';return '±'+f(Math.round(v))}
+// 리포트 신뢰도 요약 — 체크된 복지에 대한 official/est/stale 비율과 평균 검증일.
+function computeDataTrust(){
+  const all=[...((benS.a||[]).filter(b=>b.checked)),...((benS.b||[]).filter(b=>b.checked))];
+  const total=all.length;
+  if(!total)return null;
+  let off=0,stl=0,est=0,latest='',earliestExpires='';
+  all.forEach(b=>{const st=badgeState(b);if(st==='off')off++;else if(st==='stl')stl++;else est++;if(b.verified_dtm&&(!latest||b.verified_dtm>latest))latest=b.verified_dtm;if(b.expires_dtm&&(!earliestExpires||b.expires_dtm<earliestExpires))earliestExpires=b.expires_dtm;});
+  return{total,off,stl,est,off_pct:Math.round(off/total*100),latest:latest?latest.slice(0,10):'',earliestExpires:earliestExpires?earliestExpires.slice(0,10):''};
+}
+// 제보 모달 — 복지 하나 값이 잘못됐다고 사용자가 신고. 익명/로그인 모두 허용.
+// state: 현재 선택된 (comp_id, benefit_id) 를 담는다.
+let _rptTarget=null;
+function reportBen(s,idx){
+  const b=benS[s]?.[idx];
+  const cmp=matched[s];
+  if(!b||!b.benefit_id||!cmp?.comp_id){
+    showToast('DB에 저장된 회사 복지만 제보할 수 있습니다','info');
+    return;
+  }
+  _rptTarget={comp_id:cmp.comp_id,benefit_id:b.benefit_id,benefit_nm:b.benefit_nm,current_amt:b.benefit_amt};
+  const box=document.getElementById('rptBox');
+  box.innerHTML=`
+    <h4>🚩 값이 잘못됐다고 제보</h4>
+    <div class="rpt-sub">${esc(cmp.comp_nm||'회사')} · ${esc(b.benefit_nm||'')}</div>
+    <label>제보 유형</label>
+    <select id="rptType" onchange="document.getElementById('rptAmtRow').style.display=this.value==='wrong_amount'?'block':'none'">
+      <option value="wrong_amount">금액이 잘못됐습니다</option>
+      <option value="outdated">이 제도는 이미 폐지/변경됐습니다</option>
+      <option value="missing_field">다른 정보가 누락됐습니다</option>
+    </select>
+    <div id="rptAmtRow"><label>올바른 금액 (만원)</label><input type="number" id="rptAmt" placeholder="예: 500" min="0"></div>
+    <label>사유/상세 (선택, 500자)</label>
+    <textarea id="rptComment" maxlength="500" placeholder="어떻게 알게 됐는지, 출처 링크 등"></textarea>
+    <div class="rpt-actions">
+      <button class="rpt-cancel" onclick="closeRpt()">취소</button>
+      <button class="rpt-submit" onclick="submitReport()">제보하기</button>
+    </div>`;
+  document.getElementById('rptOverlay').classList.add('open');
+}
+function closeRpt(){document.getElementById('rptOverlay').classList.remove('open');_rptTarget=null}
+async function submitReport(){
+  if(!_rptTarget)return;
+  const type=document.getElementById('rptType').value;
+  const amt=document.getElementById('rptAmt').value;
+  const comment=document.getElementById('rptComment').value.trim();
+  const body={report_type_cd:type,comment_ctnt:comment||null};
+  if(type==='wrong_amount'){
+    if(!amt){showToast('금액을 입력해주세요','error');return}
+    body.reported_amt=Number(amt);
+  }
+  const r=await apiFetchFull(`/companies/${_rptTarget.comp_id}/benefits/${_rptTarget.benefit_id}/report`,{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok){showToast('제보 실패: '+(r.error||'서버 오류'),'error');return}
+  closeRpt();
+  showToast('제보가 접수되었습니다. 관리자 검수 후 반영됩니다.','success');
+}
 function renderBen(s){renderBenCompare()}
 function renderBenCompare(){
   const listA=benS.a||[],listB=benS.b||[];
@@ -1502,10 +1635,10 @@ function renderBenCompare(){
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nAE}</div>`;
-    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
+    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span>${badgeChip(b)}</div>`});
     if(!d.aItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nBE}</div>`;
-    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
+    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span>${badgeChip(b)}</div>`});
     if(!d.bItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
@@ -1589,20 +1722,26 @@ function renderBenCatCompare(nA,nB){
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
     d.details.filter(x=>x.inA).forEach(x=>{
-      const only='';
-      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)"><span class="bi-u">만</span>${only}</div>`;
+      const ben=x.idxA>=0?benS.a[x.idxA]:null;
+      const ch=ben?badgeChip(ben):'';
+      const rpt=(ben&&ben.benefit_id)?`<button class="bi-report-btn" onclick="event.stopPropagation();reportBen('a',${x.idxA})" title="값이 잘못됐다고 제보">🚩</button>`:'';
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span>${ch}<input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)"><span class="bi-u">만</span>${rpt}</div>`;
     });
     if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
     d.details.filter(x=>x.inB).forEach(x=>{
-      const only='';
-      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span><input type="number" class="bi-v" value="${x.valB}" onchange="updRptBenVal('b',${x.idxB},this.value)"><span class="bi-u">만</span>${only}</div>`;
+      const ben=x.idxB>=0?benS.b[x.idxB]:null;
+      const ch=ben?badgeChip(ben):'';
+      const rpt=(ben&&ben.benefit_id)?`<button class="bi-report-btn" onclick="event.stopPropagation();reportBen('b',${x.idxB})" title="값이 잘못됐다고 제보">🚩</button>`:'';
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span>${ch}<input type="number" class="bi-v" value="${x.valB}" onchange="updRptBenVal('b',${x.idxB},this.value)"><span class="bi-u">만</span>${rpt}</div>`;
     });
     if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
   const totA=listA.reduce((s,b)=>s+b.benefit_amt,0),totB=listB.reduce((s,b)=>s+b.benefit_amt,0),totD=totB-totA;
+  const uncA=sumBenUncertainty(benS.a),uncB=sumBenUncertainty(benS.b);
   h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptTotA">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptTotDiff">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b" id="rptTotB">${fV(totB)}</span></div>`;
+  h+=`<div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--t4);padding:4px 14px 0"><span id="rptTotUncA">${totA>0?fmtPM(uncA):''}</span><span>신뢰구간 (official ±5% / stale ±15% / est ±20%)</span><span id="rptTotUncB">${totB>0?fmtPM(uncB):''}</span></div>`;
   h+='</div>';
   return h;
 }
@@ -1634,6 +1773,10 @@ function updRptBenVal(s,idx,v){
   const elTA=document.getElementById('rptTotA'),elTB=document.getElementById('rptTotB'),elTD=document.getElementById('rptTotDiff');
   if(elTA)elTA.textContent=fV(totA);if(elTB)elTB.textContent=fV(totB);
   if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
+  const uncA=sumBenUncertainty(benS.a),uncB=sumBenUncertainty(benS.b);
+  const elUA=document.getElementById('rptTotUncA'),elUB=document.getElementById('rptTotUncB');
+  if(elUA)elUA.textContent=totA>0?fmtPM(uncA):'';
+  if(elUB)elUB.textContent=totB>0?fmtPM(uncB):'';
 }
 function renderQualCompare(nA,nB){
   const listA=(benS.a||[]).filter(b=>b.checked&&b.qual_yn),listB=(benS.b||[]).filter(b=>b.checked&&b.qual_yn);
@@ -1667,10 +1810,10 @@ function renderQualCompare(nA,nB){
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
     h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
-    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span></div>`})}
+    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span>${badgeChip(b)}</div>`})}
     else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
     h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
-    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span></div>`})}
+    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span>${badgeChip(b)}</div>`})}
     else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
     h+=`</div></div></div></div>`;
   });
@@ -1985,6 +2128,16 @@ function compare(){
   }
 
   if(!pfResult){html+=`<div class="rp-profiler-cta"><p>내가 선택한 기준이 정말 맞을까?<br><strong>커리어 가치관 테스트</strong>로 검증해보세요.</p><button class="rp-profiler-btn" onclick="go('s-profiler')">🎯 가치관 테스트 하기</button></div>`}
+  const _trust=computeDataTrust();
+  if(_trust){
+    const pctCls=_trust.off_pct>=60?'':_trust.off_pct>=30?'warn':'bad';
+    html+=`<div class="data-trust"><div class="data-trust-head">🔎 데이터 신뢰도</div>`;
+    html+=`<div class="data-trust-row"><span class="data-trust-label">공식 확인 비율</span><span class="data-trust-val data-trust-pct ${pctCls}">${_trust.off_pct}% (${_trust.off}/${_trust.total})</span></div>`;
+    if(_trust.est>0)html+=`<div class="data-trust-row"><span class="data-trust-label">추정치 항목</span><span class="data-trust-val">${_trust.est}개</span></div>`;
+    if(_trust.stl>0)html+=`<div class="data-trust-row"><span class="data-trust-label">재검증 필요(만료)</span><span class="data-trust-val">${_trust.stl}개</span></div>`;
+    if(_trust.latest)html+=`<div class="data-trust-row"><span class="data-trust-label">최근 검증일</span><span class="data-trust-val">${esc(_trust.latest)}</span></div>`;
+    html+=`<div class="data-trust-foot">공식 확인 비율이 낮을수록 실제 값과 편차가 큽니다. 추정치는 채용 공고·공개 정보 기반 계산이며, 각 항목에 달린 <span class="bi-badge b-off">공식</span>/<span class="bi-badge b-est">추정</span>/<span class="bi-badge b-stl">만료</span> 뱃지에 마우스를 올리면 출처/검증일을 볼 수 있습니다.</div></div>`;
+  }
   html+=`<div class="disclaimer">복리후생 금액은 공개 채용 정보 기반 추정치이며 실제와 다를 수 있습니다.</div>`;
   // Feed data for social landing
   const _totalA=effA.mid+otPayA,_totalB=effB.mid+otPayB,_td=_totalB-_totalA;
@@ -2008,8 +2161,8 @@ function compare(){
 }
 
 // ━━ ADMIN ━━
-let admTab='dashboard',admPage={companies:1,users:1,cases:1,feed:1},admData={},admCompQ='',admCompType='',admUserQ='',admContentSub='cases',admStatsDays=30;
-const ADM_TABS=[['dashboard','대시보드'],['companies','회사 관리'],['users','사용자'],['content','콘텐츠'],['stats','통계']];
+let admTab='dashboard',admPage={companies:1,users:1,cases:1,feed:1,pending:1},admData={},admCompQ='',admCompType='',admUserQ='',admContentSub='cases',admStatsDays=30;
+const ADM_TABS=[['dashboard','대시보드'],['companies','회사 관리'],['pending','검수'],['users','사용자'],['content','콘텐츠'],['stats','통계']];
 const ADM_TYPE_LABELS={large:'대기업',mid:'중견기업',public:'공기업',startup:'스타트업',foreign:'외국계',freelance:'프리랜서'};
 const ADM_CAT_OPTS=[['compensation','보상·금전'],['flexibility','근무유연성'],['work_env','근무환경'],['time_off','시간·휴가'],['health','건강·의료'],['family','가족·돌봄'],['growth','성장·커리어'],['leisure','여가·라이프'],['perks','경제적 부가혜택']];
 const ADM_BADGE_OPTS=[['confirmed','확인됨'],['est','추정'],['premium','프리미엄'],['unique','고유']];
@@ -2023,6 +2176,7 @@ function admGoTab(t){
   document.querySelectorAll('.adm-tab').forEach(el=>el.classList.toggle('active',el.textContent===ADM_TABS.find(x=>x[0]===t)?.[1]));
   if(t==='dashboard')admLoadDash();
   else if(t==='companies')admLoadCompanies();
+  else if(t==='pending')admLoadPending();
   else if(t==='users')admLoadUsers();
   else if(t==='content')admLoadContent();
   else if(t==='stats')admLoadStats();
@@ -2051,6 +2205,73 @@ async function admLoadDash(){
 async function admClearCache(){
   const r=await apiFetch('/admin/cache/clear',{method:'POST'});
   alert(r?'캐시가 초기화되었습니다.':'오류가 발생했습니다.');
+}
+
+// ━━ ADMIN: 검수 (est → official 승격 + 사용자 제보) ━━
+const RPT_TYPE_LABELS={wrong_amount:'금액 오류',outdated:'제도 변경/폐지',missing_field:'정보 누락'};
+async function admLoadPending(page){
+  if(page!=null)admPage.pending=page;
+  const c=document.getElementById('admContent');
+  c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">로딩 중...</div>';
+  const [d,reports]=await Promise.all([
+    apiFetch('/admin/benefits/pending?page='+admPage.pending),
+    apiFetch('/admin/benefit-reports'),
+  ]);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>검수 대기 — 출처 URL 이 있는 추정치</h4>';
+  h+=`<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">스크래퍼가 공식 페이지에서 수집했으나 아직 <span class="bi-badge b-est">추정</span> 상태인 항목입니다. 원문을 확인하고 값이 맞으면 <strong>승격</strong>하세요.</p>`;
+  h+='<table class="adm-tbl"><thead><tr><th>회사</th><th>복지</th><th>금액</th><th>카테고리</th><th>출처</th><th>수집일</th><th>작업</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(it=>{
+      const bid=Number(it.benefit_id)||0;
+      const amt=it.benefit_amt?Number(it.benefit_amt).toLocaleString()+'만':'—';
+      const ins=it.ins_dtm?String(it.ins_dtm).slice(0,10):'-';
+      const url=it.badge_src_url_ctnt||'';
+      const srcBtn=url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="adm-btn" style="padding:2px 8px">원문 ↗</a>`:'<span style="color:var(--t4)">—</span>';
+      const cat=ADM_CAT_OPTS.find(([k])=>k===it.benefit_ctgr_cd)?.[1]||it.benefit_ctgr_cd||'-';
+      return `<tr id="admPR${bid}"><td><strong>${esc(it.comp_nm||'')}</strong></td><td>${esc(it.benefit_nm||'')}<div style="font-size:.7rem;color:var(--t4)">${esc(it.benefit_cd||'')}</div></td><td>${amt}</td><td>${esc(cat)}</td><td>${srcBtn}</td><td>${ins}</td><td style="white-space:nowrap"><button class="adm-btn primary" onclick="admPromoteBenefit(${bid})" style="padding:4px 10px">승격 → 공식</button></td></tr>`;
+    }).join('');
+  }else{
+    h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:2rem">검수 대기 항목이 없습니다.</td></tr>';
+  }
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadPending');
+  // 사용자 제보 섹션
+  h+='<h4 style="margin-top:2rem">🚩 사용자 제보 — 미해결</h4>';
+  h+=`<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">사용자가 리포트에서 "값 틀림" 으로 신고한 항목입니다. <strong>반영</strong>은 별도로 복지 편집 화면에서 수정하세요.</p>`;
+  h+='<table class="adm-tbl"><thead><tr><th>회사</th><th>복지</th><th>유형</th><th>현재값</th><th>제보값</th><th>제보자</th><th>제보일</th><th>사유</th><th>작업</th></tr></thead><tbody>';
+  if(reports&&reports.length){
+    h+=reports.map(r=>{
+      const rid=Number(r.report_id)||0;
+      const cur=r.current_amt!=null?Number(r.current_amt).toLocaleString()+'만':'—';
+      const sug=r.reported_amt!=null?Number(r.reported_amt).toLocaleString()+'만':'—';
+      const who=r.reporter_email?esc(r.reporter_email):'익명';
+      const ins=r.ins_dtm?String(r.ins_dtm).slice(0,10):'-';
+      const cmt=r.comment_ctnt?esc(r.comment_ctnt):'<span style="color:var(--t4)">—</span>';
+      return `<tr id="admRR${rid}"><td><strong>${esc(r.comp_nm||'')}</strong></td><td>${esc(r.benefit_nm||'')}<div style="font-size:.7rem;color:var(--t4)">${esc(r.benefit_cd||'')}</div></td><td>${esc(RPT_TYPE_LABELS[r.report_type_cd]||r.report_type_cd||'-')}</td><td>${cur}</td><td style="color:var(--amber)">${sug}</td><td>${who}</td><td>${ins}</td><td style="max-width:220px;white-space:normal;font-size:.75rem">${cmt}</td><td style="white-space:nowrap"><button class="adm-btn primary" onclick="admResolveReport(${rid},'resolved')" style="padding:4px 8px">반영</button> <button class="adm-btn danger" onclick="admResolveReport(${rid},'rejected')" style="padding:4px 8px">기각</button></td></tr>`;
+    }).join('');
+  }else{
+    h+='<tr><td colspan="9" style="text-align:center;color:var(--t3);padding:2rem">미해결 제보가 없습니다.</td></tr>';
+  }
+  h+='</tbody></table>';
+  h+='</div>';
+  c.innerHTML=h;
+}
+async function admResolveReport(rid,statusCd){
+  const note=prompt((statusCd==='resolved'?'반영':'기각')+' 메모 (선택, 엔터로 스킵)','')||'';
+  const r=await apiFetch('/admin/benefit-reports/'+rid+'/resolve',{method:'PUT',body:JSON.stringify({status_cd:statusCd,note_ctnt:note||null})});
+  if(!r){showToast('처리 실패','error');return}
+  const tr=document.getElementById('admRR'+rid);if(tr)tr.style.opacity='.4';
+  showToast(statusCd==='resolved'?'제보 반영 처리':'제보 기각 처리','success');
+  setTimeout(()=>admLoadPending(),400);
+}
+async function admPromoteBenefit(id){
+  const note=prompt('승격 사유 메모 (선택, 엔터로 스킵)','')||'';
+  const r=await apiFetch('/admin/benefits/'+id+'/promote',{method:'PUT',body:JSON.stringify({note_ctnt:note||null})});
+  if(!r){showToast('승격 실패 — 서버 로그를 확인하세요','error');return}
+  const tr=document.getElementById('admPR'+id);if(tr)tr.style.opacity='.4';
+  showToast('공식 배지로 승격되었습니다','success');
+  setTimeout(()=>admLoadPending(),400);
 }
 
 // ━━ ADMIN: COMPANIES ━━

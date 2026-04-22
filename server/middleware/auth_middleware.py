@@ -32,6 +32,21 @@ async def get_verified_user_for_comp(
     return int(payload["sub"])
 
 
+_optional_bearer = HTTPBearer(auto_error=False)
+
+async def get_optional_user(
+    cred: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> int | None:
+    """익명 허용 엔드포인트용 — 토큰 없으면 None, 유효하지 않아도 None.
+
+    예: 사용자 제보 API — 로그인이면 mbr_id 기록, 비로그인도 허용.
+    """
+    if cred is None:
+        return None
+    mbr_id = decode_token(cred.credentials)
+    return mbr_id  # 유효하지 않으면 None
+
+
 async def get_admin_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> int:
     payload = decode_token_full(cred.credentials)
     if payload is None:

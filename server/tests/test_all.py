@@ -201,12 +201,12 @@ def test_openapi_schema():
 
 def test_visitor_tracking():
     import time
-    from routers.landing import _active_visitors, _get_active_count
+    from services.landing_service import _active_visitors, get_active_count
     _active_visitors.clear()
     _active_visitors["u1"] = time.time()
     _active_visitors["u2"] = time.time()
     _active_visitors["old"] = time.time() - 120
-    assert _get_active_count() == 2
+    assert get_active_count() == 2
 
 
 # ━━ SCRAPE BENEFITS TOOL ━━

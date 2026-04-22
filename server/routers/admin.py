@@ -3,10 +3,12 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 import database
 from services import cache
+from services import benefit_service
 from middleware.auth_middleware import get_admin_user
 from models.admin import (
     DashboardStats, CompanyCreate, CompanyUpdate, BenefitItem,
     AliasUpdate, PopularCaseReq, UserRoleUpdate, PagedResponse,
+    BenefitPromoteReq, BenefitReportResolveReq,
 )
 
 router = APIRouter()
@@ -27,7 +29,7 @@ async def dashboard(admin_id: int = Depends(get_admin_user)):
     comp_with_ben = await database.fetch_one(
         "SELECT COUNT(DISTINCT COMP_ID) AS cnt FROM TCOMPANY_BENEFIT"
     )
-    from routers.landing import _get_active_count
+    from services import landing_service
     return DashboardStats(
         total_mbr_no=int(total_mbr["cnt"]) if total_mbr else 0,
         today_mbr_no=int(today_mbr["cnt"]) if today_mbr else 0,
@@ -35,7 +37,7 @@ async def dashboard(admin_id: int = Depends(get_admin_user)):
         today_comparison_no=int(today_comparison["cnt"]) if today_comparison else 0,
         total_comp_no=int(total_comp["cnt"]) if total_comp else 0,
         comp_with_benefit_no=int(comp_with_ben["cnt"]) if comp_with_ben else 0,
-        active_visitor_no=_get_active_count(),
+        active_visitor_no=landing_service.get_active_count(),
     )
 
 # ━━ MEMBERS ━━
@@ -219,18 +221,7 @@ async def delete_company(comp_id: int, admin_id: int = Depends(get_admin_user)):
 
 @router.get("/companies/{comp_id}/benefits")
 async def get_company_benefits(comp_id: int, admin_id: int = Depends(get_admin_user)):
-    rows = await database.fetch_all(
-        """SELECT BENEFIT_ID AS benefit_id, BENEFIT_CD AS benefit_cd, BENEFIT_NM AS benefit_nm,
-                  BENEFIT_AMT AS benefit_amt, BENEFIT_CTGR_CD AS benefit_ctgr_cd,
-                  BADGE_CD AS badge_cd, NOTE_CTNT AS note_ctnt,
-                  QUAL_YN AS qual_yn, QUAL_DESC_CTNT AS qual_desc_ctnt,
-                  SORT_ORDER_NO AS sort_order_no
-           FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s ORDER BY SORT_ORDER_NO""",
-        (comp_id,),
-    )
-    for r in rows:
-        r["qual_yn"] = bool(r.get("qual_yn"))
-    return rows
+    return await benefit_service.fetch_company_benefits(comp_id)
 
 @router.put("/companies/{comp_id}/benefits")
 async def save_company_benefits(
@@ -238,22 +229,91 @@ async def save_company_benefits(
     benefits: list[BenefitItem],
     admin_id: int = Depends(get_admin_user),
 ):
-    existing = await database.fetch_one("SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (comp_id,))
+    existing = await database.fetch_one(
+        "SELECT COMP_ID AS comp_id FROM TCOMPANY WHERE COMP_ID=%s", (comp_id,)
+    )
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    async with database.transaction() as tx:
-        await tx.execute("DELETE FROM TCOMPANY_BENEFIT WHERE COMP_ID=%s", (comp_id,))
-        for i, b in enumerate(benefits):
-            await tx.execute(
-                """INSERT INTO TCOMPANY_BENEFIT
-                   (COMP_ID, BENEFIT_CD, BENEFIT_NM, BENEFIT_AMT, BENEFIT_CTGR_CD, BADGE_CD, NOTE_CTNT, QUAL_YN, QUAL_DESC_CTNT, SORT_ORDER_NO)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                (comp_id, b.benefit_cd, b.benefit_nm, b.benefit_amt,
-                 b.benefit_ctgr_cd, b.badge_cd, b.note_ctnt,
-                 b.qual_yn, b.qual_desc_ctnt, b.sort_order_no or i),
-            )
+    saved = await benefit_service.upsert_company_benefits(comp_id, benefits)
     cache.delete("reference_all")
-    return {"ok": True, "count": len(benefits)}
+    return {"ok": True, "count": len(saved)}
+
+# ━━ BADGE 검수 ━━
+
+@router.get("/benefits/pending", response_model=PagedResponse)
+async def list_pending_benefits(
+    page: int = Query(1, ge=1),
+    admin_id: int = Depends(get_admin_user),
+):
+    """est 상태이면서 출처 URL 이 있는 복지 — 관리자 검수 대기 큐.
+
+    승격 후보: scraper 가 공식 페이지에서 긁어왔지만 아직 관리자 승인 전인 것.
+    ai_parse/scrape_fallback 도 BADGE_SRC_URL_CTNT 가 있으면 포함(원문 확인 가능).
+    """
+    page_size = 20
+    offset = (page - 1) * page_size
+    where = """WHERE cb.BADGE_CD = 'est'
+                 AND cb.BADGE_SRC_URL_CTNT IS NOT NULL
+                 AND cb.BADGE_SRC_URL_CTNT <> ''"""
+    count_row = await database.fetch_one(
+        f"SELECT COUNT(*) AS cnt FROM TCOMPANY_BENEFIT cb {where}"
+    )
+    rows = await database.fetch_all(
+        f"""SELECT cb.BENEFIT_ID AS benefit_id, cb.COMP_ID AS comp_id,
+                   c.COMP_NM AS comp_nm,
+                   cb.BENEFIT_CD AS benefit_cd, cb.BENEFIT_NM AS benefit_nm,
+                   cb.BENEFIT_AMT AS benefit_amt, cb.BENEFIT_CTGR_CD AS benefit_ctgr_cd,
+                   cb.BADGE_CD AS badge_cd, cb.BADGE_SRC_CD AS badge_src_cd,
+                   cb.BADGE_SRC_URL_CTNT AS badge_src_url_ctnt,
+                   cb.VERIFIED_DTM AS verified_dtm, cb.EXPIRES_DTM AS expires_dtm,
+                   cb.NOTE_CTNT AS note_ctnt, cb.INS_DTM AS ins_dtm
+            FROM TCOMPANY_BENEFIT cb
+            JOIN TCOMPANY c ON c.COMP_ID = cb.COMP_ID
+            {where}
+            ORDER BY cb.INS_DTM DESC
+            LIMIT %s OFFSET %s""",
+        (page_size, offset),
+    )
+    for r in rows:
+        for k in ("ins_dtm", "verified_dtm", "expires_dtm"):
+            if r.get(k) and hasattr(r[k], "isoformat"):
+                r[k] = r[k].isoformat()
+    return PagedResponse(
+        items=rows,
+        total=int(count_row["cnt"]) if count_row else 0,
+        page=page,
+        page_size=page_size,
+    )
+
+@router.put("/benefits/{benefit_id}/promote")
+async def promote_benefit(
+    benefit_id: int,
+    req: BenefitPromoteReq,
+    admin_id: int = Depends(get_admin_user),
+):
+    """est → official 승격 + TCOMPANY_BENEFIT_BADGE_LOG 기록."""
+    result = await benefit_service.promote_to_official(benefit_id, admin_id, req.note_ctnt)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benefit not found")
+    cache.delete("reference_all")
+    return result
+
+@router.get("/benefit-reports")
+async def list_benefit_reports(admin_id: int = Depends(get_admin_user)):
+    """미해결(open) 사용자 제보 목록 — 관리자 검수 큐."""
+    return await benefit_service.list_open_reports(limit=100)
+
+@router.put("/benefit-reports/{report_id}/resolve")
+async def resolve_benefit_report(
+    report_id: int,
+    req: BenefitReportResolveReq,
+    admin_id: int = Depends(get_admin_user),
+):
+    """제보 처리 — resolved/rejected. 실제 복지 금액 반영은 별도(관리자 편집 화면)."""
+    result = await benefit_service.resolve_report(report_id, admin_id, req.status_cd, req.note_ctnt)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return result
 
 # ━━ COMPANY ALIASES ━━
 

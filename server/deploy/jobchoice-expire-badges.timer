@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily run of Job Choice expire-badges
+
+[Timer]
+# 매일 03:00 (KST)
+OnCalendar=*-*-* 03:00:00
+# 시스템 다운타임 후 누락된 실행을 부팅 직후 실행
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

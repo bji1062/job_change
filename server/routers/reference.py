@@ -58,9 +58,13 @@ async def get_all():
 
     # Benefits — batch
     all_bens = await database.fetch_all(
-        """SELECT COMP_ID AS comp_id, BENEFIT_CD AS benefit_cd, BENEFIT_NM AS benefit_nm,
+        """SELECT COMP_ID AS comp_id, BENEFIT_ID AS benefit_id,
+                  BENEFIT_CD AS benefit_cd, BENEFIT_NM AS benefit_nm,
                   BENEFIT_AMT AS benefit_amt, BENEFIT_CTGR_CD AS benefit_ctgr_cd,
-                  BADGE_CD AS badge_cd, NOTE_CTNT AS note_ctnt,
+                  BADGE_CD AS badge_cd, BADGE_SRC_CD AS badge_src_cd,
+                  BADGE_SRC_URL_CTNT AS badge_src_url_ctnt,
+                  VERIFIED_DTM AS verified_dtm, EXPIRES_DTM AS expires_dtm,
+                  NOTE_CTNT AS note_ctnt,
                   QUAL_YN AS qual_yn, QUAL_DESC_CTNT AS qual_desc_ctnt
            FROM TCOMPANY_BENEFIT ORDER BY SORT_ORDER_NO"""
     )
@@ -68,6 +72,9 @@ async def get_all():
     for b in all_bens:
         comp_id = b.pop("comp_id")
         b["qual_yn"] = bool(b["qual_yn"])
+        for k in ("verified_dtm", "expires_dtm"):
+            if b.get(k) and hasattr(b[k], "isoformat"):
+                b[k] = b[k].isoformat()
         ben_map.setdefault(comp_id, []).append(b)
 
     for c in companies:

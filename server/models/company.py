@@ -1,6 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from models.types import BadgeCd, BadgeSrcCd, BenefitCtgrCd, CompTpCd
+from models.types import (
+    BadgeCd, BadgeSrcCd, BenefitCtgrCd, BenefitReportTypeCd, CompTpCd,
+)
 
 
 class CompanyBrief(BaseModel):
@@ -39,3 +41,8 @@ class CompanyDetail(CompanyBrief):
     benefits: list[Benefit] = []
     work_style_val: dict | None = None
     aliases: list[str] = []
+
+class BenefitReportReq(BaseModel):
+    report_type_cd: BenefitReportTypeCd
+    reported_amt: int | None = None  # wrong_amount 일 때 제보자가 주장하는 값 (만원)
+    comment_ctnt: str | None = Field(default=None, max_length=500)
