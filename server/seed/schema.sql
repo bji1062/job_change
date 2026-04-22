@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS TCOMPANY_BENEFIT (
   BENEFIT_AMT INT DEFAULT NULL COMMENT '연간 환산 금액 (만원, 정성적 항목은 NULL)',
   BENEFIT_CTGR_CD VARCHAR(20) NOT NULL COMMENT '복지 카테고리 (compensation, flexibility, work_env, time_off, health, family, growth, leisure, perks)',
   BADGE_CD VARCHAR(10) DEFAULT 'est' COMMENT '데이터 신뢰도 (est: 추정, official: 공식)',
+  BADGE_SRC_CD VARCHAR(20) DEFAULT NULL COMMENT '데이터 출처 (scrape_official, scrape_fallback, ai_parse, manual, user_report)',
+  BADGE_SRC_URL_CTNT VARCHAR(500) DEFAULT NULL COMMENT '출처 URL (공식 페이지 스크래핑 시)',
+  VERIFIED_DTM DATETIME DEFAULT NULL COMMENT '마지막 출처 재확인 시점 (INS/MOD_DTM과 별개, badge 신선도 기준)',
+  VERIFIED_BY_ID INT DEFAULT NULL COMMENT '검증자 FK (tmember.mbr_id) — 관리자 수동 승격 추적',
+  EXPIRES_DTM DATETIME DEFAULT NULL COMMENT '유효 만료 시점 (VERIFIED_DTM + category별 TTL, 초과 시 재검증 필요)',
   NOTE_CTNT VARCHAR(200) COMMENT '복지 상세 설명',
   QUAL_YN BOOLEAN DEFAULT FALSE COMMENT '정성적 복지 여부 (TRUE: 금액 환산 불가)',
   QUAL_DESC_CTNT VARCHAR(500) COMMENT '정성적 복지 상세 텍스트',
@@ -182,12 +187,13 @@ CREATE TABLE IF NOT EXISTS TMEMBER (
   LOGIN_PROVIDER_CD VARCHAR(20) DEFAULT 'local' COMMENT '인증 제공자 (local, kakao, naver, google)',
   COMP_EMAIL_ADDR VARCHAR(255) COMMENT '인증된 회사 이메일 주소',
   COMP_EMAIL_VRFC_YN VARCHAR(1) DEFAULT 'N' COMMENT '회사 이메일 인증 여부 (Y/N)',
-  VRFC_COMP_ID INT DEFAULT NULL COMMENT '회사 이메일로 인증된 회사 FK (companies.comp_id)',
+  VRFC_COMP_ID INT DEFAULT NULL COMMENT '회사 이메일로 인증된 회사 FK (tcompany.comp_id) — IDOR 방어 DB 근거',
   INS_ID INT COMMENT '입력자 ID',
   INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '가입 일시 (입력 일시)',
   MOD_ID INT COMMENT '수정자 ID',
   MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
-  INDEX idx_email_addr (EMAIL_ADDR)
+  INDEX idx_email_addr (EMAIL_ADDR),
+  FOREIGN KEY (VRFC_COMP_ID) REFERENCES TCOMPANY(COMP_ID) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS TPROFILER_RESULT (
