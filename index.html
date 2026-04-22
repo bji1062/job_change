@@ -1239,20 +1239,61 @@ function pfMag(v){return Math.sqrt(DIMS.reduce((s,d)=>s+(v[d]||0)**2,0))}
 function pfCos(a,b){const ma=pfMag(a),mb=pfMag(b);return(ma&&mb)?pfDot(a,b)/(ma*mb):0}
 
 function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]]}return r}
+
+// ━━ SHARED HELPERS ━━
+// calc() + saveDraft() 묶음 — setter 일관성 유지 (P3-4)
+function commit(){calc();saveDraft();}
+
+// 회사 데이터 정규화 — API 응답과 BEN_PRESETS 프리셋을 같은 shape 로 통일 (P3-4)
+//  - qual_yn: boolean 강제
+//  - benefits: 기본 체크 상태(default_checked_yn 또는 checked) 유지, 없으면 true
+//  - benefit_amt: number 강제
+//  - benefit_ctgr_cd: 없으면 'perks' 폴백
+function normalizeCompany(raw){
+  if(!raw)return raw;
+  const bens=(raw.benefits||[]).map(b=>({
+    ...b,
+    benefit_amt:Number(b.benefit_amt)||0,
+    benefit_ctgr_cd:b.benefit_ctgr_cd||'perks',
+    badge_cd:b.badge_cd||'est',
+    qual_yn:!!b.qual_yn,
+    checked:b.checked!==undefined?b.checked:(b.default_checked_yn!==undefined?!!b.default_checked_yn:true),
+  }));
+  return{...raw,benefits:bens};
+}
+
 function pfInit(){pfShuffled=[];pfCur=0;pfAnswers=[];pfResult=null;pfJob=null;renderPfIntro()}
+// 하드코드 {id,label,a:{title,fx},b:{title,fx}} 와 API {question_label_nm, option_a.{option_a_title_nm, option_a_fx_val}, ...} 양쪽 수용
+function _normalizeQ(q,idx){
+  if(q.option_a&&q.option_a.option_a_title_nm!==undefined)return q;
+  return{
+    question_no:q.id??(idx+1),
+    question_label_nm:q.label||'',
+    option_a:{option_a_title_nm:q.a?.title||'',option_a_fx_val:q.a?.fx||{}},
+    option_b:{option_b_title_nm:q.b?.title||'',option_b_fx_val:q.b?.fx||{}},
+  };
+}
 function buildQuestions(jobId){
   const job=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.job_cd===jobId);
-  if(!job)return shuffle(Q_BASE);
-  const descs=Q_DESC[job.scenario];
-  return shuffle(Q_BASE.map((q,i)=>{const d=descs?.[i];return{...q,a:{...q.option_a,desc:d?.a||''},b:{...q.option_b,desc:d?.b||''}}}));
+  const scenarioKey=job?(job.scenario_cd||job.scenario):null;
+  const descs=scenarioKey?Q_DESC[scenarioKey]:null;
+  return shuffle(Q_BASE.map((raw,i)=>{
+    const q=_normalizeQ(raw,i);
+    const d=descs?.[i];
+    return{
+      ...q,
+      option_a:{...q.option_a,desc_a_ctnt:d?.a||''},
+      option_b:{...q.option_b,desc_b_ctnt:d?.b||''},
+    };
+  }));
 }
 
 function renderPfIntro(){
   let jobsHtml='';
   JOB_GROUPS.forEach((g,gi)=>{
     const oc=gi===0?' open':'';
-    jobsHtml+=`<div class="pf-job-group"><div class="pf-job-group-label${oc}" style="border-color:${g.color_cd}25" onclick="toggleJobGroup(this)"><span style="background:${g.color_cd};width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span><span style="color:${g.color_cd}">${g.job_group_nm}</span><span class="jg-arrow">▼</span></div><div class="pf-job-grid${oc}">`;
-    g.jobs.forEach(j=>{jobsHtml+=`<button class="pf-job-chip" data-jid="${j.job_cd}" onclick="pfSelectJob('${j.job_cd}')"><span class="pf-job-chip-i">${j.icon_nm}</span><span class="pf-job-chip-t">${j.job_nm}</span></button>`});
+    jobsHtml+=`<div class="pf-job-group"><div class="pf-job-group-label${oc}" style="border-color:${g.color_cd}25" onclick="toggleJobGroup(this)"><span style="background:${g.color_cd};width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span><span style="color:${g.color_cd}">${esc(g.job_group_nm)}</span><span class="jg-arrow">▼</span></div><div class="pf-job-grid${oc}">`;
+    g.jobs.forEach(j=>{jobsHtml+=`<button class="pf-job-chip" data-jid="${esc(j.job_cd)}" onclick="pfSelectJob('${esc(j.job_cd)}')"><span class="pf-job-chip-i">${esc(j.icon_nm)}</span><span class="pf-job-chip-t">${esc(j.job_nm)}</span></button>`});
     jobsHtml+=`</div></div>`;
   });
   document.getElementById('pfWrap').innerHTML=`<button class="back" onclick="go('s-landing')">← 처음으로</button><div class="pf-intro fadein"><div class="mono pf-badge">Career Values Profiler <span style="opacity:.4">v3</span></div><h1 class="pf-h">당신의 커리어 가치관을<br><span>발견</span>합니다</h1><p class="pf-p">12개의 구체적 시나리오에서 트레이드오프를 선택하세요.<br>각 선택이 6개 가치 차원에 미치는 복합 효과를 분석합니다.</p><div class="pf-dims">${DIMS.map(d=>`<span class="pf-dim" style="border-color:${DIM_META[d].color}30;color:${DIM_META[d].color}">${DIM_META[d].icon} ${DIM_META[d].label}</span>`).join('')}</div><div class="pf-job-section"><div class="pf-job-label">먼저, 현재 직무를 선택해주세요</div>${jobsHtml}<div class="pf-job-notice" id="pfJobNotice"></div></div><button class="pf-start" id="pfStartBtn" onclick="pfStart()" disabled style="opacity:.4;cursor:not-allowed">직무를 선택하면 시작할 수 있습니다</button><p class="mono" style="margin-top:20px;font-size:11px;color:rgba(255,255,255,.18)">약 3~5분 · 12문항 · 직무 맞춤 시나리오</p></div>`;
@@ -1263,7 +1304,7 @@ function pfSelectJob(jobId){
   document.querySelectorAll('.pf-job-chip').forEach(c=>c.classList.toggle('on',c.dataset.jid===jobId));
   document.querySelectorAll('.pf-job-chip.on').forEach(c=>{const g=c.closest('.pf-job-grid'),l=g?.previousElementSibling;if(g&&!g.classList.contains('open')){g.classList.add('open');l?.classList.add('open')}});
   const n=document.getElementById('pfJobNotice');
-  if(pfJob&&!pfJob.custom){n.innerHTML=`현재 <strong>${pfJob.job_nm}</strong>은 범용 시나리오가 적용됩니다. 곧 직무별 맞춤 시나리오가 추가됩니다.`;n.classList.add('show')}else{n.classList.remove('show')}
+  if(pfJob&&!pfJob.custom){n.innerHTML=`현재 <strong>${esc(pfJob.job_nm)}</strong>은 범용 시나리오가 적용됩니다. 곧 직무별 맞춤 시나리오가 추가됩니다.`;n.classList.add('show')}else{n.classList.remove('show')}
   const btn=document.getElementById('pfStartBtn');btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.textContent='시작하기';
 }
 function pfStart(){if(!pfJob)return;pfCur=0;pfAnswers=[];pfShuffled=buildQuestions(pfJob.job_cd);renderPfQ()}
@@ -1274,10 +1315,10 @@ function renderPfQ(){
   const q=pfShuffled[pfCur];
   const bars=pfShuffled.map((_,i)=>`<div class="pf-bar" style="background:${i<pfCur?'#E8B931':i===pfCur?'rgba(232,185,49,.4)':'rgba(255,255,255,.05)'}"></div>`).join('');
   function fxTags(fx){return DIMS.filter(d=>Math.abs(fx[d])>=.3).sort((a,b)=>Math.abs(fx[b])-Math.abs(fx[a])).map(d=>{const v=fx[d],pos=v>0;return`<span class="opt-fx-tag" style="background:${pos?DIM_META[d].color+'15':'rgba(255,255,255,.03)'};color:${pos?DIM_META[d].color:'rgba(255,255,255,.25)'};border-color:${pos?DIM_META[d].color+'30':'rgba(255,255,255,.06)'}">${pos?'↑':'↓'} ${DIM_META[d].label}</span>`}).join('')}
-  document.getElementById('pfWrap').innerHTML=`<div class="pf-q fadein"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="back" onclick="pfBack()" style="margin:0">← 이전</button><span class="mono" style="font-size:12px;color:rgba(255,255,255,.3)">${String(pfCur+1).padStart(2,'0')} / ${pfShuffled.length}</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.18)">${q.question_label_nm}</span></div><div class="pf-progress">${bars}</div><p class="pf-prompt">두 회사에서 동시에 오퍼를 받았습니다. 어디를 선택하시겠습니까?</p><div class="opt-card" id="pfOptA" onclick="pfSelect('a')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#E8B931;background:rgba(232,185,49,.15)">A</span><span class="opt-title">${q.option_a.option_a_title_nm}</span></div><p class="opt-desc">${q.option_a.desc_a_ctnt}</p><div class="opt-fx">${fxTags(q.option_a.option_a_fx_val)}</div></div><div class="opt-card" id="pfOptB" onclick="pfSelect('b')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#7B68C8;background:rgba(123,104,200,.15)">B</span><span class="opt-title">${q.option_b.option_b_title_nm}</span></div><p class="opt-desc">${q.option_b.desc_b_ctnt}</p><div class="opt-fx">${fxTags(q.option_b.option_b_fx_val)}</div></div></div>`;
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-q fadein"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="back" onclick="pfBack()" style="margin:0">← 이전</button><span class="mono" style="font-size:12px;color:rgba(255,255,255,.3)">${String(pfCur+1).padStart(2,'0')} / ${pfShuffled.length}</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.18)">${esc(q.question_label_nm||'')}</span></div><div class="pf-progress">${bars}</div><p class="pf-prompt">두 회사에서 동시에 오퍼를 받았습니다. 어디를 선택하시겠습니까?</p><div class="opt-card" id="pfOptA" onclick="pfSelect('a')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#E8B931;background:rgba(232,185,49,.15)">A</span><span class="opt-title">${esc(q.option_a.option_a_title_nm||'')}</span></div><p class="opt-desc">${esc(q.option_a.desc_a_ctnt||'')}</p><div class="opt-fx">${fxTags(q.option_a.option_a_fx_val)}</div></div><div class="opt-card" id="pfOptB" onclick="pfSelect('b')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#7B68C8;background:rgba(123,104,200,.15)">B</span><span class="opt-title">${esc(q.option_b.option_b_title_nm||'')}</span></div><p class="opt-desc">${esc(q.option_b.desc_b_ctnt||'')}</p><div class="opt-fx">${fxTags(q.option_b.option_b_fx_val)}</div></div></div>`;
 }
 let pfLock=false;
-function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];document.getElementById(side==='a'?'pfOptA':'pfOptB').classList.add('sel-'+side);document.getElementById(side==='a'?'pfOptB':'pfOptA').classList.add('dim');setTimeout(()=>{pfAnswers.push({fx:side==='a'?q.option_a.option_a_fx_val:q.option_b.option_b_fx_val});pfCur++;pfLock=false;renderPfQ()},500)}
+function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];document.getElementById(side==='a'?'pfOptA':'pfOptB').classList.add('sel-'+side);document.getElementById(side==='a'?'pfOptB':'pfOptA').classList.add('dim');setTimeout(()=>{try{pfAnswers.push({fx:side==='a'?q.option_a.option_a_fx_val:q.option_b.option_b_fx_val});pfCur++;renderPfQ()}finally{pfLock=false}},500)}
 
 function pfFinish(){
   const scores={};DIMS.forEach(d=>scores[d]=0);pfAnswers.forEach(a=>DIMS.forEach(d=>scores[d]+=(a.fx[d]||0)));
@@ -1294,9 +1335,12 @@ function pfFinish(){
   DIMS.forEach((d,i)=>{const p=pt(i,1.22);svg+=`<text x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="middle" fill="${DIM_META[d].color}" font-size="11" font-weight="600">${DIM_META[d].icon} ${DIM_META[d].label}</text>`});svg+=`</svg>`;
   const sorted=[...DIMS].sort((a,b)=>scores[b]-scores[a]);
   const barsH=sorted.map(d=>`<div style="display:flex;align-items:center;gap:12px"><span style="width:72px;font-size:13px;color:${DIM_META[d].color};font-weight:600;text-align:right">${DIM_META[d].icon} ${DIM_META[d].label}</span><div style="flex:1;height:26px;background:rgba(255,255,255,.03);border-radius:4px;overflow:hidden;position:relative"><div style="height:100%;width:${norm[d]*100}%;background:linear-gradient(90deg,${DIM_META[d].color}33,${DIM_META[d].color}99);border-radius:4px"></div><span class="mono" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:rgba(255,255,255,.45)">${scores[d]>=0?'+':''}${scores[d].toFixed(2)}</span></div></div>`).join('');
-  const simH=allSim.map(({p,s})=>`<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.4)"><span class="mono" style="width:90px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.profile_nm}</span><div style="flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(0,((s+1)/2)*100)}%;background:linear-gradient(90deg,rgba(232,185,49,.3),rgba(232,185,49,.8));border-radius:3px"></div></div><span class="mono" style="width:40px">${(s*100).toFixed(0)}%</span></div>`).join('');
+  const simH=allSim.map(({p,s})=>`<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.4)"><span class="mono" style="width:90px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.profile_nm)}</span><div style="flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(0,((s+1)/2)*100)}%;background:linear-gradient(90deg,rgba(232,185,49,.3),rgba(232,185,49,.8));border-radius:3px"></div></div><span class="mono" style="width:40px">${(s*100).toFixed(0)}%</span></div>`).join('');
   const scenarioKey=pfJob?.scenario_cd||'tech';const profile_job_fits=best.profile_job_fits?.[scenarioKey]||best.profile_job_fits?.tech;const jobLabel=pfJob?.job_nm||'기술';
-  document.getElementById('pfWrap').innerHTML=`<div class="pf-result"><div class="slideup" style="text-align:center;margin-bottom:36px"><div class="mono" style="font-size:11px;letter-spacing:4px;color:rgba(232,185,49,.6);text-transform:uppercase;margin-bottom:16px">Your Career DNA</div><h2 style="font-size:28px;font-weight:700;color:#f0ede6;margin-bottom:6px">${best.profile_nm}</h2><span class="mono" style="font-size:11px;color:rgba(255,255,255,.25)">cosine similarity_val:${(bestSim*100).toFixed(1)}% · ${jobLabel} 직군</span></div><div class="slideup" style="display:flex;justify-content:center;margin-bottom:28px">${svg}</div><div class="slideup" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">${barsH}</div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(232,185,49,.7)">분석</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${best.profile_desc_ctnt}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(123,104,200,.7)">${jobLabel} 직군에서의 적합 경로</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${profile_job_fits.fit}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(212,100,78,.7)">${jobLabel} 직군 주의점</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${profile_job_fits.caution}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(255,255,255,.35)">전체 프로필 유사도</h3><div style="display:flex;flex-direction:column;gap:8px">${simH}</div></div><button class="pf-to-compare" onclick="pfToCompare()">이 가치관으로 회사 비교하기<span class="sub">${best.profile_nm} · ${jobLabel} → 추천 기준: ${PRIORITIES.find(p=>p.key===best.map_priority_cd)?.label||''}</span></button><div style="text-align:center;margin-top:1rem"><button class="back" onclick="pfInit()" style="margin:0">다시 측정하기</button></div></div>`;
+  const bestNmE=esc(best.profile_nm||''),jobLabelE=esc(jobLabel||''),priLabelE=esc(PRIORITIES.find(p=>p.key===best.map_priority_cd)?.label||'');
+  const fitCtnt=profile_job_fits?.fit_ctnt||profile_job_fits?.fit||'';
+  const cautionCtnt=profile_job_fits?.caution_ctnt||profile_job_fits?.caution||'';
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-result"><div class="slideup" style="text-align:center;margin-bottom:36px"><div class="mono" style="font-size:11px;letter-spacing:4px;color:rgba(232,185,49,.6);text-transform:uppercase;margin-bottom:16px">Your Career DNA</div><h2 style="font-size:28px;font-weight:700;color:#f0ede6;margin-bottom:6px">${bestNmE}</h2><span class="mono" style="font-size:11px;color:rgba(255,255,255,.25)">cosine similarity_val:${(bestSim*100).toFixed(1)}% · ${jobLabelE} 직군</span></div><div class="slideup" style="display:flex;justify-content:center;margin-bottom:28px">${svg}</div><div class="slideup" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">${barsH}</div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(232,185,49,.7)">분석</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(best.profile_desc_ctnt||'')}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(123,104,200,.7)">${jobLabelE} 직군에서의 적합 경로</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(fitCtnt)}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(212,100,78,.7)">${jobLabelE} 직군 주의점</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(cautionCtnt)}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(255,255,255,.35)">전체 프로필 유사도</h3><div style="display:flex;flex-direction:column;gap:8px">${simH}</div></div><button class="pf-to-compare" onclick="pfToCompare()">이 가치관으로 회사 비교하기<span class="sub">${bestNmE} · ${jobLabelE} → 추천 기준: ${priLabelE}</span></button><div style="text-align:center;margin-top:1rem"><button class="back" onclick="pfInit()" style="margin:0">다시 측정하기</button></div></div>`;
 }
 function pfToCompare(){
   if(pfResult?.profile?.map_priority_cd)curPri=pfResult.profile.map_priority_cd;
@@ -1309,7 +1353,7 @@ function pfToCompare(){
   const a=document.getElementById('priAuto');
   if(pfResult){
     const sacLabel=curSacrifice?PRIORITIES.find(p=>p.key===curSacrifice)?.label:'';
-    a.innerHTML=`🎯 <strong>${pfResult.profile.profile_nm}</strong> (${pfResult.job?.label||''} 직군) 가치관 분석 결과, 최우선: <strong>${PRIORITIES.find(p=>p.key===curPri)?.label}</strong>${sacLabel?`, 포기 가능: <strong>${sacLabel}</strong>`:''} — 다른 기준을 선택해도 됩니다.`;
+    a.innerHTML=`🎯 <strong>${esc(pfResult.profile.profile_nm||'')}</strong> (${esc(pfResult.job?.job_nm||pfResult.job?.label||'')} 직군) 가치관 분석 결과, 최우선: <strong>${esc(PRIORITIES.find(p=>p.key===curPri)?.label||'')}</strong>${sacLabel?`, 포기 가능: <strong>${esc(sacLabel)}</strong>`:''} — 다른 기준을 선택해도 됩니다.`;
     a.classList.add('show');
   }
 }
@@ -1409,9 +1453,9 @@ function updateSelSummary(){
 function renderPriPreview(k){const pv=PRI_PREVIEW[k],pri=PRIORITIES.find(p=>p.key===k);if(!pv||!pri)return;const el=document.getElementById('priPreview'),inner=document.getElementById('priPvInner');inner.innerHTML=`<div class="pri-pv-head"><span class="pri-pv-icon">${pri.icon}</span><div class="pri-pv-title"><span>${pv.title}</span>을 최우선으로<br>비교하겠습니다.</div></div><div class="pri-pv-checks">${pv.checks.map(c=>`<div class="pri-pv-check"><span class="pri-pv-check-icon">✓</span><span>${c}</span></div>`).join('')}</div><div class="pri-pv-tip"><span class="pri-pv-tip-icon">📌</span><span>${pv.tip}</span></div>`;el.classList.remove('open');requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')))}
 
 // ━━ SEARCH ━━
-function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}',${c.comp_id})"><div class="si-logo">${esc(c.logo_nm||c.comp_nm[0])}</div><div class="si-info"><div class="si-name">${esc(c.comp_nm)}</div><div class="si-meta">${esc(c.industry_nm||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
+function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}',${Number(c.comp_id)||0})"><div class="si-logo">${esc(c.logo_nm||c.comp_nm[0])}</div><div class="si-info"><div class="si-name">${esc(c.comp_nm)}</div><div class="si-meta">${esc(c.industry_nm||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
 function doSearch(s){const q=document.getElementById(s==='a'?'sA':'sB').value.trim();const el=document.getElementById(s==='a'?'rA':'rB');if(q.length<1){el.classList.remove('open');return}if(!API_BASE){const ql=q.toLowerCase();const m=DB.filter(c=>c.comp_nm.toLowerCase().includes(ql)||(c.aliases||[]).some(a=>a.toLowerCase().includes(ql)));_renderSR(s,el,m);return}clearTimeout(_searchTimers[s]);el.innerHTML='<div class="sr-empty">검색 중...</div>';el.classList.add('open');_searchTimers[s]=setTimeout(async()=>{const r=await apiFetch('/companies/search?q='+encodeURIComponent(q));_renderSR(s,el,r||[])},300)}
-async function selComp(s,comp_id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+comp_id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c={...raw,benefits:(raw.benefits||[]).map(b=>({...b,qual_yn:!!b.qual_yn}))}}else{c=DB.find(x=>x.comp_id===comp_id);if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.comp_nm;const typeEl=document.getElementById(s==='a'?'tA':'tB');typeEl.value=c.comp_tp_cd;const typeFd=typeEl.closest('.fd');if(typeFd)typeFd.classList.remove('has-error');const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:true}));renderBen(s);
+async function selComp(s,comp_id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+comp_id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c=normalizeCompany(raw)}else{c=normalizeCompany(DB.find(x=>x.comp_id===comp_id));if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.comp_nm;const typeEl=document.getElementById(s==='a'?'tA':'tB');typeEl.value=c.comp_tp_cd;const typeFd=typeEl.closest('.fd');if(typeFd)typeFd.classList.remove('has-error');const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:true}));renderBen(s);
   const ws=c.work_style_val||{};const tp_cd=c.comp_tp_cd;
   const preset=WORK_PRESETS[tp_cd]||{};
   setWS(s,'ot',preset.ot||'mid');
@@ -1422,7 +1466,7 @@ async function selComp(s,comp_id){document.getElementById(s==='a'?'rA':'rB').cla
   pr.innerHTML=`✓ <strong>${esc(c.comp_nm)}</strong> DB 근무방식 + ${TYPE_LABELS[tp_cd]} 평균 추정 적용`;pr.classList.add('show');
   calc();saveDraft()}
 function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc();saveDraft()}
-function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const tp_cd=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[tp_cd];const label=TYPE_LABELS[tp_cd]||tp_cd;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=preset.map(b=>({...b,checked:b.default_checked_yn}));const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,tp_cd);calc();saveDraft()}
+function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const tp_cd=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[tp_cd];const label=TYPE_LABELS[tp_cd]||tp_cd;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=normalizeCompany({benefits:preset}).benefits;const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,tp_cd);commit()}
 
 // ━━ BENEFITS ━━
 function renderBen(s){renderBenCompare()}
@@ -1443,6 +1487,7 @@ function renderBenCompare(){
   if(!catData.length){el.innerHTML='';return}
   const maxCnt=Math.max(...catData.map(d=>Math.max(d.aCk,d.bCk)),1);
   const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
+  const nAE=esc(nA),nBE=esc(nB);
   let h='';
   catData.forEach(d=>{
     const barA=d.aCk>0?Math.max(10,d.aCk/maxCnt*100):0;
@@ -1451,16 +1496,16 @@ function renderBenCompare(){
     h+=`<div class="bg-header" onclick="this.parentElement.classList.toggle('bg-open')">`;
     h+=`<span class="bg-cnt cnt-a" id="bgCntA_${d.benefit_ctgr_cd}">${d.aCk}개</span>`;
     h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="bgBarA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
-    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span><span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${esc(CAT_LABELS[d.benefit_ctgr_cd]||'')}</span><span class="bg-chevron">▼</span></div>`;
     h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="bgBarB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
     h+=`<span class="bg-cnt cnt-b" id="bgCntB_${d.benefit_ctgr_cd}">${d.bCk}개</span>`;
     h+=`</div>`;
     h+=`<div class="bg-items"><div class="bg-cols">`;
-    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
-    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${b.idx},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nAE}</div>`;
+    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
     if(!d.aItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
-    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
-    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${b.idx},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nBE}</div>`;
+    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span></div>`});
     if(!d.bItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
     h+=`</div></div></div></div>`;
   });
@@ -1469,8 +1514,8 @@ function renderBenCompare(){
   const bc=document.getElementById('bcCompare');
   if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
 }
-function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].benefit_ctgr_cd);calc();saveDraft()}
-function setBenV(s,i,v){benS[s][i].benefit_amt=Number(v)||0;calc();saveDraft()}
+function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].benefit_ctgr_cd);commit()}
+function setBenV(s,i,v){benS[s][i].benefit_amt=Number(v)||0;commit()}
 function updBenCatBfly(cat){
   const aCk=(benS.a||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
   const bCk=(benS.b||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
@@ -2023,7 +2068,7 @@ async function admLoadCompanies(page,q,type){
   h+='</div><button class="adm-btn primary" onclick="admEditCompany(null)">+ 회사 추가</button></div>';
   h+='<table class="adm-tbl"><thead><tr><th>회사명</th><th>유형</th><th>산업</th><th>복지</th><th>별명</th><th>작업</th></tr></thead><tbody>';
   if(d.items&&d.items.length){
-    h+=d.items.map(co=>`<tr><td><strong>${esc(co.comp_nm)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.comp_tp_cd]||co.comp_tp_cd||'-')}</td><td>${esc(co.industry_nm||'-')}</td><td>${co.benefit_no??0}건</td><td>${co.alias_no??0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany('${co.comp_id}')">편집</button> <button class="adm-btn" onclick="admEditBenefits('${co.comp_id}','${esc(co.comp_nm)}')">복지</button> <button class="adm-btn danger" onclick="admDelCompany('${co.comp_id}','${esc(co.comp_nm)}')">삭제</button></td></tr>`).join('');
+    h+=d.items.map(co=>{const cid=Number(co.comp_id)||0;return `<tr><td><strong>${esc(co.comp_nm)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.comp_tp_cd]||co.comp_tp_cd||'-')}</td><td>${esc(co.industry_nm||'-')}</td><td>${Number(co.benefit_no)||0}건</td><td>${Number(co.alias_no)||0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany(${cid})">편집</button> <button class="adm-btn" onclick="admEditBenefits(${cid},${JSON.stringify(co.comp_nm||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')})">복지</button> <button class="adm-btn danger" onclick="admDelCompany(${cid},${JSON.stringify(co.comp_nm||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')})">삭제</button></td></tr>`}).join('');
   }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:2rem">회사가 없습니다.</td></tr>';
   h+='</tbody></table>';
   h+=admPagination(d.total,d.page,d.page_size,'admLoadCompanies');
@@ -2450,12 +2495,15 @@ async function loadRefData(){
   if(ref.question_descs&&Object.keys(ref.question_descs).length)Q_DESC=ref.question_descs;
   if(ref.profiles?.length)PROFILES=ref.profiles;
 }
-loadRefData();
-initPri();calc();
-restoreDraft();
-updateAuthUI();
-loadLanding();
-history.replaceState({screen:'s-landing'},'');
+// ref 데이터 로딩을 우선하고, 이후 draft 복원 등 의존 로직을 순차 실행
+(async()=>{
+  await loadRefData();
+  initPri();calc();
+  restoreDraft();
+  updateAuthUI();
+  loadLanding();
+  history.replaceState({screen:'s-landing'},'');
+})();
 
 </script>
 </body>
