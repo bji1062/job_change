@@ -20,29 +20,31 @@ import asyncio
 import os
 import re
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config
 from datetime import date
 from pathlib import Path
+# config / DB 는 resolve_company_id 에서 lazy-import — 순수 helper 재사용 시 import 부담 제거
 
 
 
 # ━━ 복지 키워드 → (ben_key, category) 매핑 ━━
 # 카테고리(9종): compensation, flexibility, work_env, time_off, health, family, growth, leisure, perks
+# 2026-04-22: parse-benefits SKILL 의 9-카테고리 확정 규칙과 정렬
+#   - 식대/통근/경조사/생일/결혼 → perks (경제적 부가혜택, 현금등가)
+#   - 사택/기숙사 → work_env (근무환경, 주거 제공)
 BENEFIT_KEYWORDS = [
-    # ━━ compensation (보상) ━━
+    # ━━ compensation (보상·금전) ━━
     (r"성과급|인센티브|보너스", "bonus", "compensation"),
     (r"자사주|RSU|스톡옵션|주식\s*매입|주식\s*보상", "stock", "compensation"),
-    # ━━ perks (금전·지원) ━━
+    # ━━ perks (경제적 부가혜택 — 식대/통근/경조사/복지포인트 등) ━━
     (r"복지\s*포인트|복리\s*포인트|선택.{0,2}복[리지]|카페테리아\s*포인트|업무\s*지원비|통신비", "welfare_point", "perks"),
     (r"할인.*구매|임직원.*할인|사내.*매장|자사.*제품|서비스\s*이용권", "discount", "perks"),
     (r"주택.*대출|주택자금|사내\s*대출|전세.*대출|대출.*이자|대출.*지원", "housing_loan", "perks"),
-    (r"기숙사|사택|숙소", "dormitory", "perks"),
-    # ━━ family (경조·가족) ━━
-    (r"경조사|경조금|명절", "event", "family"),
-    # ━━ work_env (근무환경) ━━
-    (r"식대|식당|식사|중식|조식|석식|세\s*끼|카페|캔틴", "meal", "work_env"),
-    (r"교통비|주차|통근|셔틀", "transport", "work_env"),
+    (r"식대|식당|식사|중식|조식|석식|세\s*끼|카페|캔틴", "meal", "perks"),
+    (r"교통비|주차|통근|셔틀", "transport", "perks"),
+    (r"경조사|경조금|명절", "event", "perks"),
+    (r"결혼|웨딩|예식", "wedding", "perks"),
+    # ━━ work_env (근무환경 — 장비/주거/사무공간) ━━
+    (r"기숙사|사택|숙소", "dormitory", "work_env"),
     (r"업무\s*기기|노트북|모니터|장비.*지원|가구|허먼밀러|스탠딩\s*데스크", "work_tools", "work_env"),
     # ━━ health (건강·의료) ━━
     (r"건강\s*검진|종합\s*검진|심리\s*검진", "health_check", "health"),
@@ -60,10 +62,9 @@ BENEFIT_KEYWORDS = [
     (r"어학|외국어|영어", "lang", "growth"),
     (r"사내\s*교육|직무\s*교육|교육\s*지원|외부\s*교육|컨퍼런스|학회|세미나|멘토링|온보딩", "edu_support", "growth"),
     (r"사내\s*공모|OCC|근속.*기념|시상|Awards?|추천.*리워드|스카우트", "career", "growth"),
-    # ━━ family (가족) ━━
+    # ━━ family (가족·돌봄 — 자녀/출산/보육) ━━
     (r"학자금|자녀.*교육", "child_edu", "family"),
     (r"출산|육아|임신|보육|어린이집|난임|가족\s*돌봄", "parenting", "family"),
-    (r"결혼|웨딩|예식", "wedding", "family"),
     # ━━ leisure (여가·라이프) ━━
     (r"동호회|동아리|사내.*클럽|커뮤니티|활동비", "club", "leisure"),
     (r"도서|북카페|라이브러리", "library", "leisure"),
@@ -91,6 +92,9 @@ def resolve_company_id(name: str, cli_id: str | None) -> str:
     """회사명 → COMP_ENG_NM 조회. DB 의 TCOMPANY.COMP_NM + TCOMPANY_ALIAS.ALIAS_NM 에서 검색."""
     if cli_id:
         return cli_id
+    # DB 접근이 필요할 때만 config 로드 (모듈-import 타임의 side effect 제거)
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import config
     import pymysql
     conn = pymysql.connect(
         host=config.DB_HOST, port=config.DB_PORT,
@@ -172,32 +176,40 @@ async def create_browser():
     return pw, browser, context
 
 
-async def scrape_page(context, url: str, timeout: int = 30000, screenshot_path: str | None = None):
+async def scrape_page(
+    context, url: str, timeout: int = 30000,
+    screenshot_path: str | None = None, verbose: bool = True,
+):
     page = await context.new_page()
     try:
-        print(f"[INFO] 페이지 접속 중: {url}")
-        resp = await page.goto(url, wait_until="networkidle", timeout=timeout)
+        if verbose:
+            print(f"[INFO] 페이지 접속 중: {url}")
+        # domcontentloaded 기준으로 바꿔 networkidle 무한대기 제거
+        # (analytics/polling 스크립트가 networkidle 를 영원히 만들 수 있음)
+        resp = await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
         status = resp.status if resp else "unknown"
-        print(f"[INFO] HTTP 상태: {status}")
+        if verbose:
+            print(f"[INFO] HTTP 상태: {status}")
 
-        # 추가 대기 (JS 렌더링)
-        await page.wait_for_timeout(2000)
+        # JS 렌더링 대기 (짧게)
+        await page.wait_for_timeout(3000)
 
         # 점진적 스크롤 (lazy-load 대응)
         for i in range(5):
             await page.evaluate("window.scrollBy(0, window.innerHeight)")
-            await page.wait_for_timeout(500)
+            await page.wait_for_timeout(300)
 
         # 최상단으로 복귀
         await page.evaluate("window.scrollTo(0, 0)")
-        await page.wait_for_timeout(500)
+        await page.wait_for_timeout(300)
 
         title = await page.title()
         text = await page.evaluate("document.body.innerText")
 
         if screenshot_path:
             await page.screenshot(path=screenshot_path, full_page=True)
-            print(f"[INFO] 스크린샷 저장: {screenshot_path}")
+            if verbose:
+                print(f"[INFO] 스크린샷 저장: {screenshot_path}")
 
         return {"title": title, "text": text, "status": status}
     finally:
@@ -370,17 +382,24 @@ async def main():
 
     # ── 스크래핑 ──
     pw, browser, context = await create_browser()
+    scrape_failed = False
     try:
         screenshot_path = str(BENEFIT_DIR / f"{args.company}.png") if args.screenshot else None
         result = await scrape_page(context, args.url, args.timeout, screenshot_path)
     except Exception as e:
         print(f"[ERROR] 스크래핑 실패: {e}")
-        await browser.close()
-        await pw.stop()
-        sys.exit(1)
+        scrape_failed = True
     finally:
-        await browser.close()
-        await pw.stop()
+        try:
+            await browser.close()
+        except Exception:
+            pass
+        try:
+            await pw.stop()
+        except Exception:
+            pass
+    if scrape_failed:
+        sys.exit(1)
 
     raw_text = result["text"]
 
