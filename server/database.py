@@ -1,8 +1,12 @@
+import logging
+
 import aiomysql
 import pymysql
 from contextlib import asynccontextmanager
 from decimal import Decimal
 import config
+
+logger = logging.getLogger(__name__)
 
 def _convert_row(row):
     """Convert Decimal values to float for JSON serialization."""
@@ -21,67 +25,8 @@ async def init_pool():
         autocommit=True, minsize=2, maxsize=10,
         auth_plugin="mysql_native_password",
     )
-    await _ensure_tables()
-
-async def _ensure_tables():
-    """TCOMPARISON_FEED, TPOPULAR_CASE, TDAILY_STAT 테이블이 없으면 자동 생성."""
-    ddl = [
-        """CREATE TABLE IF NOT EXISTS TCOMPARISON_FEED (
-          FEED_ID INT AUTO_INCREMENT PRIMARY KEY,
-          COMPARISON_ID INT NOT NULL,
-          JOB_CTGR_NM VARCHAR(30),
-          COMP_A_DISP_NM VARCHAR(100),
-          COMP_A_TP_CD VARCHAR(20) NOT NULL,
-          COMP_B_DISP_NM VARCHAR(100),
-          COMP_B_TP_CD VARCHAR(20) NOT NULL,
-          HEADLINE_CTNT VARCHAR(300) NOT NULL,
-          DETAIL_CTNT VARCHAR(500),
-          METRIC_VAL_CTNT VARCHAR(30),
-          METRIC_LABEL_NM VARCHAR(30),
-          METRIC_TYPE_CD VARCHAR(10) DEFAULT 'neu',
-          INS_ID INT,
-          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          MOD_ID INT,
-          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-          FOREIGN KEY (COMPARISON_ID) REFERENCES TCOMPARISON(COMPARISON_ID) ON DELETE CASCADE,
-          INDEX idx_feed_ins (INS_DTM DESC)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-        """CREATE TABLE IF NOT EXISTS TDAILY_STAT (
-          STAT_DT DATE PRIMARY KEY,
-          COMPARISON_NO INT DEFAULT 0,
-          INS_ID INT,
-          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          MOD_ID INT,
-          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-        """CREATE TABLE IF NOT EXISTS TPOPULAR_CASE (
-          CASE_ID INT AUTO_INCREMENT PRIMARY KEY,
-          CASE_TYPE_CD VARCHAR(20) NOT NULL,
-          CURRENT_COMP_NM VARCHAR(50) NOT NULL,
-          CURRENT_COMP_TP_CD VARCHAR(20) NOT NULL,
-          CURRENT_SUB_NM VARCHAR(30),
-          OFFER_COMP_NM VARCHAR(50) NOT NULL,
-          OFFER_COMP_TP_CD VARCHAR(20) NOT NULL,
-          OFFER_SUB_NM VARCHAR(30),
-          POINTS_VAL JSON,
-          VIEW_NO INT DEFAULT 0,
-          COMPARISON_NO INT DEFAULT 0,
-          ACTIVE_YN BOOLEAN DEFAULT TRUE,
-          INS_ID INT,
-          INS_DTM TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          MOD_ID INT,
-          MOD_DTM TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_active_comparison (ACTIVE_YN, COMPARISON_NO DESC),
-          UNIQUE KEY uq_case_pair (CASE_TYPE_CD, CURRENT_COMP_NM, OFFER_COMP_NM)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-    ]
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            for sql in ddl:
-                try:
-                    await cur.execute(sql)
-                except Exception as e:
-                    print(f"[_ensure_tables] {e}")
+    # DDL 은 seed/schema.sql 및 seed/migrations/ 를 단일 소스로 한다.
+    # (이전에 있던 _ensure_tables() 는 drift 근원이라 2026-04-22 제거됨 — 분석 리포트 BE #2)
 
 async def close_pool():
     global pool

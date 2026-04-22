@@ -1,5 +1,10 @@
 from pydantic import BaseModel
-from typing import Any, Literal
+from typing import Any
+
+from models.types import (
+    BadgeCd, BadgeSrcCd, BenefitCtgrCd, CaseTypeCd, CompTpCd, RoleCd,
+)
+
 
 class DashboardStats(BaseModel):
     total_mbr_no: int
@@ -41,26 +46,28 @@ class BenefitItem(BaseModel):
     benefit_cd: str
     benefit_nm: str
     benefit_amt: int = 0
-    benefit_ctgr_cd: str = "perks"
-    badge_cd: str = "est"
+    benefit_ctgr_cd: BenefitCtgrCd = "perks"
+    badge_cd: BadgeCd = "est"
+    badge_src_cd: BadgeSrcCd | None = None
+    badge_src_url_ctnt: str | None = None
     note_ctnt: str | None = None
     qual_yn: bool = False
     qual_desc_ctnt: str | None = None
     sort_order_no: int = 0
 
 class PopularCaseReq(BaseModel):
-    case_type_cd: str
+    case_type_cd: CaseTypeCd
     current_comp_nm: str
-    current_comp_tp_cd: str
+    current_comp_tp_cd: CompTpCd
     current_sub_nm: str | None = None
     offer_comp_nm: str
-    offer_comp_tp_cd: str
+    offer_comp_tp_cd: CompTpCd
     offer_sub_nm: str | None = None
     points_val: list[str] | None = None
     active_yn: bool = True
 
 class UserRoleUpdate(BaseModel):
-    role_cd: Literal["user", "admin"]
+    role_cd: RoleCd
 
 class PagedResponse(BaseModel):
     items: list[Any]
