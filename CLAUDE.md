@@ -212,7 +212,7 @@ Side convention: `a` = current job (현직), `b` = new job offer (이직처).
 
 ## Development Guidelines
 
-- **Frontend**: All frontend code stays in `index.html`. Compact/minified style — match existing density.
+- **Frontend**: Code is split across `index.html` (HTML only) + `styles.css` + `app.js`. Compact/minified style — match existing density. Section markers (`// ━━ SECTION ━━`) are preserved inside `app.js`. Assets are referenced with **relative paths** (`href="styles.css?v={hash}"`, `src="app.js?v={hash}"`) to preserve `file://` offline support. `<script src="app.js?v=...">` must stay immediately before `</body>` with **no `defer` attribute** (see OAuth token exposure note in `.omc/plans/p5-1-index-html-split-plan.md` §4 Scenario 4). Release flow: run `bash server/deploy/release-frontend.sh` locally to inject content hashes and generate `*.gz` for `gzip_static`.
 - **Backend**: Follow existing module structure (`routers/`, `models/`, `services/`). Raw SQL, no ORM.
 - **Korean UI text**: All user-facing strings are in Korean. Code in English.
 - **Frontend state is global**: `wsState`, `benS`, `matched`, `curPri`, `curSacrifice`, `pfResult`, `AUTH_TOKEN`.

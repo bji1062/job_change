@@ -1,0 +1,1862 @@
+// ━━ UTILS ━━
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+
+// ━━ API CLIENT ━━
+const API_BASE=(location.protocol==='file:')?'':location.origin;
+let AUTH_TOKEN=localStorage.getItem('jc_token')||null;
+let AUTH_USER=JSON.parse(localStorage.getItem('jc_user')||'null');
+let authIsRegister=false;
+(function handleOAuthReturn(){
+  const params=new URLSearchParams(location.search);
+  const token=params.get('token');
+  if(token){
+    AUTH_TOKEN=token;
+    AUTH_USER={mbr_id:parseInt(params.get('mbr_id')||'0'),mbr_nm:decodeURIComponent(params.get('mbr_nm')||'사용자'),role_cd:params.get('role_cd')||'user',comp_email_vrfc_yn:params.get('cev')==='1'};
+    localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
+    history.replaceState({},'','/');updateAuthUI();
+  }
+  if(params.get('email_verified')==='1'){
+    apiFetch('/oauth/me').then(u=>{if(u){AUTH_USER.comp_email_vrfc_yn=true;localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));updateAuthUI()}});
+    history.replaceState({},'','/');
+  }
+})();
+
+// 내부용 — 상세 정보가 필요한 호출자(saveComparison 등)가 쓰는 full 변형.
+// 반환: {ok:boolean, data:any, error:string|null, status:number|0, aborted:boolean}
+// 401 은 자동 로그아웃하고 ok=false, status=401 로 표현 (TOKEN_EXPIRED 로 분기 판단).
+// timeoutMs 미지정 시 10초. raw fetch 쓰지 말고 이걸로 통합.
+async function apiFetchFull(path,opts={}){
+  const timeoutMs=opts.timeoutMs??10000;
+  if(!API_BASE)return{ok:false,data:null,error:'no_api_base',status:0,aborted:false};
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),timeoutMs);
+  const h={'Content-Type':'application/json'};
+  if(AUTH_TOKEN)h['Authorization']='Bearer '+AUTH_TOKEN;
+  // opts 에 headers 가 있으면 그 값으로 Content-Type 대체 가능
+  if(opts.headers)Object.assign(h,opts.headers);
+  try{
+    const {timeoutMs:_ignore,headers:_h,...rest}=opts;
+    const r=await fetch(API_BASE+'/api/v1'+path,{...rest,headers:h,signal:ctrl.signal});
+    if(r.status===401){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI();return{ok:false,data:null,error:'unauthorized',status:401,aborted:false}}
+    let data=null,err=null;
+    try{data=await r.json()}catch{data=null}
+    if(!r.ok)err=(data&&(data.detail||data.error))||('HTTP '+r.status);
+    return{ok:r.ok,data,error:err,status:r.status,aborted:false};
+  }catch(e){
+    const aborted=(e&&e.name==='AbortError');
+    return{ok:false,data:null,error:aborted?'timeout':(e&&e.message)||'network_error',status:0,aborted};
+  }finally{clearTimeout(tid)}
+}
+// 기존 호환 API — data 또는 null 반환. 50+ 호출부 유지. 네트워크/타임아웃 오류는 토스트로 사용자에게 알림.
+async function apiFetch(path,opts={}){
+  const r=await apiFetchFull(path,opts);
+  if(!r.ok){
+    // 401 은 로그아웃 처리만, 토스트는 생략(UI 교체가 있음). 타임아웃/네트워크는 사용자에게 알림.
+    if(r.aborted)showToast('서버 응답이 지연됩니다. 잠시 후 다시 시도해주세요.','error');
+    else if(r.status===0&&r.error!=='no_api_base')showToast('네트워크 연결을 확인해주세요.','error');
+    return null;
+  }
+  return r.data;
+}
+// 경량 토스트 — 상단 우측에 3초 자동 사라짐. type: 'info'|'success'|'error'
+function showToast(msg,type='info'){
+  let c=document.getElementById('_toastBox');
+  if(!c){c=document.createElement('div');c.id='_toastBox';c.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(c)}
+  const t=document.createElement('div');
+  const bg=type==='error'?'rgba(231,85,82,.95)':type==='success'?'rgba(52,199,123,.95)':'rgba(45,48,58,.95)';
+  t.style.cssText=`background:${bg};color:#fff;padding:10px 14px;border-radius:8px;font-size:.8rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:320px;line-height:1.4;opacity:0;transform:translateX(10px);transition:all .2s;pointer-events:auto`;
+  t.textContent=msg;
+  c.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(0)'});
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(10px)';setTimeout(()=>t.remove(),250)},3000);
+}
+function openAuth(){document.getElementById('authOverlay').classList.add('open');document.getElementById('authErr').textContent=''}
+function closeAuth(){document.getElementById('authOverlay').classList.remove('open');if(window._saveRetry){window._saveRetry();window._saveRetry=null}}
+function socialLogin(provider){window.location.href=API_BASE+'/api/v1/oauth/'+provider+'/login'}
+async function requestCompanyEmail(){
+  const cand=(matched.a&&matched.a.comp_id)||(matched.b&&matched.b.comp_id)||null;
+  if(!cand){alert('먼저 검색으로 본인 회사를 선택해주세요. (현직 또는 이직처 칸)');return;}
+  const compNm=(matched.a&&matched.a.comp_id===cand?matched.a.comp_nm:matched.b.comp_nm);
+  if(!confirm(`'${compNm}' 회사 이메일로 인증하시겠습니까?`))return;
+  const email=prompt('회사 이메일을 입력하세요 (개인 이메일 제외)');
+  if(!email)return;
+  const r=await apiFetch('/oauth/company-email/request',{method:'POST',body:JSON.stringify({email_addr:email,comp_id:cand})});
+  if(r&&r.ok)alert('인증 이메일을 발송했습니다. 24시간 내에 인증해주세요.');
+  else alert(r?.message||r?.detail||'회사 이메일만 사용 가능합니다. (gmail, naver 등 제외)');
+}
+function toggleAuthMode(){
+  authIsRegister=!authIsRegister;
+  document.getElementById('authTitle').textContent=authIsRegister?'회원가입':'로그인';
+  document.getElementById('authSubmit').textContent=authIsRegister?'가입하기':'로그인';
+  document.getElementById('authNameField').style.display=authIsRegister?'block':'none';
+  document.getElementById('authJobField').style.display=authIsRegister?'block':'none';
+  if(authIsRegister)populateAuthJobs();
+  document.getElementById('authToggle').innerHTML=authIsRegister?'이미 계정이 있으신가요? <a onclick="toggleAuthMode()">로그인</a>':'계정이 없으신가요? <a onclick="toggleAuthMode()">회원가입</a>';
+  document.getElementById('authErr').textContent='';
+}
+function populateAuthJobs(){
+  const sel=document.getElementById('authJob');if(sel.options.length>1)return;
+  JOB_GROUPS.forEach(g=>{const og=document.createElement('optgroup');og.label=g.job_group_nm;g.jobs.forEach(j=>{const o=document.createElement('option');o.value=j.job_cd;o.textContent=j.icon_nm+' '+j.job_nm;og.appendChild(o)});sel.appendChild(og)});
+}
+async function submitAuth(){
+  const email=document.getElementById('authEmail').value.trim();
+  const pass=document.getElementById('authPass').value;
+  const errEl=document.getElementById('authErr');
+  if(!email||!pass){errEl.textContent='이메일과 비밀번호를 입력하세요.';return}
+  if(pass.length<8){errEl.textContent='비밀번호는 8자 이상이어야 합니다.';return}
+  const jobSel=document.getElementById('authJob');
+  const jobNm=jobSel.options[jobSel.selectedIndex]?.text.trim()||'';
+  if(authIsRegister&&!jobSel.value){errEl.textContent='직군을 선택하세요.';return}
+  const path=authIsRegister?'/auth/register':'/auth/login';
+  const body=authIsRegister?{email_addr:email,password:pass,mbr_nm:document.getElementById('authName').value.trim()||null,job_nm:jobNm}:{email_addr:email,password:pass};
+  const r=await apiFetch(path,{method:'POST',body:JSON.stringify(body)});
+  if(!r||!r.access_token){errEl.textContent=authIsRegister?'이미 등록된 이메일이거나 오류가 발생했습니다.':'이메일 또는 비밀번호가 올바르지 않습니다.';return}
+  AUTH_TOKEN=r.access_token;AUTH_USER={mbr_id:r.mbr_id,mbr_nm:r.mbr_nm,role_cd:r.role_cd||'user',comp_email_vrfc_yn:r.comp_email_vrfc_yn||false};
+  localStorage.setItem('jc_token',AUTH_TOKEN);localStorage.setItem('jc_user',JSON.stringify(AUTH_USER));
+  updateAuthUI();closeAuth();
+  if(window._saveRetry){window._saveRetry();window._saveRetry=null}
+}
+function logout(){AUTH_TOKEN=null;AUTH_USER=null;localStorage.removeItem('jc_token');localStorage.removeItem('jc_user');updateAuthUI()}
+function toggleUserDrop(){const d=document.getElementById('userDrop');d.classList.toggle('open')}
+function updateAuthUI(){
+  const btn=document.getElementById('authNavBtn');const drop=document.getElementById('userDrop');
+  if(AUTH_USER){btn.innerHTML=esc(AUTH_USER.mbr_nm||'사용자')+'님'+(AUTH_USER.comp_email_vrfc_yn?' <span class="cev-badge">&#10003; 인증됨</span>':'');btn.classList.add('l-user');btn.classList.remove('l-login');btn.onclick=toggleUserDrop;
+    let admHtml='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>';
+    if(AUTH_USER.role_cd==='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();go(\'s-admin\')">관리자</button>'+admHtml;
+    if(!AUTH_USER.comp_email_vrfc_yn&&AUTH_USER.role_cd!=='admin')admHtml='<button class="u-drop-item" onclick="event.stopPropagation();requestCompanyEmail()">회사 이메일 인증</button>'+admHtml;
+    drop.innerHTML=admHtml}
+  else{btn.textContent='로그인';btn.classList.remove('l-user');btn.classList.add('l-login');btn.onclick=openAuth;drop.classList.remove('open');drop.innerHTML='<button class="u-drop-item" onclick="event.stopPropagation();logout()">로그아웃</button>'}
+}
+document.addEventListener('click',function(e){const d=document.getElementById('userDrop');if(d&&!e.target.closest('.l-user')&&!e.target.closest('.u-drop'))d.classList.remove('open')})
+async function saveComparison(){
+  if(!AUTH_TOKEN||!API_BASE)throw new Error('로그인이 필요합니다');
+  const tA=document.getElementById('tA')?.value,tB=document.getElementById('tB')?.value;
+  if(!tA||!tB)throw new Error('기업 유형 미선택');
+  const payload={
+    comp_a_nm:matched.a?.comp_nm||document.getElementById('sA')?.value?.trim()||null,comp_a_tp_cd:tA,
+    salary_a_min_amt:getSalRange().min,salary_a_max_amt:getSalRange().max,
+    commute_a_min_no:parseInt(document.getElementById('comA')?.value)||0,
+    work_style_a_val:wsState.a,benefits_a_val:benS.a.filter(b=>b.checked),
+    comp_b_nm:matched.b?.comp_nm||document.getElementById('sB')?.value?.trim()||null,comp_b_tp_cd:tB,
+    salary_rate_val:selectedRate,
+    commute_b_min_no:parseInt(document.getElementById('comB')?.value)||0,
+    work_style_b_val:wsState.b,benefits_b_val:benS.b.filter(b=>b.checked),
+    priority_cd:curPri,sacrifice_cd:curSacrifice
+  };
+  if(window._lastFeedData)Object.assign(payload,window._lastFeedData);
+  const body=JSON.stringify(payload);
+  const doSave=async()=>{
+    // apiFetchFull 이 401 을 자동 로그아웃 처리하고 status 로 분기 판단 가능.
+    // timeoutMs 는 기본 10s 로 충분.
+    return await apiFetchFull('/comparisons',{method:'POST',body});
+  };
+  let r=await doSave();
+  if(!r.ok&&r.status===401){
+    // 토큰 만료 → 재로그인 후 자동 재시도
+    await new Promise(resolve=>{window._saveRetry=resolve;openAuth()});
+    if(!AUTH_TOKEN)throw new Error('로그인이 취소되었습니다');
+    r=await doSave();
+  }
+  if(!r.ok)throw new Error(r.error||'서버 오류');
+  if(!r.data||r.data.error)throw new Error('서버 오류: '+JSON.stringify(r.data));
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  DATA — 상수, DB, 프리셋, 전역 상태
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const DIMS=["compensation","security","growth","autonomy","impact","flexibility"];
+const DIM_META={
+  compensation:{label:"보상",color:"#E8B931",icon:"◈"},security:{label:"안정성",color:"#4A9B8E",icon:"◉"},
+  growth:{label:"성장",color:"#D4644E",icon:"△"},autonomy:{label:"자율성",color:"#7B68C8",icon:"◎"},
+  impact:{label:"영향력",color:"#C75B8E",icon:"⬡"},flexibility:{label:"유연성",color:"#5B95D4",icon:"◇"},
+};
+
+let JOB_GROUPS = [
+  { job_group_nm:'기술', color_cd:'#4b8df8', jobs:[
+    {job_cd:'dev',job_nm:'개발',icon_nm:'💻',scenario_cd:'tech',custom:true},
+    {job_cd:'devops',job_nm:'DevOps/인프라',icon_nm:'🛠️',scenario_cd:'tech',custom:true},
+    {job_cd:'security',job_nm:'보안',icon_nm:'🔐',scenario_cd:'tech',custom:true},
+    {job_cd:'data',job_nm:'데이터 분석',icon_nm:'📊',scenario_cd:'tech',custom:false},
+    {job_cd:'ai',job_nm:'AI / ML',icon_nm:'🤖',scenario_cd:'tech',custom:false},
+  ]},
+  { job_group_nm:'디자인', color_cd:'#e85d9a', jobs:[
+    {job_cd:'uxui',job_nm:'UX/UI 디자인',icon_nm:'🎨',scenario_cd:'design',custom:true},
+    {job_cd:'graphic',job_nm:'그래픽/영상',icon_nm:'🎬',scenario_cd:'design',custom:false},
+  ]},
+  { job_group_nm:'비즈니스', color_cd:'#f0a030', jobs:[
+    {job_cd:'pm',job_nm:'서비스기획/PM',icon_nm:'📋',scenario_cd:'planning',custom:true},
+    {job_cd:'po',job_nm:'프로덕트 오너',icon_nm:'📦',scenario_cd:'planning',custom:false},
+    {job_cd:'marketing',job_nm:'마케팅',icon_nm:'📢',scenario_cd:'marketing',custom:true},
+    {job_cd:'content',job_nm:'콘텐츠/에디터',icon_nm:'✍️',scenario_cd:'marketing',custom:false},
+    {job_cd:'sales',job_nm:'영업/세일즈',icon_nm:'🤝',scenario_cd:'sales',custom:true},
+    {job_cd:'cs',job_nm:'고객성공(CS/CX)',icon_nm:'📞',scenario_cd:'sales',custom:false},
+  ]},
+  { job_group_nm:'경영', color_cd:'#34c77b', jobs:[
+    {job_cd:'finance',job_nm:'재무/회계',icon_nm:'💰',scenario_cd:'corporate',custom:true},
+    {job_cd:'hr',job_nm:'인사(HR)',icon_nm:'👤',scenario_cd:'corporate',custom:false},
+    {job_cd:'legal',job_nm:'총무/법무',icon_nm:'📑',scenario_cd:'corporate',custom:false},
+  ]},
+  { job_group_nm:'산업/연구', color_cd:'#8b6cf6', jobs:[
+    {job_cd:'manufacturing',job_nm:'생산/제조/품질',icon_nm:'🏭',scenario_cd:'corporate',custom:false},
+    {job_cd:'logistics',job_nm:'물류/SCM',icon_nm:'🚛',scenario_cd:'corporate',custom:false},
+    {job_cd:'md',job_nm:'MD/바잉',icon_nm:'🏪',scenario_cd:'sales',custom:false},
+    {job_cd:'rnd',job_nm:'연구/R&D',icon_nm:'🔬',scenario_cd:'tech',custom:false},
+  ]},
+];
+
+let Q_BASE = [
+  {id:1,label:'보상 vs 성장',a:{title:'연봉 40% 인상',fx:{compensation:.9,security:.2,growth:-.5,autonomy:0,impact:-.1,flexibility:-.1}},b:{title:'연봉 동결',fx:{compensation:-.4,security:-.2,growth:.9,autonomy:.3,impact:.1,flexibility:.2}}},
+  {id:2,label:'안정성 vs 자율성',a:{title:'대기업 정규직',fx:{compensation:.3,security:.9,growth:-.1,autonomy:-.7,impact:.1,flexibility:-.3}},b:{title:'계약직 1년 갱신',fx:{compensation:-.1,security:-.7,growth:.1,autonomy:.9,impact:-.1,flexibility:.4}}},
+  {id:3,label:'영향력 vs 보상',a:{title:'연봉 30% 인상',fx:{compensation:.8,security:.2,growth:.1,autonomy:-.1,impact:-.6,flexibility:0}},b:{title:'연봉 10% 삭감',fx:{compensation:-.5,security:-.1,growth:.3,autonomy:.2,impact:.9,flexibility:0}}},
+  {id:4,label:'유연성 vs 안정성',a:{title:'업계 1위 대기업',fx:{compensation:.3,security:.9,growth:-.2,autonomy:-.2,impact:.2,flexibility:-.8}},b:{title:'중견 회사',fx:{compensation:-.1,security:-.5,growth:.3,autonomy:.1,impact:-.1,flexibility:.9}}},
+  {id:5,label:'성장 vs 자율성',a:{title:'업계 최고 전문가에게 직접 배움',fx:{compensation:0,security:.1,growth:.9,autonomy:-.7,impact:0,flexibility:-.1}},b:{title:'혼자 맡아서 자유롭게 진행',fx:{compensation:0,security:-.2,growth:.2,autonomy:.9,impact:.2,flexibility:.3}}},
+  {id:6,label:'보상 vs 유연성',a:{title:'연봉 50% 인상',fx:{compensation:1,security:.3,growth:-.1,autonomy:-.5,impact:.1,flexibility:-.9}},b:{title:'연봉 동결',fx:{compensation:-.3,security:-.1,growth:.1,autonomy:.4,impact:0,flexibility:.9}}},
+  {id:7,label:'영향력 vs 성장',a:{title:'리더 포지션',fx:{compensation:.3,security:.1,growth:-.4,autonomy:.1,impact:.9,flexibility:-.2}},b:{title:'실무 전문가',fx:{compensation:-.1,security:.1,growth:.9,autonomy:.2,impact:-.4,flexibility:.2}}},
+  {id:8,label:'안정성 vs 보상',a:{title:'공공기관급 안정성',fx:{compensation:-.5,security:1,growth:-.3,autonomy:-.2,impact:-.1,flexibility:-.3}},b:{title:'초기 스타트업',fx:{compensation:.8,security:-.9,growth:.5,autonomy:.2,impact:.3,flexibility:-.1}}},
+  {id:9,label:'자율성 vs 영향력',a:{title:'완전 자율 근무',fx:{compensation:0,security:0,growth:.1,autonomy:.9,impact:-.6,flexibility:.3}},b:{title:'출근 필수, 회의 빡빡',fx:{compensation:.1,security:.2,growth:.2,autonomy:-.7,impact:.9,flexibility:-.2}}},
+  {id:10,label:'성장 vs 안정성',a:{title:'검증된 환경, 안정 운영',fx:{compensation:.2,security:.9,growth:-.6,autonomy:-.1,impact:0,flexibility:-.3}},b:{title:'초기 스타트업',fx:{compensation:-.2,security:-.8,growth:.9,autonomy:.3,impact:.2,flexibility:.1}}},
+  {id:11,label:'유연성 vs 영향력',a:{title:'업계 인정받는 포지션',fx:{compensation:.2,security:.3,growth:.1,autonomy:-.1,impact:.9,flexibility:-.7}},b:{title:'무명이지만 범용적 역할',fx:{compensation:-.1,security:-.1,growth:.3,autonomy:.2,impact:-.5,flexibility:.9}}},
+  {id:12,label:'보상 vs 자율성',a:{title:'연봉 35% 인상',fx:{compensation:.85,security:.2,growth:0,autonomy:-.8,impact:.1,flexibility:-.3}},b:{title:'현재 연봉 유지',fx:{compensation:-.2,security:0,growth:.1,autonomy:.9,impact:-.1,flexibility:.4}}},
+];
+
+let Q_DESC = {
+  tech: [
+    {a:'기존과 동일한 기술 스택 유지',b:'한 번도 다뤄보지 않은 기술 스택을 처음부터 구축'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 원격, 업무 시간 자율, 프로젝트 선택권'},
+    {a:'실무 개발자. 의사결정 참여 없음',b:'5인 팀 리드. 기술 선택, 채용, 아키텍처 직접 결정'},
+    {a:'10년 안정적. 독자 플랫폼이라 이직 시 기술 전환 어려움',b:'3년 후 존속 불확실. 시장 범용 기술로 어디든 이직 가능'},
+    {a:'그 사람의 방식을 따라야 하고, 자기 코드 스타일 불가',b:'사내에 배울 시니어 없음. 독학으로 해결'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'CTO 타이틀. 경영진 회의, 컨퍼런스 발표. 70%가 매니지먼트',b:'시니어 엔지니어. 최신 기술을 매일 다루고 깊이가 쌓임'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 스톡옵션으로 연봉 5배'},
+    {a:'재택, 자기 일정, 프로젝트 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 팀 리드로서 조직 방향에 직접 영향'},
+    {a:'새로 배울 건 적지만 실수할 일도 없음. 5년 후 같은 자리 보장',b:'3개월마다 기술 스택 변경. 성장은 폭발적이지만 회사가 망하면 처음부터'},
+    {a:'컨퍼런스 초청, 네임밸류 높음. 다른 방향 전환은 어려움',b:'시장 인지도 없음. 경험이 3~4개 다른 직군으로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+  planning: [
+    {a:'기존과 동일한 서비스 운영 업무',b:'한 번도 해보지 않은 신규 서비스를 0→1로 기획'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 원격, 업무 시간 자율, 프로젝트 선택권'},
+    {a:'기획 실무만 담당. 전략 회의 참여 없음',b:'프로덕트 리드. 로드맵, 우선순위, KPI 직접 결정'},
+    {a:'10년 안정적. 자체 프로세스라 이직 시 경험 전환 어려움',b:'3년 후 존속 불확실. 범용적 기획 방법론으로 어디든 이직 가능'},
+    {a:'업계 최고 PO에게 직접 배움. 그 사람의 프레임워크만 사용',b:'사내에 배울 사람 없음. 나만의 기획 프레임을 직접 구축'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'CPO 타이틀. 경영진 보고, 외부 발표. 70%가 매니지먼트',b:'실무 기획자. 매일 사용자 리서치하고 PRD 직접 작성'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 스톡옵션으로 연봉 5배'},
+    {a:'재택, 자기 일정, 프로젝트 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 팀 리드로서 프로덕트 방향에 직접 영향'},
+    {a:'안정적인 서비스 유지보수. 5년 후 같은 자리 보장',b:'3개월마다 피봇. 성장은 폭발적이지만 회사가 망하면 처음부터'},
+    {a:'업계에서 인정받는 PM. 다른 분야 전환은 어려움',b:'시장 인지도 없음. 경험이 마케팅·영업·전략 등으로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+  marketing: [
+    {a:'기존과 동일한 캠페인 반복 운영',b:'한 번도 해보지 않은 신규 채널/시장을 처음부터 개척'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 원격, 업무 시간 자율, 프로젝트 선택권'},
+    {a:'실행 담당자. 전략 회의 참여 없음',b:'마케팅 팀 리드. 예산 배분, 채널 선택, KPI 직접 결정'},
+    {a:'10년 안정적. 자체 플랫폼 마케팅이라 범용 경험 부족',b:'3년 후 존속 불확실. 다양한 채널 경험으로 어디든 이직 가능'},
+    {a:'업계 최고 CMO에게 직접 배움. 그 사람의 방식만 따라야 함',b:'사내에 배울 사람 없음. 나만의 마케팅 전략을 직접 구축'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'CMO 타이틀. 경영진 보고, 외부 강연. 70%가 매니지먼트',b:'퍼포먼스 마케터. 매일 데이터 보고 캠페인 최적화. 깊이가 쌓임'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 스톡옵션으로 연봉 5배'},
+    {a:'재택, 자기 일정, 프로젝트 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 팀 리드로서 브랜드 방향에 직접 영향'},
+    {a:'안정적인 브랜드 유지. 5년 후 같은 자리 보장',b:'매달 새 캠페인. 성장은 폭발적이지만 회사가 망하면 포트폴리오만 남음'},
+    {a:'업계에서 인정받는 마케터. 다른 분야 전환은 어려움',b:'시장 인지도 없음. 경험이 기획·영업·콘텐츠로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+  sales: [
+    {a:'기존 고객 관리 위주의 안정적 영업',b:'신규 시장 개척. 고객 베이스를 처음부터 구축'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 자율, 성과만 내면 시간과 장소 자유'},
+    {a:'담당 고객만 관리. 영업 전략 참여 없음',b:'영업팀 리드. 타겟 시장, 가격 정책, 파이프라인 직접 결정'},
+    {a:'10년 안정적. 특정 산업 영업이라 다른 업종 전환 어려움',b:'3년 후 존속 불확실. 다양한 산업 경험으로 어디든 이직 가능'},
+    {a:'업계 최고 영업 리더에게 직접 배움. 그 사람의 방식만 따름',b:'사내에 배울 사람 없음. 나만의 영업 프로세스를 직접 구축'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'영업본부장. 경영진 보고, 핵심 고객 미팅. 70%가 매니지먼트',b:'탑세일즈. 매일 현장에서 딜 클로징. 실력이 직접 쌓임'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 인센티브로 연봉 5배'},
+    {a:'재택, 자기 일정, 고객 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 팀 리드로서 영업 전략에 직접 영향'},
+    {a:'기존 거래처 유지. 5년 후 같은 자리 보장',b:'매달 새 고객 발굴. 성장은 폭발적이지만 파이프라인이 끊기면 처음부터'},
+    {a:'업계에서 인정받는 영업 전문가. 다른 직군 전환은 어려움',b:'시장 인지도 없음. 경험이 마케팅·사업개발·컨설팅으로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+  design: [
+    {a:'기존과 동일한 디자인 시스템 유지 운영',b:'한 번도 해보지 않은 브랜딩을 처음부터 구축'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 원격, 업무 시간 자율, 프로젝트 선택권'},
+    {a:'시안 제작만 담당. 방향성 결정 없음',b:'디자인 리드. 브랜딩, UX 방향, 디자인 시스템 직접 결정'},
+    {a:'10년 안정적. 자체 디자인 가이드라 이직 시 포트폴리오 약함',b:'3년 후 존속 불확실. 다양한 프로젝트로 포트폴리오 풍부'},
+    {a:'업계 최고 디자이너에게 직접 배움. 그 사람의 스타일만 따름',b:'사내에 배울 사람 없음. 나만의 디자인 철학을 직접 구축'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'CDO 타이틀. 경영진 보고, 외부 강연. 70%가 매니지먼트',b:'시니어 디자이너. 매일 직접 디자인하고 깊이가 쌓임'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 스톡옵션으로 연봉 5배'},
+    {a:'재택, 자기 일정, 프로젝트 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 리드로서 제품 디자인 방향에 직접 영향'},
+    {a:'안정적인 유지보수 디자인. 5년 후 같은 자리 보장',b:'매달 새 프로젝트. 성장은 폭발적이지만 회사가 망하면 포트폴리오만 남음'},
+    {a:'업계에서 인정받는 디자이너. 다른 분야 전환은 어려움',b:'시장 인지도 없음. 경험이 기획·마케팅·프론트엔드로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+  corporate: [
+    {a:'기존과 동일한 프로세스 운영',b:'전사 시스템을 새로 설계. ERP 도입부터 직접 주도'},
+    {a:'명확한 R&R, 매년 3~5% 인상. 출퇴근 고정, 재택 불가',b:'완전 원격, 업무 시간 자율, 프로젝트 선택권'},
+    {a:'실무 담당자. 경영 의사결정 참여 없음',b:'팀 리드. 예산, 인력, 프로세스 직접 결정'},
+    {a:'10년 안정적. 특정 산업 경험이라 다른 업종 전환 어려움',b:'3년 후 존속 불확실. 범용적 경험으로 어디든 이직 가능'},
+    {a:'업계 최고 임원에게 직접 배움. 그 사람의 방식만 따름',b:'사내에 배울 사람 없음. 나만의 프로세스를 직접 구축'},
+    {a:'3년 의무 근속. 중도 퇴사 시 위약금',b:'아무 구속 없음. 6개월마다 커리어 방향 재조정 가능'},
+    {a:'임원 타이틀. 이사회 보고, 전사 의사결정. 70%가 매니지먼트',b:'실무 전문가. 매일 직접 분석하고 보고서 작성. 전문성이 쌓임'},
+    {a:'구조조정 가능성 제로. 연봉은 업계 평균의 80%',b:'2년 내 인수 또는 폐업 반반. 성공 시 스톡옵션으로 연봉 5배'},
+    {a:'재택, 자기 일정, 프로젝트 선택. 조직 의사결정에 영향력 없음',b:'일정 자율 없음. 대신 팀 리드로서 조직 운영에 직접 영향'},
+    {a:'안정적인 운영 업무. 5년 후 같은 자리 보장',b:'매달 새 과제. 성장은 폭발적이지만 회사가 망하면 처음부터'},
+    {a:'업계에서 인정받는 전문가. 다른 분야 전환은 어려움',b:'시장 인지도 없음. 경험이 컨설팅·기획·운영 등으로 전환 가능'},
+    {a:'주 5일 출근, 야근 빈번, 휴가 사용 자유롭지 않음',b:'주 4일 근무, 완전 원격, 업무 시간 자율 선택'},
+  ],
+};
+
+let PROFILES=[
+  {profile_cd:"explorer",profile_nm:"탐험가형",vec_val:{compensation:-.3,security:-.6,growth:.9,autonomy:.8,impact:0,flexibility:.4},profile_desc_ctnt:"돈과 안정성을 기꺼이 포기하더라도 배움과 자유를 택합니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'스타트업 초기 멤버, 프리랜서 개발자',caution_ctnt:'안정성을 경시하면 생애 주기 변화에서 급격한 스트레스를 받을 수 있습니다.'},planning:{fit_ctnt:'신규 서비스 0→1 기획, 스타트업 첫 PM',caution_ctnt:'탐험을 위한 이직이 잦으면 런칭→성장까지의 결과물을 증명하기 어렵습니다.'},marketing:{fit_ctnt:'그로스 마케팅 초기 셋업, 스타트업 마케팅 1호',caution_ctnt:'너무 자주 이동하면 캠페인 성과를 끝까지 증명하기 어렵습니다.'},sales:{fit_ctnt:'신규 시장 개척 영업, 스타트업 첫 세일즈',caution_ctnt:'고객 관계는 시간이 걸립니다. 너무 빨리 떠나면 네트워크가 쌓이지 않습니다.'},design:{fit_ctnt:'브랜딩 에이전시, 프리랜서 디자이너',caution_ctnt:'포트폴리오 다양성은 좋지만, 깊이 있는 프로젝트 하나가 더 강력합니다.'},corporate:{fit_ctnt:'스타트업 경영지원 1호, 신규 법인 셋업',caution_ctnt:'경영지원은 신뢰와 안정이 핵심입니다. 잦은 이동은 신뢰를 쌓기 어렵게 만듭니다.'}}},
+  {profile_cd:"architect",profile_nm:"건축가형",vec_val:{compensation:0,security:-.1,growth:.8,autonomy:.2,impact:.8,flexibility:0},profile_desc_ctnt:"전문적 깊이와 조직적 영향력을 동시에 추구합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'기술 리드, CTO, 플랫폼 아키텍트',caution_ctnt:'기술과 경영 두 축을 동시에 추구하면 중간에 빠질 위험이 있습니다.'},planning:{fit_ctnt:'CPO, 프로덕트 전략가, 서비스 아키텍트',caution_ctnt:'기획 깊이와 조직 영향력 사이에서 시기별로 비중을 조절해야 합니다.'},marketing:{fit_ctnt:'CMO, 브랜드 전략가, 마케팅 디렉터',caution_ctnt:'전략과 실행을 동시에 잡으려면 위임 능력이 핵심입니다.'},sales:{fit_ctnt:'영업 디렉터, 전략 파트너십, 사업개발 리더',caution_ctnt:'영업 현장과 전략 사이에서 균형을 잃으면 둘 다 약해집니다.'},design:{fit_ctnt:'CDO, 디자인 시스템 리드, UX 디렉터',caution_ctnt:'디자인 실무에서 멀어지면 팀의 신뢰를 잃을 수 있습니다.'},corporate:{fit_ctnt:'CFO, CHRO, 경영전략 임원',caution_ctnt:'실무 감각을 잃으면 현장과 괴리된 의사결정을 하게 됩니다.'}}},
+  {profile_cd:"fortress",profile_nm:"요새형",vec_val:{compensation:.7,security:.9,growth:-.3,autonomy:-.3,impact:0,flexibility:-.5},profile_desc_ctnt:"예측 가능한 보상과 안정성을 최우선으로 합니다.",map_priority_cd:"benefits",
+    profile_job_fits:{tech:{fit_ctnt:'대기업 전문가 트랙, 공공기관 IT, 금융권 개발',caution_ctnt:'안정성에 과도하게 최적화하면 기술 트렌드 변화에 적응력이 약해집니다.'},planning:{fit_ctnt:'대기업 서비스기획, 공공 SI 기획, 금융권 PM',caution_ctnt:'안정적 환경에서 혁신적 기획 역량이 정체될 수 있습니다.'},marketing:{fit_ctnt:'대기업 브랜드 마케팅, 공기업 홍보',caution_ctnt:'안정적이지만 퍼포먼스 마케팅 역량이 약해질 수 있습니다.'},sales:{fit_ctnt:'대기업 기존 고객 관리, 공공 입찰 영업',caution_ctnt:'신규 개척 역량이 약해지면 시장 변화에 취약해집니다.'},design:{fit_ctnt:'대기업 인하우스, 공공기관 디자인',caution_ctnt:'외부 트렌드와 단절되면 디자인 감각이 정체됩니다.'},corporate:{fit_ctnt:'대기업 재무/인사, 공기업 경영지원',caution_ctnt:'한 회사에 오래 있으면 외부 시장가치를 모르게 됩니다.'}}},
+  {profile_cd:"conqueror",profile_nm:"정복자형",vec_val:{compensation:.9,security:-.2,growth:.1,autonomy:0,impact:.8,flexibility:-.2},profile_desc_ctnt:"높은 보상과 강한 영향력을 함께 추구합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'빅테크 시니어, 핀테크 리드, 높은 RSU 제공 기업',caution_ctnt:'보상에 집중하면 기술적 깊이가 약해질 수 있습니다.'},planning:{fit_ctnt:'빅테크 PM, 전략 컨설팅, VC/PE 투자심사역',caution_ctnt:'보상과 타이틀에 집착하면 실질적 기획 역량이 정체됩니다.'},marketing:{fit_ctnt:'퍼포먼스 에이전시 임원, 빅테크 마케팅 리드',caution_ctnt:'매출 기여만 추구하면 브랜드 역량이 약해집니다.'},sales:{fit_ctnt:'엔터프라이즈 세일즈, 투자 세일즈, 고연봉 영업직',caution_ctnt:'단기 실적 추구가 장기 고객 관계를 해칠 수 있습니다.'},design:{fit_ctnt:'빅테크 디자인 리드, 에이전시 CD',caution_ctnt:'보상 중심 이동은 포트폴리오의 일관성을 해칩니다.'},corporate:{fit_ctnt:'경영 컨설팅, 투자은행, CFO 트랙',caution_ctnt:'보상과 직급에만 집중하면 실무 역량이 약해집니다.'}}},
+  {profile_cd:"nomad",profile_nm:"유목민형",vec_val:{compensation:-.4,security:-.5,growth:.2,autonomy:.8,impact:-.3,flexibility:.9},profile_desc_ctnt:"어떤 것에도 묶이지 않는 것을 최고의 가치로 봅니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'디지털 노마드 개발자, 프리랜서, 오픈소스 컨트리뷰터',caution_ctnt:'유연성 자체가 목적이 되면 깊이도 영향력도 쌓이지 않습니다.'},planning:{fit_ctnt:'프리랜서 PM/기획 컨설턴트, 멀티 프로젝트',caution_ctnt:'프로덕트의 성장을 끝까지 보지 못하면 기획 역량이 제한됩니다.'},marketing:{fit_ctnt:'프리랜서 마케터, 포트폴리오 커리어',caution_ctnt:'브랜드 마케팅은 시간이 걸립니다. 짧은 프로젝트만으론 한계가 있습니다.'},sales:{fit_ctnt:'독립 에이전트, 프리랜서 세일즈 컨설턴트',caution_ctnt:'영업은 관계 비즈니스입니다. 유목 생활이 네트워크 구축을 방해할 수 있습니다.'},design:{fit_ctnt:'프리랜서 디자이너, 디지털 노마드',caution_ctnt:'클라이언트 의존도가 높으면 진정한 자유가 아닙니다.'},corporate:{fit_ctnt:'프리랜서 회계사, 독립 HR 컨설턴트',caution_ctnt:'경영지원은 조직 맥락을 깊이 아는 것이 핵심인데, 짧은 관여로는 어렵습니다.'}}},
+  {profile_cd:"gardener",profile_nm:"정원사형",vec_val:{compensation:.1,security:.7,growth:.7,autonomy:-.1,impact:0,flexibility:-.2},profile_desc_ctnt:"안전한 환경 안에서 꾸준히 성장하는 것을 선호합니다.",map_priority_cd:"benefits",
+    profile_job_fits:{tech:{fit_ctnt:'대기업 R&D, 사내 기술 리더, 내부 이동 활용',caution_ctnt:'외부 시장 가치를 점검하지 않으면 사내에서만 통하는 전문가가 됩니다.'},planning:{fit_ctnt:'대기업 기획실, 안정적 서비스의 지속적 개선',caution_ctnt:'새로운 시장/서비스 경험 없이는 기획 역량에 한계가 옵니다.'},marketing:{fit_ctnt:'대기업 브랜드팀, 안정적 마케팅 조직',caution_ctnt:'같은 브랜드만 오래 하면 새 도전에 대한 감각이 둔해집니다.'},sales:{fit_ctnt:'대기업 핵심 고객 관리, 장기 파트너십 영업',caution_ctnt:'신규 개척 없이 관리만 하면 영업 근육이 약해집니다.'},design:{fit_ctnt:'대기업 디자인센터, 디자인 시스템 장기 운영',caution_ctnt:'같은 가이드라인 안에서만 작업하면 창의성이 정체됩니다.'},corporate:{fit_ctnt:'대기업 재무/인사 전문가, 장기 근속',caution_ctnt:'한 회사에 최적화되면 이직 시 적응이 어렵습니다.'}}},
+  {profile_cd:"sovereign",profile_nm:"주권자형",vec_val:{compensation:.2,security:-.3,growth:.1,autonomy:.9,impact:.5,flexibility:.3},profile_desc_ctnt:"자기 방식대로 일하면서 의미 있는 결정을 내리고 싶어합니다.",map_priority_cd:"wlb",
+    profile_job_fits:{tech:{fit_ctnt:'창업, 소규모 팀 리더, 독립 컨설턴트',caution_ctnt:'모든 것을 직접 통제하려는 성향이 위임 실패와 번아웃으로 이어질 수 있습니다.'},planning:{fit_ctnt:'1인 PM, 사내 벤처, 독립 프로덕트 컨설팅',caution_ctnt:'혼자 결정하는 습관이 팀 협업을 어렵게 만들 수 있습니다.'},marketing:{fit_ctnt:'1인 마케팅 에이전시, 사내 벤처 마케팅 리드',caution_ctnt:'혼자서 다 하려다 전문성 깊이가 얕아질 수 있습니다.'},sales:{fit_ctnt:'독립 세일즈 에이전트, 소규모 팀 영업 리더',caution_ctnt:'영업은 조직 지원이 중요합니다. 혼자 다 하면 스케일이 안 됩니다.'},design:{fit_ctnt:'1인 디자인 스튜디오, 사내 벤처 디자인 리드',caution_ctnt:'클라이언트 관리와 디자인을 동시에 하면 둘 다 약해질 수 있습니다.'},corporate:{fit_ctnt:'소규모 법인 CFO, 스타트업 COO',caution_ctnt:'경영지원을 혼자 맡으면 전문 분야의 깊이가 얕아집니다.'}}},
+  {profile_cd:"strategist",profile_nm:"전략가형",vec_val:{compensation:.5,security:.2,growth:.3,autonomy:0,impact:.6,flexibility:.5},profile_desc_ctnt:"어떤 한 축에 올인하지 않고 최적의 포지션을 계산합니다.",map_priority_cd:"salary",
+    profile_job_fits:{tech:{fit_ctnt:'PM, 전략 기획, 매니지먼트 트랙',caution_ctnt:'균형 추구가 어느 것도 강하지 않은 상태로 이어질 수 있습니다.'},planning:{fit_ctnt:'전략 기획, 사업개발, PM → 경영 트랙',caution_ctnt:'다방면에 관심이 분산되면 전문성이 약해집니다.'},marketing:{fit_ctnt:'마케팅 전략가, 브랜드+퍼포먼스 양쪽 경험',caution_ctnt:'다 잘하려다 아무것도 깊지 않을 수 있습니다.'},sales:{fit_ctnt:'전략 영업, 사업개발, 파트너십 매니저',caution_ctnt:'너무 전략적으로만 접근하면 현장 감각을 잃습니다.'},design:{fit_ctnt:'UX 전략가, 디자인+기획 겸직',caution_ctnt:'디자인과 전략 사이에서 정체성이 모호해질 수 있습니다.'},corporate:{fit_ctnt:'전략기획실, 경영진 보좌, MBA 트랙',caution_ctnt:'전략만 하고 실행을 안 하면 신뢰를 잃습니다.'}}},
+];
+
+const PRIORITIES=[
+  {key:'salary',icon:'💰',label:'금전적 보상'},{key:'wlb',icon:'⚖️',label:'워라밸'},
+  {key:'benefits',icon:'🎁',label:'복지'},
+];
+const PRI_PREVIEW={
+  salary:{title:'금전적 보상',checks:['연봉 + 복지 + 야근수당 합산 <strong>총 보상</strong> 비교','명목 연봉과 실질 보상의 <strong>격차 분석</strong>','포괄/비포괄 임금 유형에 따른 보상 차이 계산'],tip:'연봉이 높아도 복지가 빈약하면 실질 보상이 역전될 수 있고, 야근수당은 임금 유형에 따라 크게 달라집니다.'},
+  wlb:{title:'워라밸',checks:['<strong>주당 근무시간</strong> 비교 — 워라밸의 핵심','원격근무 · 유연출퇴근 · 통근 시간 종합 분석','자율 휴가 / 리프레시 휴가 비교'],tip:'근무시간이 가장 중요하고, 재택/유연근무는 보조 기준입니다.'},
+  benefits:{title:'복지',checks:['복리후생 <strong>항목별 금액 비교</strong> 테이블','연봉+복지 합산 실질 보상 분석','합산 차이 1,200만 이하 시 <strong>복지 만족도 우선 판단</strong>'],tip:'복지포인트, 사내대출 등은 사용 조건이 회사마다 다릅니다.'},
+};
+
+const CAT_LABELS={compensation:'💰 보상·금전',flexibility:'🔄 근무유연성',work_env:'🏢 근무환경',time_off:'🏖 시간·휴가',health:'🏥 건강·의료',family:'👶 가족·돌봄',growth:'📈 성장·커리어',leisure:'🎯 여가·라이프',perks:'🎁 경제적 부가혜택'};
+const TYPE_LABELS={large:'대기업',mid:'중견기업',public:'공기업',startup:'스타트업',foreign:'외국계',freelance:'프리랜서'};
+const GROWTH_RATES={large:0.04,mid:0.027,public:0.03,startup:0.10,foreign:0.05,freelance:0.02};
+const GROWTH_LABELS={large:'대기업 평균 4%',mid:'중견기업 평균 2.7%',public:'공기업 평균 3%',startup:'스타트업 평균 10%',foreign:'외국계 평균 5%',freelance:'프리랜서 평균 2%'};
+
+const BEN_PRESETS={
+  large:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비/주차비',benefit_amt:120,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트/선택복지',benefit_amt:200,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'bonus',benefit_nm:'성과급/인센티브',benefit_amt:300,benefit_ctgr_cd:'compensation',badge_cd:'est',default_checked_yn:false,note_ctnt:'성과에 따라 편차 큼'},{benefit_cd:'health',benefit_nm:'건강검진 (본인+가족)',benefit_amt:100,benefit_ctgr_cd:'health',badge_cd:'est',default_checked_yn:true},{benefit_cd:'housing',benefit_nm:'사내대출 이자절감',benefit_amt:200,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'child_edu',benefit_nm:'자녀 학자금',benefit_amt:300,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:false,note_ctnt:'자녀가 있는 경우'},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:50,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:true}],
+  mid:[{benefit_cd:'meal',benefit_nm:'식대 지원',benefit_amt:300,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:60,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:50,benefit_ctgr_cd:'health',badge_cd:'est',default_checked_yn:true},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:30,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:true}],
+  public:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:120,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트/선택복지',benefit_amt:250,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:80,benefit_ctgr_cd:'health',badge_cd:'est',default_checked_yn:true},{benefit_cd:'housing',benefit_nm:'사내대출 이자절감',benefit_amt:250,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'child_edu',benefit_nm:'자녀 학자금',benefit_amt:400,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:false,note_ctnt:'자녀가 있는 경우'},{benefit_cd:'edu',benefit_nm:'교육비/자기개발비',benefit_amt:100,benefit_ctgr_cd:'growth',badge_cd:'est',default_checked_yn:true},{benefit_cd:'event',benefit_nm:'경조사 지원',benefit_amt:50,benefit_ctgr_cd:'family',badge_cd:'est',default_checked_yn:true}],
+  startup:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'stock',benefit_nm:'스톡옵션/RSU 기대값',benefit_amt:500,benefit_ctgr_cd:'compensation',badge_cd:'est',default_checked_yn:false,note_ctnt:'성공 시 기대값 — 불확실성 높음'}],
+  foreign:[{benefit_cd:'meal',benefit_nm:'식대 지원 (3식)',benefit_amt:360,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'transport',benefit_nm:'교통비',benefit_amt:100,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'welfare',benefit_nm:'복지포인트',benefit_amt:150,benefit_ctgr_cd:'perks',badge_cd:'est',default_checked_yn:true},{benefit_cd:'bonus',benefit_nm:'성과급/인센티브',benefit_amt:500,benefit_ctgr_cd:'compensation',badge_cd:'est',default_checked_yn:false,note_ctnt:'성과에 따라 편차 큼'},{benefit_cd:'health',benefit_nm:'건강검진',benefit_amt:150,benefit_ctgr_cd:'health',badge_cd:'est',default_checked_yn:true},{benefit_cd:'edu',benefit_nm:'교육비 (도서, 세미나)',benefit_amt:200,benefit_ctgr_cd:'growth',badge_cd:'est',default_checked_yn:true}],
+  freelance:[],
+};
+
+const OT_HRS={low:40,mid:45,high:54};
+const OT_LABELS={low:'거의 없음',mid:'보통',high:'많음'};
+const WAGE_LABELS={inclusive:'포괄임금',separate:'비포괄임금'};
+const REMOTE_LABELS={none:'없음',partial:'주 1~2일',hybrid:'주 3일+',free:'자유'};
+const FLEX_LABELS={none:'없음',stagger:'시차출퇴근',flexible:'탄력근무'};
+const REMOTE_SAVE={none:0,partial:72,hybrid:120,free:180};
+
+const WORK_PRESETS={
+  large:{ot:'mid',wage:'inclusive',remote:'partial',flex:'stagger'},
+  mid:{ot:'mid',wage:'inclusive',remote:'none',flex:'none'},
+  public:{ot:'low',wage:'separate',remote:'none',flex:'stagger'},
+  startup:{ot:'high',wage:'inclusive',remote:'hybrid',flex:'flexible'},
+  foreign:{ot:'mid',wage:'separate',remote:'hybrid',flex:'flexible'},
+  freelance:{ot:'mid',wage:'separate',remote:'free',flex:'flexible'},
+};
+
+const DB=[];
+
+// ━━ 전역 상태 ━━
+let matched={a:null,b:null},benS={a:[],b:[]},_searchTimers={};
+let curPri='wlb';
+let curSacrifice=null;
+let wsState={a:{ot:null,wage:null,remote:null,flex:null},b:{ot:null,wage:null,remote:null,flex:null}};
+let selectedRate=null;
+let pfShuffled=[],pfCur=0,pfAnswers=[],pfResult=null,pfJob=null;
+
+// ━━ DRAFT PERSISTENCE ━━
+let _draftTimer=null;
+function saveDraft(){
+  if(_draftTimer)clearTimeout(_draftTimer);
+  _draftTimer=setTimeout(()=>{
+    try{localStorage.setItem('jc_draft',JSON.stringify({
+      sA:document.getElementById('sA')?.value||'',sB:document.getElementById('sB')?.value||'',
+      tA:document.getElementById('tA')?.value||'',tB:document.getElementById('tB')?.value||'',
+      salA:document.getElementById('salA')?.value||'',
+      comA:document.getElementById('comA')?.value||'',comB:document.getElementById('comB')?.value||'',
+      selectedRate,wsState,benS,curPri,curSacrifice,pfResult,pfJob,
+      mA:matched.a?{id:matched.a.comp_id,name:matched.a.comp_nm}:null,
+      mB:matched.b?{comp_id:matched.b.comp_id,comp_nm:matched.b.comp_nm}:null,
+      t:Date.now()
+    }))}catch{}
+  },300);
+}
+function clearDraft(){try{localStorage.removeItem('jc_draft')}catch{}}
+async function restoreDraft(){
+  try{
+    const raw=localStorage.getItem('jc_draft');if(!raw)return;
+    const d=JSON.parse(raw);
+    if(Date.now()-d.t>7*86400000){clearDraft();return}
+    if(d.tA)document.getElementById('tA').value=d.tA;
+    if(d.tB)document.getElementById('tB').value=d.tB;
+    if(d.salA)document.getElementById('salA').value=d.salA;
+    if(d.comA)document.getElementById('comA').value=d.comA;
+    if(d.comB)document.getElementById('comB').value=d.comB;
+    if(d.selectedRate!==null&&d.selectedRate!==undefined)setRate(d.selectedRate);
+    if(d.wsState){wsState=d.wsState;['a','b'].forEach(s=>['ot','wage','remote','flex'].forEach(f=>{const v=wsState[s][f];if(v){const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.toggle('on',b.dataset.v===v))}}))}
+    if(d.benS&&(d.benS.a?.length||d.benS.b?.length)){benS=d.benS;renderBenCompare()}
+    if(d.curPri)setPri(d.curPri);
+    if(d.curSacrifice)setSacrifice(d.curSacrifice);
+    if(d.pfResult)pfResult=d.pfResult;
+    if(d.pfJob)pfJob=d.pfJob;
+    if(d.mA?.id&&API_BASE){document.getElementById('sA').value=d.mA.name||'';await selComp('a',d.mA.id)}
+    else if(d.sA)document.getElementById('sA').value=d.sA;
+    if(d.mB?.id&&API_BASE){document.getElementById('sB').value=d.mB.name||'';await selComp('b',d.mB.id)}
+    else if(d.sB)document.getElementById('sB').value=d.sB;
+    calc();
+  }catch(e){console.error('[restoreDraft]',e)}
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PROFILER ENGINE (v3 — job-aware)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function pfDot(a,b){return DIMS.reduce((s,d)=>s+(a[d]||0)*(b[d]||0),0)}
+function pfMag(v){return Math.sqrt(DIMS.reduce((s,d)=>s+(v[d]||0)**2,0))}
+function pfCos(a,b){const ma=pfMag(a),mb=pfMag(b);return(ma&&mb)?pfDot(a,b)/(ma*mb):0}
+
+function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]]}return r}
+
+// ━━ SHARED HELPERS ━━
+// calc() + saveDraft() 묶음 — setter 일관성 유지 (P3-4)
+function commit(){calc();saveDraft();}
+
+// 회사 데이터 정규화 — API 응답과 BEN_PRESETS 프리셋을 같은 shape 로 통일 (P3-4)
+//  - qual_yn: boolean 강제
+//  - benefits: 기본 체크 상태(default_checked_yn 또는 checked) 유지, 없으면 true
+//  - benefit_amt: number 강제
+//  - benefit_ctgr_cd: 없으면 'perks' 폴백
+function normalizeCompany(raw){
+  if(!raw)return raw;
+  const bens=(raw.benefits||[]).map(b=>({
+    ...b,
+    benefit_amt:Number(b.benefit_amt)||0,
+    benefit_ctgr_cd:b.benefit_ctgr_cd||'perks',
+    badge_cd:b.badge_cd||'est',
+    qual_yn:!!b.qual_yn,
+    checked:b.checked!==undefined?b.checked:(b.default_checked_yn!==undefined?!!b.default_checked_yn:true),
+  }));
+  return{...raw,benefits:bens};
+}
+
+function pfInit(){pfShuffled=[];pfCur=0;pfAnswers=[];pfResult=null;pfJob=null;renderPfIntro()}
+// 하드코드 {id,label,a:{title,fx},b:{title,fx}} 와 API {question_label_nm, option_a.{option_a_title_nm, option_a_fx_val}, ...} 양쪽 수용
+function _normalizeQ(q,idx){
+  if(q.option_a&&q.option_a.option_a_title_nm!==undefined)return q;
+  return{
+    question_no:q.id??(idx+1),
+    question_label_nm:q.label||'',
+    option_a:{option_a_title_nm:q.a?.title||'',option_a_fx_val:q.a?.fx||{}},
+    option_b:{option_b_title_nm:q.b?.title||'',option_b_fx_val:q.b?.fx||{}},
+  };
+}
+function buildQuestions(jobId){
+  const job=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.job_cd===jobId);
+  const scenarioKey=job?(job.scenario_cd||job.scenario):null;
+  const descs=scenarioKey?Q_DESC[scenarioKey]:null;
+  return shuffle(Q_BASE.map((raw,i)=>{
+    const q=_normalizeQ(raw,i);
+    const d=descs?.[i];
+    return{
+      ...q,
+      option_a:{...q.option_a,desc_a_ctnt:d?.a||''},
+      option_b:{...q.option_b,desc_b_ctnt:d?.b||''},
+    };
+  }));
+}
+
+function renderPfIntro(){
+  let jobsHtml='';
+  JOB_GROUPS.forEach((g,gi)=>{
+    const oc=gi===0?' open':'';
+    jobsHtml+=`<div class="pf-job-group"><div class="pf-job-group-label${oc}" style="border-color:${g.color_cd}25" onclick="toggleJobGroup(this)"><span style="background:${g.color_cd};width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span><span style="color:${g.color_cd}">${esc(g.job_group_nm)}</span><span class="jg-arrow">▼</span></div><div class="pf-job-grid${oc}">`;
+    g.jobs.forEach(j=>{jobsHtml+=`<button class="pf-job-chip" data-jid="${esc(j.job_cd)}" onclick="pfSelectJob('${esc(j.job_cd)}')"><span class="pf-job-chip-i">${esc(j.icon_nm)}</span><span class="pf-job-chip-t">${esc(j.job_nm)}</span></button>`});
+    jobsHtml+=`</div></div>`;
+  });
+  document.getElementById('pfWrap').innerHTML=`<button class="back" onclick="go('s-landing')">← 처음으로</button><div class="pf-intro fadein"><div class="mono pf-badge">Career Values Profiler <span style="opacity:.4">v3</span></div><h1 class="pf-h">당신의 커리어 가치관을<br><span>발견</span>합니다</h1><p class="pf-p">12개의 구체적 시나리오에서 트레이드오프를 선택하세요.<br>각 선택이 6개 가치 차원에 미치는 복합 효과를 분석합니다.</p><div class="pf-dims">${DIMS.map(d=>`<span class="pf-dim" style="border-color:${DIM_META[d].color}30;color:${DIM_META[d].color}">${DIM_META[d].icon} ${DIM_META[d].label}</span>`).join('')}</div><div class="pf-job-section"><div class="pf-job-label">먼저, 현재 직무를 선택해주세요</div>${jobsHtml}<div class="pf-job-notice" id="pfJobNotice"></div></div><button class="pf-start" id="pfStartBtn" onclick="pfStart()" disabled style="opacity:.4;cursor:not-allowed">직무를 선택하면 시작할 수 있습니다</button><p class="mono" style="margin-top:20px;font-size:11px;color:rgba(255,255,255,.18)">약 3~5분 · 12문항 · 직무 맞춤 시나리오</p></div>`;
+}
+function toggleJobGroup(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function pfSelectJob(jobId){
+  pfJob=JOB_GROUPS.flatMap(g=>g.jobs).find(j=>j.job_cd===jobId);
+  document.querySelectorAll('.pf-job-chip').forEach(c=>c.classList.toggle('on',c.dataset.jid===jobId));
+  document.querySelectorAll('.pf-job-chip.on').forEach(c=>{const g=c.closest('.pf-job-grid'),l=g?.previousElementSibling;if(g&&!g.classList.contains('open')){g.classList.add('open');l?.classList.add('open')}});
+  const n=document.getElementById('pfJobNotice');
+  if(pfJob&&!pfJob.custom){n.innerHTML=`현재 <strong>${esc(pfJob.job_nm)}</strong>은 범용 시나리오가 적용됩니다. 곧 직무별 맞춤 시나리오가 추가됩니다.`;n.classList.add('show')}else{n.classList.remove('show')}
+  const btn=document.getElementById('pfStartBtn');btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.textContent='시작하기';
+}
+function pfStart(){if(!pfJob)return;pfCur=0;pfAnswers=[];pfShuffled=buildQuestions(pfJob.job_cd);renderPfQ()}
+
+function pfBack(){if(pfLock)return;if(pfCur>0){pfCur--;pfAnswers.pop();renderPfQ()}else{renderPfIntro()}}
+function renderPfQ(){
+  if(pfCur>=pfShuffled.length){pfFinish();return}
+  const q=pfShuffled[pfCur];
+  const bars=pfShuffled.map((_,i)=>`<div class="pf-bar" style="background:${i<pfCur?'#E8B931':i===pfCur?'rgba(232,185,49,.4)':'rgba(255,255,255,.05)'}"></div>`).join('');
+  function fxTags(fx){return DIMS.filter(d=>Math.abs(fx[d])>=.3).sort((a,b)=>Math.abs(fx[b])-Math.abs(fx[a])).map(d=>{const v=fx[d],pos=v>0;return`<span class="opt-fx-tag" style="background:${pos?DIM_META[d].color+'15':'rgba(255,255,255,.03)'};color:${pos?DIM_META[d].color:'rgba(255,255,255,.25)'};border-color:${pos?DIM_META[d].color+'30':'rgba(255,255,255,.06)'}">${pos?'↑':'↓'} ${DIM_META[d].label}</span>`}).join('')}
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-q fadein"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><button class="back" onclick="pfBack()" style="margin:0">← 이전</button><span class="mono" style="font-size:12px;color:rgba(255,255,255,.3)">${String(pfCur+1).padStart(2,'0')} / ${pfShuffled.length}</span><span class="mono" style="font-size:12px;color:rgba(255,255,255,.18)">${esc(q.question_label_nm||'')}</span></div><div class="pf-progress">${bars}</div><p class="pf-prompt">두 회사에서 동시에 오퍼를 받았습니다. 어디를 선택하시겠습니까?</p><div class="opt-card" id="pfOptA" onclick="pfSelect('a')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#E8B931;background:rgba(232,185,49,.15)">A</span><span class="opt-title">${esc(q.option_a.option_a_title_nm||'')}</span></div><p class="opt-desc">${esc(q.option_a.desc_a_ctnt||'')}</p><div class="opt-fx">${fxTags(q.option_a.option_a_fx_val)}</div></div><div class="opt-card" id="pfOptB" onclick="pfSelect('b')"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono opt-tag" style="color:#7B68C8;background:rgba(123,104,200,.15)">B</span><span class="opt-title">${esc(q.option_b.option_b_title_nm||'')}</span></div><p class="opt-desc">${esc(q.option_b.desc_b_ctnt||'')}</p><div class="opt-fx">${fxTags(q.option_b.option_b_fx_val)}</div></div></div>`;
+}
+let pfLock=false;
+function pfSelect(side){if(pfLock)return;pfLock=true;const q=pfShuffled[pfCur];document.getElementById(side==='a'?'pfOptA':'pfOptB').classList.add('sel-'+side);document.getElementById(side==='a'?'pfOptB':'pfOptA').classList.add('dim');setTimeout(()=>{try{pfAnswers.push({fx:side==='a'?q.option_a.option_a_fx_val:q.option_b.option_b_fx_val});pfCur++;renderPfQ()}finally{pfLock=false}},500)}
+
+function pfFinish(){
+  const scores={};DIMS.forEach(d=>scores[d]=0);pfAnswers.forEach(a=>DIMS.forEach(d=>scores[d]+=(a.fx[d]||0)));
+  let best=null,bestSim=-Infinity;PROFILES.forEach(p=>{const s=pfCos(scores,p.vec_val);if(s>bestSim){bestSim=s;best=p}});
+  pfResult={scores,profile:best,similarity_val:bestSim,job:pfJob};saveDraft();
+  const allSim=PROFILES.map(p=>({p,s:pfCos(scores,p.vec_val)})).sort((a,b)=>b.s-a.s);
+  const vals=DIMS.map(d=>scores[d]),mn=Math.min(...vals);const shifted={};DIMS.forEach(d=>shifted[d]=scores[d]-mn);const mx=Math.max(...DIMS.map(d=>shifted[d]),.01);const norm={};DIMS.forEach(d=>norm[d]=shifted[d]/mx);
+  const sz=280,cx=sz/2,cy=sz/2,r=sz*.34,as=Math.PI*2/DIMS.length;const pt=(i,v)=>({x:cx+r*v*Math.cos(as*i-Math.PI/2),y:cy+r*v*Math.sin(as*i-Math.PI/2)});
+  let svg=`<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><defs><linearGradient id="rg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#E8B931" stop-opacity=".3"/><stop offset="50%" stop-color="#7B68C8" stop-opacity=".2"/><stop offset="100%" stop-color="#4A9B8E" stop-opacity=".3"/></linearGradient></defs>`;
+  [.2,.4,.6,.8,1].forEach(lv=>{svg+=`<path d="${DIMS.map((_,i)=>{const p=pt(i,lv);return`${i?'L':'M'} ${p.x} ${p.y}`}).join(' ')} Z" fill="none" stroke="rgba(255,255,255,.06)"/>`});
+  DIMS.forEach((_,i)=>{const p=pt(i,1);svg+=`<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" stroke="rgba(255,255,255,.06)"/>`});
+  svg+=`<path d="${DIMS.map((d,i)=>{const p=pt(i,norm[d]);return`${i?'L':'M'} ${p.x} ${p.y}`}).join(' ')} Z" fill="url(#rg2)" stroke="rgba(232,185,49,.7)" stroke-width="2"/>`;
+  DIMS.forEach((d,i)=>{const p=pt(i,norm[d]);svg+=`<circle cx="${p.x}" cy="${p.y}" r="5" fill="${DIM_META[d].color}" stroke="#0d0d1a" stroke-width="2"/>`});
+  DIMS.forEach((d,i)=>{const p=pt(i,1.22);svg+=`<text x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="middle" fill="${DIM_META[d].color}" font-size="11" font-weight="600">${DIM_META[d].icon} ${DIM_META[d].label}</text>`});svg+=`</svg>`;
+  const sorted=[...DIMS].sort((a,b)=>scores[b]-scores[a]);
+  const barsH=sorted.map(d=>`<div style="display:flex;align-items:center;gap:12px"><span style="width:72px;font-size:13px;color:${DIM_META[d].color};font-weight:600;text-align:right">${DIM_META[d].icon} ${DIM_META[d].label}</span><div style="flex:1;height:26px;background:rgba(255,255,255,.03);border-radius:4px;overflow:hidden;position:relative"><div style="height:100%;width:${norm[d]*100}%;background:linear-gradient(90deg,${DIM_META[d].color}33,${DIM_META[d].color}99);border-radius:4px"></div><span class="mono" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:rgba(255,255,255,.45)">${scores[d]>=0?'+':''}${scores[d].toFixed(2)}</span></div></div>`).join('');
+  const simH=allSim.map(({p,s})=>`<div style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.4)"><span class="mono" style="width:90px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.profile_nm)}</span><div style="flex:1;height:6px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(0,((s+1)/2)*100)}%;background:linear-gradient(90deg,rgba(232,185,49,.3),rgba(232,185,49,.8));border-radius:3px"></div></div><span class="mono" style="width:40px">${(s*100).toFixed(0)}%</span></div>`).join('');
+  const scenarioKey=pfJob?.scenario_cd||'tech';const profile_job_fits=best.profile_job_fits?.[scenarioKey]||best.profile_job_fits?.tech;const jobLabel=pfJob?.job_nm||'기술';
+  const bestNmE=esc(best.profile_nm||''),jobLabelE=esc(jobLabel||''),priLabelE=esc(PRIORITIES.find(p=>p.key===best.map_priority_cd)?.label||'');
+  const fitCtnt=profile_job_fits?.fit_ctnt||profile_job_fits?.fit||'';
+  const cautionCtnt=profile_job_fits?.caution_ctnt||profile_job_fits?.caution||'';
+  document.getElementById('pfWrap').innerHTML=`<div class="pf-result"><div class="slideup" style="text-align:center;margin-bottom:36px"><div class="mono" style="font-size:11px;letter-spacing:4px;color:rgba(232,185,49,.6);text-transform:uppercase;margin-bottom:16px">Your Career DNA</div><h2 style="font-size:28px;font-weight:700;color:#f0ede6;margin-bottom:6px">${bestNmE}</h2><span class="mono" style="font-size:11px;color:rgba(255,255,255,.25)">cosine similarity_val:${(bestSim*100).toFixed(1)}% · ${jobLabelE} 직군</span></div><div class="slideup" style="display:flex;justify-content:center;margin-bottom:28px">${svg}</div><div class="slideup" style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">${barsH}</div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(232,185,49,.7)">분석</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(best.profile_desc_ctnt||'')}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(123,104,200,.7)">${jobLabelE} 직군에서의 적합 경로</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(fitCtnt)}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(212,100,78,.7)">${jobLabelE} 직군 주의점</h3><p style="font-size:14px;line-height:1.8;color:rgba(255,255,255,.55)">${esc(cautionCtnt)}</p></div><div class="pf-res-box slideup"><h3 class="mono pf-res-label" style="color:rgba(255,255,255,.35)">전체 프로필 유사도</h3><div style="display:flex;flex-direction:column;gap:8px">${simH}</div></div><button class="pf-to-compare" onclick="pfToCompare()">이 가치관으로 회사 비교하기<span class="sub">${bestNmE} · ${jobLabelE} → 추천 기준: ${priLabelE}</span></button><div style="text-align:center;margin-top:1rem"><button class="back" onclick="pfInit()" style="margin:0">다시 측정하기</button></div></div>`;
+}
+function pfToCompare(){
+  if(pfResult?.profile?.map_priority_cd)curPri=pfResult.profile.map_priority_cd;
+  if(pfResult?.scores){
+    const dimToPri={compensation:'salary',security:'salary',growth:'benefits',autonomy:'wlb',flexibility:'wlb',impact:'salary'};
+    const sorted=[...DIMS].sort((a,b)=>pfResult.scores[a]-pfResult.scores[b]);
+    for(const d of sorted){const pk=dimToPri[d];if(pk&&pk!==curPri&&PRIORITIES.some(p=>p.key===pk)){curSacrifice=pk;break}}
+  }
+  go('s-input');
+  const a=document.getElementById('priAuto');
+  if(pfResult){
+    const sacLabel=curSacrifice?PRIORITIES.find(p=>p.key===curSacrifice)?.label:'';
+    a.innerHTML=`🎯 <strong>${esc(pfResult.profile.profile_nm||'')}</strong> (${esc(pfResult.job?.job_nm||pfResult.job?.label||'')} 직군) 가치관 분석 결과, 최우선: <strong>${esc(PRIORITIES.find(p=>p.key===curPri)?.label||'')}</strong>${sacLabel?`, 포기 가능: <strong>${esc(sacLabel)}</strong>`:''} — 다른 기준을 선택해도 됩니다.`;
+    a.classList.add('show');
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  INPUT — 우선순위, 검색, 복지, 근무방식, 연봉, calc
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ━━ WORK STYLE ━━
+function setWS(s,field,val){
+  wsState[s][field]=val;
+  const containerId={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[field]+s.toUpperCase();
+  document.querySelectorAll(`#${containerId} .ws-btn`).forEach(b=>b.classList.toggle('on',b.dataset.v===val));
+  const w=wsState[s];
+  const warn=document.getElementById('wsWarn'+s.toUpperCase());
+  const info=document.getElementById('wsInfo'+s.toUpperCase());
+  warn.classList.toggle('show',w.wage==='inclusive'&&(w.ot==='mid'||w.ot==='high'));
+  info.classList.toggle('show',w.wage==='separate');
+  renderOTCalc(s);
+  calc();saveDraft();
+}
+
+function renderOTCalc(s){
+  const el=document.getElementById('otCalc'+s.toUpperCase());
+  el.classList.remove('show');
+}
+
+function applyWSPreset(s,type){
+  const preset=WORK_PRESETS[type];
+  if(!preset)return;
+  const label=TYPE_LABELS[type]||type;
+  Object.entries(preset).forEach(([field,val])=>setWS(s,field,val));
+  const pr=document.getElementById('wsPr'+s.toUpperCase());
+  pr.innerHTML=`💡 <strong>${label} 평균</strong> 근무방식을 자동으로 채웠습니다. 실제와 다르면 수정하세요.`;
+  pr.classList.add('show');
+}
+
+function getWSHours(s){return OT_HRS[wsState[s].ot]||0}
+function getOTPay(s){
+  const w=wsState[s];
+  if(w.wage!=='separate'||w.ot==='low')return 0;
+  const salRange=s==='a'?getSalRange():getOfferRange();
+  if(!salRange.mid)return 0;
+  const hourlyBase=salRange.mid*10000/12/209;
+  const extraHrs=OT_HRS[w.ot]-40;
+  return Math.round(extraHrs*hourlyBase*1.5*4.33*12/10000);
+}
+
+// ━━ PRIORITY ━━
+function initPri(){
+  document.getElementById('priGrid').innerHTML=PRIORITIES.map(p=>`<button class="pri-c${p.key===curPri?' on':''}" data-k="${p.key}" onclick="setPri('${p.key}')"><span class="pri-c-i">${p.icon}</span><span class="pri-c-t">${p.label}</span></button>`).join('');
+  renderPriPreview(curPri);
+  document.getElementById('priSacSection').style.display='block';
+  renderSacGrid();
+  updateSelSummary();
+}
+function setPri(k){
+  curPri=k;
+  if(curSacrifice===k)curSacrifice=null;
+  document.querySelectorAll('#priGrid .pri-c').forEach(c=>c.classList.toggle('on',c.dataset.k===k));
+  renderPriPreview(k);
+  document.getElementById('priSacSection').style.display='block';
+  renderSacGrid();
+  updateSelSummary();
+  saveDraft();
+}
+function renderSacGrid(){
+  const grid=document.getElementById('sacGrid');
+  grid.innerHTML=PRIORITIES.filter(p=>p.key!==curPri).map(p=>`<button class="pri-c${p.key===curSacrifice?' sac-on':''}" data-k="${p.key}" onclick="setSacrifice('${p.key}')"><span class="pri-c-i">${p.icon}</span><span class="pri-c-t">${p.label}</span></button>`).join('');
+}
+function setSacrifice(k){
+  if(k===curPri)return;
+  curSacrifice=k;
+  document.querySelectorAll('#sacGrid .pri-c').forEach(c=>c.classList.toggle('sac-on',c.dataset.k===k));
+  const pv=PRI_PREVIEW[k],pri=PRIORITIES.find(p=>p.key===k);
+  if(pv&&pri){
+    const el=document.getElementById('sacPreview'),inner=document.getElementById('sacPvInner');
+    inner.innerHTML=`<div style="display:flex;align-items:center;gap:8px;font-size:.82rem"><span style="font-size:1.1rem">${pri.icon}</span><span><strong style="color:var(--red)">${pv.title}</strong>을 포기 가능으로 선택했습니다. 리포트에서 포기 비용을 정량화합니다.</span></div>`;
+    el.classList.remove('open');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')));
+  }
+  updateSelSummary();
+  saveDraft();
+}
+function updateSelSummary(){
+  const el=document.getElementById('priSelSummary');
+  const priObj=PRIORITIES.find(p=>p.key===curPri);
+  const sacObj=curSacrifice?PRIORITIES.find(p=>p.key===curSacrifice):null;
+  if(priObj&&sacObj){
+    document.getElementById('selPriVal').textContent=priObj.icon+' '+priObj.label;
+    document.getElementById('selSacVal').textContent=sacObj.icon+' '+sacObj.label;
+    el.style.display='flex';
+  } else {
+    el.style.display='none';
+  }
+}
+function renderPriPreview(k){const pv=PRI_PREVIEW[k],pri=PRIORITIES.find(p=>p.key===k);if(!pv||!pri)return;const el=document.getElementById('priPreview'),inner=document.getElementById('priPvInner');inner.innerHTML=`<div class="pri-pv-head"><span class="pri-pv-icon">${pri.icon}</span><div class="pri-pv-title"><span>${pv.title}</span>을 최우선으로<br>비교하겠습니다.</div></div><div class="pri-pv-checks">${pv.checks.map(c=>`<div class="pri-pv-check"><span class="pri-pv-check-icon">✓</span><span>${c}</span></div>`).join('')}</div><div class="pri-pv-tip"><span class="pri-pv-tip-icon">📌</span><span>${pv.tip}</span></div>`;el.classList.remove('open');requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open')))}
+
+// ━━ SEARCH ━━
+function _renderSR(s,el,m){if(m.length){el.innerHTML=m.map(c=>`<div class="si" onclick="selComp('${s}',${Number(c.comp_id)||0})"><div class="si-logo">${esc(c.logo_nm||c.comp_nm[0])}</div><div class="si-info"><div class="si-name">${esc(c.comp_nm)}</div><div class="si-meta">${esc(c.industry_nm||'')}</div></div><span class="si-badge">DB</span></div>`).join('')}else{el.innerHTML=`<div class="sr-empty">검색 결과 없음<span style="display:block;font-size:.72rem;color:var(--t4);margin-top:4px">기업 유형을 선택하면 평균 복지를 채워드려요</span></div>`}el.classList.add('open')}
+function doSearch(s){const q=document.getElementById(s==='a'?'sA':'sB').value.trim();const el=document.getElementById(s==='a'?'rA':'rB');if(q.length<1){el.classList.remove('open');return}if(!API_BASE){const ql=q.toLowerCase();const m=DB.filter(c=>c.comp_nm.toLowerCase().includes(ql)||(c.aliases||[]).some(a=>a.toLowerCase().includes(ql)));_renderSR(s,el,m);return}clearTimeout(_searchTimers[s]);el.innerHTML='<div class="sr-empty">검색 중...</div>';el.classList.add('open');_searchTimers[s]=setTimeout(async()=>{const r=await apiFetch('/companies/search?q='+encodeURIComponent(q));_renderSR(s,el,r||[])},300)}
+async function selComp(s,comp_id){document.getElementById(s==='a'?'rA':'rB').classList.remove('open');let c;if(API_BASE){const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='⏳ 회사 정보 불러오는 중...';mb.classList.add('show');const raw=await apiFetch('/companies/'+comp_id);if(!raw||raw.error){mb.querySelector('span').textContent='❌ 회사 정보를 불러올 수 없습니다';return}c=normalizeCompany(raw)}else{c=normalizeCompany(DB.find(x=>x.comp_id===comp_id));if(!c)return}matched[s]=c;document.getElementById(s==='a'?'sA':'sB').value=c.comp_nm;const typeEl=document.getElementById(s==='a'?'tA':'tB');typeEl.value=c.comp_tp_cd;const typeFd=typeEl.closest('.fd');if(typeFd)typeFd.classList.remove('has-error');const mb=document.getElementById(s==='a'?'mA':'mB');mb.querySelector('span').textContent='✓ DB 매칭 — 복리후생 자동 입력';mb.classList.add('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');benS[s]=c.benefits.map(b=>({...b,checked:true}));renderBen(s);
+  const ws=c.work_style_val||{};const tp_cd=c.comp_tp_cd;
+  const preset=WORK_PRESETS[tp_cd]||{};
+  setWS(s,'ot',preset.ot||'mid');
+  setWS(s,'wage',preset.wage||'inclusive');
+  setWS(s,'remote',ws.remote&&ws.unlimitedPTO?'free':ws.remote?'hybrid':preset.remote||'none');
+  setWS(s,'flex',ws.flex?'flexible':preset.flex||'none');
+  const pr=document.getElementById('wsPr'+s.toUpperCase());
+  pr.innerHTML=`✓ <strong>${esc(c.comp_nm)}</strong> DB 근무방식 + ${TYPE_LABELS[tp_cd]} 평균 추정 적용`;pr.classList.add('show');
+  calc();saveDraft()}
+function clearM(s){matched[s]=null;document.getElementById(s==='a'?'mA':'mB').classList.remove('show');document.getElementById(s==='a'?'pA':'pB').classList.remove('show');document.getElementById(s==='a'?'sA':'sB').value='';benS[s]=[];renderBen(s);wsState[s]={ot:null,wage:null,remote:null,flex:null};['ot','wage','remote','flex'].forEach(f=>{const cid={ot:'otBtns',wage:'wageBtns',remote:'remoteBtns',flex:'flexBtns'}[f]+s.toUpperCase();document.querySelectorAll(`#${cid} .ws-btn`).forEach(b=>b.classList.remove('on'))});document.getElementById('wsWarn'+s.toUpperCase()).classList.remove('show');document.getElementById('otCalc'+s.toUpperCase()).classList.remove('show');document.getElementById('wsPr'+s.toUpperCase()).classList.remove('show');calc();saveDraft()}
+function onTypeChange(s){document.getElementById(s==='a'?'tA':'tB').closest('.fd').classList.remove('has-error');if(matched[s])return;const tp_cd=document.getElementById(s==='a'?'tA':'tB').value;const preset=BEN_PRESETS[tp_cd];const label=TYPE_LABELS[tp_cd]||tp_cd;if(!preset||!preset.length){benS[s]=[];document.getElementById(s==='a'?'pA':'pB').classList.remove('show');renderBen(s)}else{benS[s]=normalizeCompany({benefits:preset}).benefits;const pb=document.getElementById(s==='a'?'pA':'pB');pb.innerHTML=`💡 <strong>${label} 평균 복지</strong>를 자동으로 채웠습니다. 아는 항목만 수정해주세요.`;pb.classList.add('show');document.getElementById(s==='a'?'mA':'mB').classList.remove('show');renderBen(s)}applyWSPreset(s,tp_cd);commit()}
+
+// ━━ BENEFITS ━━
+// 배지 상태 판정 — 'off'(공식·유효), 'stl'(공식이지만 만료), 'est'(추정) 3-상태.
+// official + 만료 = stl 로 강등해야 "예전엔 공식, 지금은 재검증 필요" 를 UI 가 전달.
+function badgeState(b){
+  if(!b)return 'est';
+  const bc=b.badge_cd||'est';
+  if(bc!=='official')return 'est';
+  const ex=b.expires_dtm;
+  if(!ex)return 'off';
+  return (new Date(ex).getTime()<Date.now())?'stl':'off';
+}
+function badgeLabel(st){return st==='off'?'공식':st==='stl'?'만료':'추정'}
+function badgeChip(b){
+  const st=badgeState(b);
+  const ver=b&&b.verified_dtm?b.verified_dtm.slice(0,10):'';
+  const tip=st==='off'?('공식 확인 '+(ver||'—')):st==='stl'?('공식이었으나 '+(b.expires_dtm?b.expires_dtm.slice(0,10):'—')+' 만료'):'공개 정보 기반 추정치';
+  return `<span class="bi-badge b-${st}" title="${esc(tip)}">${badgeLabel(st)}</span>`;
+}
+// 배지 상태별 신뢰 계수 — 합계 ± 범위 계산에 사용.
+// official(유효): ±5%, stale(만료): ±15%, est(추정): ±20%.
+function benUncertainty(b){const st=badgeState(b); return st==='off'?0.05:st==='stl'?0.15:0.20}
+// 체크된 금전 복지의 합계 ± 절대값 (만원). qual_yn 항목은 금액이 없으므로 제외.
+function sumBenUncertainty(list){return (list||[]).filter(b=>b.checked&&!b.qual_yn).reduce((acc,b)=>acc+(Number(b.benefit_amt)||0)*benUncertainty(b),0)}
+function fmtPM(v){const f=x=>x>=10000?(x/10000).toFixed(1)+'억':Math.round(x).toLocaleString()+'만';return '±'+f(Math.round(v))}
+// 리포트 신뢰도 요약 — 체크된 복지에 대한 official/est/stale 비율과 평균 검증일.
+function computeDataTrust(){
+  const all=[...((benS.a||[]).filter(b=>b.checked)),...((benS.b||[]).filter(b=>b.checked))];
+  const total=all.length;
+  if(!total)return null;
+  let off=0,stl=0,est=0,latest='',earliestExpires='';
+  all.forEach(b=>{const st=badgeState(b);if(st==='off')off++;else if(st==='stl')stl++;else est++;if(b.verified_dtm&&(!latest||b.verified_dtm>latest))latest=b.verified_dtm;if(b.expires_dtm&&(!earliestExpires||b.expires_dtm<earliestExpires))earliestExpires=b.expires_dtm;});
+  return{total,off,stl,est,off_pct:Math.round(off/total*100),latest:latest?latest.slice(0,10):'',earliestExpires:earliestExpires?earliestExpires.slice(0,10):''};
+}
+// 제보 모달 — 복지 하나 값이 잘못됐다고 사용자가 신고. 익명/로그인 모두 허용.
+// state: 현재 선택된 (comp_id, benefit_id) 를 담는다.
+let _rptTarget=null;
+function reportBen(s,idx){
+  const b=benS[s]?.[idx];
+  const cmp=matched[s];
+  if(!b||!b.benefit_id||!cmp?.comp_id){
+    showToast('DB에 저장된 회사 복지만 제보할 수 있습니다','info');
+    return;
+  }
+  _rptTarget={comp_id:cmp.comp_id,benefit_id:b.benefit_id,benefit_nm:b.benefit_nm,current_amt:b.benefit_amt};
+  const box=document.getElementById('rptBox');
+  box.innerHTML=`
+    <h4>🚩 값이 잘못됐다고 제보</h4>
+    <div class="rpt-sub">${esc(cmp.comp_nm||'회사')} · ${esc(b.benefit_nm||'')}</div>
+    <label>제보 유형</label>
+    <select id="rptType" onchange="document.getElementById('rptAmtRow').style.display=this.value==='wrong_amount'?'block':'none'">
+      <option value="wrong_amount">금액이 잘못됐습니다</option>
+      <option value="outdated">이 제도는 이미 폐지/변경됐습니다</option>
+      <option value="missing_field">다른 정보가 누락됐습니다</option>
+    </select>
+    <div id="rptAmtRow"><label>올바른 금액 (만원)</label><input type="number" id="rptAmt" placeholder="예: 500" min="0"></div>
+    <label>사유/상세 (선택, 500자)</label>
+    <textarea id="rptComment" maxlength="500" placeholder="어떻게 알게 됐는지, 출처 링크 등"></textarea>
+    <div class="rpt-actions">
+      <button class="rpt-cancel" onclick="closeRpt()">취소</button>
+      <button class="rpt-submit" onclick="submitReport()">제보하기</button>
+    </div>`;
+  document.getElementById('rptOverlay').classList.add('open');
+}
+function closeRpt(){document.getElementById('rptOverlay').classList.remove('open');_rptTarget=null}
+async function submitReport(){
+  if(!_rptTarget)return;
+  const type=document.getElementById('rptType').value;
+  const amt=document.getElementById('rptAmt').value;
+  const comment=document.getElementById('rptComment').value.trim();
+  const body={report_type_cd:type,comment_ctnt:comment||null};
+  if(type==='wrong_amount'){
+    if(!amt){showToast('금액을 입력해주세요','error');return}
+    body.reported_amt=Number(amt);
+  }
+  const r=await apiFetchFull(`/companies/${_rptTarget.comp_id}/benefits/${_rptTarget.benefit_id}/report`,{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok){showToast('제보 실패: '+(r.error||'서버 오류'),'error');return}
+  closeRpt();
+  showToast('제보가 접수되었습니다. 관리자 검수 후 반영됩니다.','success');
+}
+function renderBen(s){renderBenCompare()}
+function renderBenCompare(){
+  const listA=benS.a||[],listB=benS.b||[];
+  const el=document.getElementById('blCompare');
+  if(!el)return;
+  if(!listA.length&&!listB.length){el.innerHTML='';const bc=document.getElementById('bcCompare');if(bc)bc.textContent='';return}
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.map((b,i)=>({...b,idx:i})).filter(b=>b.benefit_ctgr_cd===cat);
+    const bItems=listB.map((b,i)=>({...b,idx:i})).filter(b=>b.benefit_ctgr_cd===cat);
+    if(!aItems.length&&!bItems.length)return;
+    const aCk=aItems.filter(b=>b.checked).length,bCk=bItems.filter(b=>b.checked).length;
+    catData.push({benefit_ctgr_cd:cat,aItems,bItems,aCk,bCk});
+  });
+  if(!catData.length){el.innerHTML='';return}
+  const maxCnt=Math.max(...catData.map(d=>Math.max(d.aCk,d.bCk)),1);
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
+  const nAE=esc(nA),nBE=esc(nB);
+  let h='';
+  catData.forEach(d=>{
+    const barA=d.aCk>0?Math.max(10,d.aCk/maxCnt*100):0;
+    const barB=d.bCk>0?Math.max(10,d.bCk/maxCnt*100):0;
+    h+=`<div class="bg" id="bgc_${d.benefit_ctgr_cd}">`;
+    h+=`<div class="bg-header" onclick="this.parentElement.classList.toggle('bg-open')">`;
+    h+=`<span class="bg-cnt cnt-a" id="bgCntA_${d.benefit_ctgr_cd}">${d.aCk}개</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="bgBarA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${esc(CAT_LABELS[d.benefit_ctgr_cd]||'')}</span><span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="bgBarB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="bgCntB_${d.benefit_ctgr_cd}">${d.bCk}개</span>`;
+    h+=`</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nAE}</div>`;
+    d.aItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('a',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span>${badgeChip(b)}</div>`});
+    if(!d.aItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nBE}</div>`;
+    d.bItems.forEach(b=>{h+=`<div class="bi"><input type="checkbox" class="bi-ck" ${b.checked?'checked':''} onchange="togBen('b',${Number(b.idx)},this.checked)"><span class="bi-n">${esc(b.benefit_nm)}</span>${badgeChip(b)}</div>`});
+    if(!d.bItems.length)h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div></div></div></div>`;
+  });
+  el.innerHTML=h;
+  const totalA=listA.filter(b=>b.checked).length,totalB=listB.filter(b=>b.checked).length;
+  const bc=document.getElementById('bcCompare');
+  if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
+}
+function togBen(s,i,c){benS[s][i].checked=c;updBenCatBfly(benS[s][i].benefit_ctgr_cd);commit()}
+function setBenV(s,i,v){benS[s][i].benefit_amt=Number(v)||0;commit()}
+function updBenCatBfly(cat){
+  const aCk=(benS.a||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
+  const bCk=(benS.b||[]).filter(b=>b.benefit_ctgr_cd===cat&&b.checked).length;
+  const maxCnt=Math.max(aCk,bCk,1);
+  const cntA=document.getElementById('bgCntA_'+cat),cntB=document.getElementById('bgCntB_'+cat);
+  const barA=document.getElementById('bgBarA_'+cat),barB=document.getElementById('bgBarB_'+cat);
+  if(cntA)cntA.textContent=aCk+'개';if(cntB)cntB.textContent=bCk+'개';
+  if(barA)barA.style.width=(aCk>0?Math.max(10,aCk/maxCnt*100):0)+'%';
+  if(barB)barB.style.width=(bCk>0?Math.max(10,bCk/maxCnt*100):0)+'%';
+  const totalA=(benS.a||[]).filter(b=>b.checked).length,totalB=(benS.b||[]).filter(b=>b.checked).length;
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
+  const bc=document.getElementById('bcCompare');if(bc)bc.textContent=`(${nA} ${totalA}개 / ${nB} ${totalB}개)`;
+}
+function getBenTotal(s){let ben=0,net=0;(benS[s]||[]).forEach(b=>{if(b.checked){ben+=b.benefit_amt;if(!b.qual_yn)net+=b.benefit_amt}});return{ben,net}}
+
+// ━━ Salary helpers ━━
+function getSalRange(){const v=document.getElementById('salA').value;if(!v)return{min:0,max:0,mid:0};const[lo,hi]=v.split('-').map(Number);return{min:lo,max:hi,mid:Math.round((lo+hi)/2)}}
+function getOfferRange(){const base=getSalRange();if(!base.min||selectedRate===null)return{min:0,max:0,mid:0};const mult=1+selectedRate/100;return{min:Math.round(base.min*mult),max:Math.round(base.max*mult),mid:Math.round(base.mid*mult)}}
+function setRate(r){selectedRate=r;document.querySelectorAll('.rate-chip').forEach(c=>c.classList.toggle('on',Number(c.dataset.rate)===r));document.querySelector('.rate-section')?.classList.remove('has-error');updateRateResult();calc();saveDraft()}
+function updateRateResult(){const el=document.getElementById('rateResult');const base=getSalRange();if(!base.min){el.innerHTML=`<span class="rate-result-placeholder">현직 연봉을 먼저 선택하면 예상 연봉이 계산됩니다.</span>`;return}if(selectedRate===null){el.innerHTML=`<span class="rate-result-placeholder">인상율을 선택해주세요.</span>`;return}const offer=getOfferRange();const rateLabel=selectedRate===0?'동결':'+'+selectedRate+'%';el.innerHTML=`<div class="rate-result-calc"><span class="rate-result-range">${offer.min.toLocaleString()} ~ ${offer.max.toLocaleString()}만원</span><span class="rate-result-detail">현직 ${base.min.toLocaleString()}~${base.max.toLocaleString()} × ${rateLabel}</span></div>`}
+function fR(range){if(!range||!range.min)return'—';const f=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';return range.min===range.max?f(range.min):`${f(range.min)} ~ ${f(range.max)}`}
+function calc(){const salA=getSalRange(),salB=getOfferRange();const bA=getBenTotal('a'),bB=getBenTotal('b');
+  if(salA.min){const tAmin=salA.min+bA.net,tAmax=salA.max+bA.net;document.getElementById('tcbA').textContent=`${salA.min.toLocaleString()}~${salA.max.toLocaleString()}`;document.getElementById('tcnA').textContent=`복지 ${bA.net>=0?'+':''}${bA.net.toLocaleString()}만`;document.getElementById('tctA').textContent=`${tAmin.toLocaleString()}~${tAmax.toLocaleString()}만`}else{document.getElementById('tcbA').textContent='—';document.getElementById('tcnA').textContent='복지 0만';document.getElementById('tctA').textContent='—'}
+  if(salB.min){const tBmin=salB.min+bB.net,tBmax=salB.max+bB.net;document.getElementById('tcbB').textContent=`${salB.min.toLocaleString()}~${salB.max.toLocaleString()}`;document.getElementById('tcnB').textContent=`복지 ${bB.net>=0?'+':''}${bB.net.toLocaleString()}만`;document.getElementById('tctB').textContent=`${tBmin.toLocaleString()}~${tBmax.toLocaleString()}만`}else{document.getElementById('tcbB').textContent='—';document.getElementById('tcnB').textContent='복지 0만';document.getElementById('tctB').textContent='—'}
+  updateRateResult()}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  COMPARE ENGINE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function fW(v){return Math.abs(v)>=10000?(v/10000).toFixed(1)+'억원':Math.round(v).toLocaleString()+'만원'}
+function getBenByCat(s,cat){let t=0;(benS[s]||[]).forEach(b=>{if(b.checked&&b.benefit_ctgr_cd===cat)t+=b.benefit_amt});return t}
+
+function renderBenCatCompare(nA,nB){
+  const listA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn),listB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn);
+  if(!listA.length&&!listB.length)return'';
+  const idxMapA={},idxMapB={};(benS.a||[]).forEach((b,i)=>{idxMapA[b.benefit_cd]=i});(benS.b||[]).forEach((b,i)=>{idxMapB[b.benefit_cd]=i});
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.filter(b=>b.benefit_ctgr_cd===cat),bItems=listB.filter(b=>b.benefit_ctgr_cd===cat);
+    if(!aItems.length&&!bItems.length)return;
+    const aKeys=new Set(aItems.map(b=>b.benefit_cd)),bKeys=new Set(bItems.map(b=>b.benefit_cd));
+    const allKeys=[...new Set([...aKeys,...bKeys])];
+    const details=allKeys.map(k=>{
+      const a=aItems.find(b=>b.benefit_cd===k),b_=bItems.find(b=>b.benefit_cd===k);
+      return{key:k,name:a?.benefit_nm||b_?.benefit_nm||k,inA:!!a,inB:!!b_,valA:a?.benefit_amt||0,valB:b_?.benefit_amt||0,idxA:idxMapA[k]??-1,idxB:idxMapB[k]??-1};
+    });
+    catData.push({benefit_ctgr_cd:cat,sumA:aItems.reduce((s,b)=>s+b.benefit_amt,0),sumB:bItems.reduce((s,b)=>s+b.benefit_amt,0),details});
+  });
+  if(!catData.length)return'';
+  const maxSum=Math.max(...catData.map(d=>Math.max(d.sumA,d.sumB)),1);
+  const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
+  let h='<div id="rptBenWrap" style="display:flex;flex-direction:column;gap:6px">';
+  catData.forEach(d=>{
+    const barA=d.sumA>0?Math.max(10,d.sumA/maxSum*100):0;
+    const barB=d.sumB>0?Math.max(10,d.sumB/maxSum*100):0;
+    const diff=d.sumB-d.sumA;
+    let diffBadge='';
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptDiff_${d.benefit_ctgr_cd}">+${fV(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptDiff_${d.benefit_ctgr_cd}">${fV(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptDiff_${d.benefit_ctgr_cd}">동일</span>`;
+    h+=`<div class="bg" onclick="if(event.target.tagName!==\'INPUT\')this.classList.toggle('bg-open')">`;
+    h+=`<div class="bg-header">`;
+    h+=`<span class="bg-cnt cnt-a" id="rptSumA_${d.benefit_ctgr_cd}">${d.sumA>0?fV(d.sumA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptBarA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptBarB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptSumB_${d.benefit_ctgr_cd}">${d.sumB>0?fV(d.sumB):'-'}</span>`;
+    h+=`</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
+    d.details.filter(x=>x.inA).forEach(x=>{
+      const ben=x.idxA>=0?benS.a[x.idxA]:null;
+      const ch=ben?badgeChip(ben):'';
+      const rpt=(ben&&ben.benefit_id)?`<button class="bi-report-btn" onclick="event.stopPropagation();reportBen('a',${x.idxA})" title="값이 잘못됐다고 제보">🚩</button>`:'';
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span>${ch}<input type="number" class="bi-v" value="${x.valA}" onchange="updRptBenVal('a',${x.idxA},this.value)"><span class="bi-u">만</span>${rpt}</div>`;
+    });
+    if(!d.details.some(x=>x.inA))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
+    d.details.filter(x=>x.inB).forEach(x=>{
+      const ben=x.idxB>=0?benS.b[x.idxB]:null;
+      const ch=ben?badgeChip(ben):'';
+      const rpt=(ben&&ben.benefit_id)?`<button class="bi-report-btn" onclick="event.stopPropagation();reportBen('b',${x.idxB})" title="값이 잘못됐다고 제보">🚩</button>`:'';
+      h+=`<div class="bi"><span class="bi-n">${esc(x.name)}</span>${ch}<input type="number" class="bi-v" value="${x.valB}" onchange="updRptBenVal('b',${x.idxB},this.value)"><span class="bi-u">만</span>${rpt}</div>`;
+    });
+    if(!d.details.some(x=>x.inB))h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`;
+    h+=`</div></div></div></div>`;
+  });
+  const totA=listA.reduce((s,b)=>s+b.benefit_amt,0),totB=listB.reduce((s,b)=>s+b.benefit_amt,0),totD=totB-totA;
+  const uncA=sumBenUncertainty(benS.a),uncB=sumBenUncertainty(benS.b);
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptTotA">${fV(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptTotDiff">${totD===0?'동일':(totD>0?'+':'')+fV(totD)}</span><span class="total-val val-b" id="rptTotB">${fV(totB)}</span></div>`;
+  h+=`<div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--t4);padding:4px 14px 0"><span id="rptTotUncA">${totA>0?fmtPM(uncA):''}</span><span>신뢰구간 (official ±5% / stale ±15% / est ±20%)</span><span id="rptTotUncB">${totB>0?fmtPM(uncB):''}</span></div>`;
+  h+='</div>';
+  return h;
+}
+function updRptBenVal(s,idx,v){
+  if(idx<0)return;benS[s][idx].benefit_amt=Number(v)||0;
+  const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
+  const cats=Object.keys(CAT_LABELS);
+  let maxSum=0;
+  cats.forEach(cat=>{
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    if(sA>maxSum)maxSum=sA;if(sB>maxSum)maxSum=sB;
+  });
+  if(!maxSum)maxSum=1;
+  cats.forEach(cat=>{
+    const sA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    const sB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn&&b.benefit_ctgr_cd===cat).reduce((t,b)=>t+b.benefit_amt,0);
+    const elSA=document.getElementById('rptSumA_'+cat),elSB=document.getElementById('rptSumB_'+cat);
+    const elBA=document.getElementById('rptBarA_'+cat),elBB=document.getElementById('rptBarB_'+cat);
+    const elD=document.getElementById('rptDiff_'+cat);
+    if(elSA)elSA.textContent=sA>0?fV(sA):'-';if(elSB)elSB.textContent=sB>0?fV(sB):'-';
+    if(elBA)elBA.style.width=(sA>0?Math.max(10,sA/maxSum*100):0)+'%';
+    if(elBB)elBB.style.width=(sB>0?Math.max(10,sB/maxSum*100):0)+'%';
+    if(elD){const d=sB-sA;elD.textContent=d===0?'동일':d>0?'+'+fV(d):fV(d);elD.className='bg-diff '+(d>0?'pos':d<0?'neg':'eq')}
+  });
+  const totA=(benS.a||[]).filter(b=>b.checked&&!b.qual_yn).reduce((t,b)=>t+b.benefit_amt,0);
+  const totB=(benS.b||[]).filter(b=>b.checked&&!b.qual_yn).reduce((t,b)=>t+b.benefit_amt,0);
+  const totD=totB-totA;
+  const elTA=document.getElementById('rptTotA'),elTB=document.getElementById('rptTotB'),elTD=document.getElementById('rptTotDiff');
+  if(elTA)elTA.textContent=fV(totA);if(elTB)elTB.textContent=fV(totB);
+  if(elTD){elTD.textContent=totD===0?'동일':(totD>0?'+':'')+fV(totD);elTD.className='total-diff '+(totD>0?'pos':totD<0?'neg':'eq')}
+  const uncA=sumBenUncertainty(benS.a),uncB=sumBenUncertainty(benS.b);
+  const elUA=document.getElementById('rptTotUncA'),elUB=document.getElementById('rptTotUncB');
+  if(elUA)elUA.textContent=totA>0?fmtPM(uncA):'';
+  if(elUB)elUB.textContent=totB>0?fmtPM(uncB):'';
+}
+function renderQualCompare(nA,nB){
+  const listA=(benS.a||[]).filter(b=>b.checked&&b.qual_yn),listB=(benS.b||[]).filter(b=>b.checked&&b.qual_yn);
+  if(!listA.length&&!listB.length)return'';
+  const cats=Object.keys(CAT_LABELS);
+  const catData=[];
+  cats.forEach(cat=>{
+    const aItems=listA.filter(b=>b.benefit_ctgr_cd===cat),bItems=listB.filter(b=>b.benefit_ctgr_cd===cat);
+    if(!aItems.length&&!bItems.length)return;
+    catData.push({benefit_ctgr_cd:cat,cntA:aItems.length,cntB:bItems.length,itemsA:aItems,itemsB:bItems});
+  });
+  if(!catData.length)return'';
+  const maxCnt=Math.max(...catData.map(d=>Math.max(d.cntA,d.cntB)),1);
+  const fC=v=>v+'건';
+  let h='<div id="rptQualWrap" style="display:flex;flex-direction:column;gap:6px">';
+  catData.forEach(d=>{
+    const barA=d.cntA>0?Math.max(10,d.cntA/maxCnt*100):0;
+    const barB=d.cntB>0?Math.max(10,d.cntB/maxCnt*100):0;
+    const diff=d.cntB-d.cntA;
+    let diffBadge='';
+    if(diff>0)diffBadge=`<span class="bg-diff pos" id="rptQ_diff_${d.benefit_ctgr_cd}">+${fC(diff)}</span>`;
+    else if(diff<0)diffBadge=`<span class="bg-diff neg" id="rptQ_diff_${d.benefit_ctgr_cd}">${fC(diff)}</span>`;
+    else diffBadge=`<span class="bg-diff eq" id="rptQ_diff_${d.benefit_ctgr_cd}">동일</span>`;
+    h+=`<div class="bg" onclick="this.classList.toggle('bg-open')">`;
+    h+=`<div class="bg-header">`;
+    h+=`<span class="bg-cnt cnt-a" id="rptQ_sA_${d.benefit_ctgr_cd}">${d.cntA>0?fC(d.cntA):'-'}</span>`;
+    h+=`<div class="bg-bar-wrap bar-a"><div class="bg-bar bar-a" id="rptQ_bA_${d.benefit_ctgr_cd}" style="width:${barA}%"></div></div>`;
+    h+=`<div class="bg-center"><span class="bg-label">${CAT_LABELS[d.benefit_ctgr_cd]}</span>${diffBadge}<span class="bg-chevron">▼</span></div>`;
+    h+=`<div class="bg-bar-wrap bar-b"><div class="bg-bar bar-b" id="rptQ_bB_${d.benefit_ctgr_cd}" style="width:${barB}%"></div></div>`;
+    h+=`<span class="bg-cnt cnt-b" id="rptQ_sB_${d.benefit_ctgr_cd}">${d.cntB>0?fC(d.cntB):'-'}</span>`;
+    h+=`</div>`;
+    h+=`<div class="bg-items"><div class="bg-cols">`;
+    h+=`<div class="bg-col"><div class="bg-col-title col-a">${nA}</div>`;
+    if(d.itemsA.length){d.itemsA.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span>${badgeChip(b)}</div>`})}
+    else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
+    h+=`</div><div class="bg-col"><div class="bg-col-title col-b">${nB}</div>`;
+    if(d.itemsB.length){d.itemsB.forEach(b=>{h+=`<div class="bi"><span class="bi-n">${esc(b.qual_desc_ctnt||b.benefit_nm)}</span>${badgeChip(b)}</div>`})}
+    else{h+=`<div style="font-size:.72rem;color:var(--t4);padding:4px 0">—</div>`}
+    h+=`</div></div></div></div>`;
+  });
+  const totA=listA.length,totB=listB.length,totD=totB-totA;
+  h+=`<div class="ben-cat-total"><span>합계</span><span class="total-val val-a" id="rptQ_totA">${fC(totA)}</span><span class="total-diff ${totD>0?'pos':totD<0?'neg':'eq'}" id="rptQ_totDiff">${totD===0?'동일':(totD>0?'+':'')+fC(totD)}</span><span class="total-val val-b" id="rptQ_totB">${fC(totB)}</span></div>`;
+  h+='</div>';
+  return h;
+}
+
+function validateForm(){
+  let ok=true;
+  document.querySelectorAll('.has-error').forEach(el=>el.classList.remove('has-error'));
+  if(!document.getElementById('tA').value){document.getElementById('tA').closest('.fd').classList.add('has-error');ok=false}
+  if(!document.getElementById('tB').value){document.getElementById('tB').closest('.fd').classList.add('has-error');ok=false}
+  if(!document.getElementById('salA').value){document.getElementById('salA').closest('.fd').classList.add('has-error');ok=false}
+  if(selectedRate===null||selectedRate===undefined){document.querySelector('.rate-section')?.classList.add('has-error');ok=false}
+  if(!ok){const f=document.querySelector('.has-error');if(f)f.scrollIntoView({behavior:'smooth',block:'center'})}
+  return ok;
+}
+function compare(){
+  if(!AUTH_TOKEN||!API_BASE){openAuth();return}
+  if(!validateForm())return;
+  const salA=getSalRange(),salB=getOfferRange();
+  const typeAVal=document.getElementById('tA').value, typeBVal=document.getElementById('tB').value;
+
+  const bA=getBenTotal('a'),bB=getBenTotal('b');
+  const effA={min:salA.min+bA.net,max:salA.max+bA.net,mid:salA.mid+bA.net};
+  const effB={min:salB.min+bB.net,max:salB.max+bB.net,mid:salB.mid+bB.net};
+  const comA=Number(document.getElementById('comA').value)||0,comB=Number(document.getElementById('comB').value)||0;
+  const hrsA=getWSHours('a'),hrsB=getWSHours('b');
+  const otPayA=getOTPay('a'),otPayB=getOTPay('b');
+  const wA=wsState.a,wB=wsState.b;
+  const nA=matched.a?matched.a.comp_nm:'현직',nB=matched.b?matched.b.comp_nm:'이직처';
+  const wsA=matched.a?.work_style_val||{},wsB=matched.b?.work_style_val||{};
+  const pri=PRIORITIES.find(p=>p.key===curPri);
+  const effDiffMid=effB.mid-effA.mid,salDiffMid=salB.mid-salA.mid;
+  const effDiffMin=effB.min-effA.min,effDiffMax=effB.max-effA.max;
+  const diffRange=effDiffMin===effDiffMax?`${effDiffMin>0?'+':''}${fW(effDiffMin)}`:`${effDiffMin>0?'+':''}${fW(effDiffMin)} ~ ${effDiffMax>0?'+':''}${fW(effDiffMax)}`;
+
+  let html=`<div class="rp-div"><span>${pri.icon} ${pri.label} 기준 비교 리포트</span></div>`;
+
+  if(curSacrifice){
+    const sacObj=PRIORITIES.find(p=>p.key===curSacrifice);
+    html+=`<div style="display:flex;gap:.75rem;margin-bottom:1rem"><div style="flex:1;padding:.65rem .85rem;background:var(--purple-d);border:1px solid rgba(139,108,246,.2);border-radius:8px;text-align:center"><div style="font-size:.58rem;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">최우선</div><div style="font-size:.82rem;font-weight:700;color:var(--t1)">${pri.icon} ${pri.label}</div></div><div style="flex:1;padding:.65rem .85rem;background:var(--red-d);border:1px solid rgba(239,80,80,.2);border-radius:8px;text-align:center"><div style="font-size:.58rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.2rem">포기 가능</div><div style="font-size:.82rem;font-weight:700;color:var(--t1)">${sacObj.icon} ${sacObj.label}</div></div></div>`;
+  }
+
+  if(pfResult){html+=`<div class="callout gold" style="margin-bottom:1rem"><span class="callout-icon">🎯</span><span><strong>${pfResult.profile.profile_nm}</strong> 가치관이 반영된 리포트입니다. 상위 가치: ${DIMS.filter(d=>pfResult.scores[d]>0).sort((a,b)=>pfResult.scores[b]-pfResult.scores[a]).slice(0,3).map(d=>`<strong style="color:${DIM_META[d].color}">${DIM_META[d].label}</strong>`).join(', ')}</span></div>`}
+
+  // Verdict card helper
+  function vdCard(icon,title,p1Label,p1Winner,p1Details,p2Label,p2Winner,p2Details,chooseText){
+    let h=`<div class="vd-wrap"><div class="vd-header"><span class="vd-header-icon">${icon}</span><div class="vd-header-title"><span>${title}</span> 분석</div></div>`;
+    h+=`<div class="vd-header-sub">선택하신 최우선 기준으로 두 가지 관점에서 비교합니다</div>`;
+    h+=`<div class="vd-persp"><div class="vp p1"><div class="vp-label"><div class="vp-dot"></div>${p1Label}</div><div class="vp-winner">${p1Winner}</div><div class="vp-details">${p1Details}</div></div>`;
+    h+=`<div class="vp p2"><div class="vp-label"><div class="vp-dot"></div>${p2Label}</div><div class="vp-winner">${p2Winner}</div><div class="vp-details">${p2Details}</div></div></div>`;
+    if(chooseText)h+=`<div class="vd-choose"><span class="ch-icon">📌</span><span>${chooseText}</span></div>`;
+    h+=`</div>`;return h;
+  }
+
+  // Build verdict based on priority
+  let vdHtml='';
+  if(curPri==='salary'){
+    const totalA=effA.mid+otPayA, totalB=effB.mid+otPayB;
+    const totalDiff=totalB-totalA;
+    const hvA_=hrsA>0?Math.round(totalA*10000/(hrsA*52)):0;
+    const hvB_=hrsB>0?Math.round(totalB*10000/(hrsB*52)):0;
+    const totalWin=totalDiff>0?nB:totalDiff<0?nA:'동일';
+    const hvWin_=hvA_&&hvB_?(hvA_>hvB_?nA:hvB_>hvA_?nB:'동일'):'';
+    const p1W=totalWin==='동일'?'동일':`<span class="${totalWin===nA?'n-a':'n-b'}">${totalWin}</span> 유리`;
+    const p1D=`총 보상(연봉+복지+야근수당) 기준<br>${totalDiff===0?'차이 없음':`차이 <strong>${totalDiff>0?'+':''}${fW(totalDiff)}</strong>`}${otPayA||otPayB?`<br><span style="font-size:.68rem;color:var(--t4)">야근수당 포함</span>`:''}`;
+    let p2W='—',p2D='근무시간 미입력';
+    if(hvA_&&hvB_){const hvDiff_=hvB_-hvA_;const pct_=Math.round(Math.abs(hvDiff_)/Math.min(hvA_,hvB_)*100);p2W=hvWin_==='동일'?`거의 동일 <span style="font-size:.72rem;color:var(--t4)">${pct_}%</span>`:`<span class="${hvWin_===nA?'n-a':'n-b'}">${hvWin_}</span> 유리`;p2D=`시간당 <strong>${hvDiff_>0?'+':''}${hvDiff_.toLocaleString()}원 (${pct_}%)</strong><br>"많이 벌어도 많이 일하면<br>시간당은 다를 수 있습니다"`}
+    let choose=`<strong>"총액"</strong>이 중요하면 ${totalWin}`;
+    if(hvWin_&&hvWin_!==totalWin&&hvWin_!=='동일')choose+=`, <strong>"시간 효율"</strong>이면 ${hvWin_}`;
+    vdHtml=vdCard(pri.icon,pri.label,'총액',p1W,p1D,'시간당 가치',p2W,p2D,choose);
+  }
+  else if(curPri==='wlb'){
+    const hA_=OT_HRS[wA.ot]||0, hB_=OT_HRS[wB.ot]||0;
+    const fewer=hA_&&hB_?(hA_<hB_?nA:hB_<hA_?nB:'동일'):'미입력';
+    const diff_=Math.abs(hA_-hB_), annDiff=diff_*52;
+    const autoA=(REMOTE_SAVE[wA.remote]||0)+(wA.flex!=='none'?50:0)+(wsA.unlimitedPTO?80:0);
+    const autoB=(REMOTE_SAVE[wB.remote]||0)+(wB.flex!=='none'?50:0)+(wsB.unlimitedPTO?80:0);
+    const autoWin=autoA>autoB?nA:autoB>autoA?nB:'동일';
+    const p1W=fewer==='미입력'?'야근 빈도 미입력':fewer==='동일'?'동일':`<span class="${fewer===nA?'n-a':'n-b'}">${fewer}</span> 유리`;
+    const p1D=hA_&&hB_&&hA_!==hB_?`주당 <strong>${diff_}시간</strong> 덜 일함<br>연간 <strong>${annDiff}시간(≈${Math.round(annDiff/8)}근무일)</strong> 차이`:(hA_&&hB_?'근무시간 동일':'야근 빈도를 선택하면 비교할 수 있습니다');
+    const dB=[],dA=[];
+    if((REMOTE_SAVE[wB.remote]||0)>(REMOTE_SAVE[wA.remote]||0))dB.push(`재택 ${REMOTE_LABELS[wB.remote]}`);
+    else if((REMOTE_SAVE[wA.remote]||0)>(REMOTE_SAVE[wB.remote]||0))dA.push(`재택 ${REMOTE_LABELS[wA.remote]}`);
+    if(wB.flex!=='none'&&(wA.flex==='none'||wB.flex==='flexible'))dB.push(FLEX_LABELS[wB.flex]);
+    else if(wA.flex!=='none'&&(wB.flex==='none'||wA.flex==='flexible'))dA.push(FLEX_LABELS[wA.flex]);
+    if(wsB.unlimitedPTO)dB.push('자율 휴가');if(wsA.unlimitedPTO)dA.push('자율 휴가');
+    const p2W=autoWin==='동일'?'동일':`<span class="${autoWin===nA?'n-a':'n-b'}">${autoWin}</span> 유리`;
+    let p2D='';
+    if(autoWin===nB&&dB.length)p2D=dB.map(d=>`<strong>${d}</strong>`).join(' + ');
+    else if(autoWin===nA&&dA.length)p2D=dA.map(d=>`<strong>${d}</strong>`).join(' + ');
+    else p2D='자율성 조건 비슷';
+    p2D+=`<br>"야근이 많아도 시간을<br>스스로 조절할 수 있는가"`;
+    let choose='';
+    if(fewer!=='동일'&&fewer!=='미입력'&&autoWin!=='동일'&&fewer!==autoWin)choose=`<strong>"적게 일하기"</strong>가 중요하면 ${fewer}, <strong>"시간 자율성"</strong>이면 ${autoWin}`;
+    else if(fewer!=='동일'&&fewer!=='미입력')choose=`${fewer}이 근무시간과 시간 자율성 모두 유리합니다`;
+    vdHtml=vdCard(pri.icon,pri.label,'적게 일하기',p1W,p1D,'시간 자율성',p2W,p2D,choose);
+  }
+  else if(curPri==='benefits'){
+    const benWin=bA.ben===bB.ben?'동일':bA.ben>bB.ben?nA:nB;
+    const totalA=effA.mid+otPayA,totalB=effB.mid+otPayB,td=totalB-totalA;
+    const p1W=benWin==='동일'?'동일':`<span class="${benWin===nA?'n-a':'n-b'}">${benWin}</span> 유리`;
+    const p2W=td===0?'동일':`<span class="${td>0?'n-b':'n-a'}">${td>0?nB:nA}</span> 유리`;
+    vdHtml=vdCard(pri.icon,pri.label,'복지 항목',p1W,`복리후생 합산<br><strong>${bA.ben.toLocaleString()}만 vs ${bB.ben.toLocaleString()}만</strong>`,'총 보상 포함',p2W,`연봉+복지+야근수당 합산<br>차이 <strong>${td>0?'+':''}${fW(td)}</strong>${Math.abs(td)<1200?'<br>"1,200만 이하면 복지 만족도 우선"':''}`,null);
+  }
+  html+=vdHtml;
+
+  // Salary comparison (always show)
+  const effWin=effDiffMid>0?'b':effDiffMid<0?'a':'eq';
+  html+=`<div class="cmp"><div class="cmp-head">💰 보상 비교</div><div class="cmp-body"><div class="vs-row"><div class="vs-card a-s${effWin==='a'?' win':''}"><div class="vs-side">${nA}</div><div class="vs-big">${fR(effA)}</div><div class="vs-detail">연봉 <strong>${fR(salA)}</strong> + 복지 <strong>${bA.net>=0?'+':''}${bA.net.toLocaleString()}만</strong></div></div><div class="vs-card b-s${effWin==='b'?' win':''}"><div class="vs-side">${nB}</div><div class="vs-big">${fR(effB)}</div><div class="vs-detail">연봉 <strong>${fR(salB)}</strong> + 복지 <strong>${bB.net>=0?'+':''}${bB.net.toLocaleString()}만</strong></div></div></div>`;
+  if(salDiffMid>0&&effDiffMid<salDiffMid&&bA.ben>bB.ben)html+=`<div class="callout warn"><span class="callout-icon">⚠️</span><span>${nA}의 복지가 <strong>${fW(bA.ben-bB.ben)}</strong> 더 많아, 연봉이 올라도 실질 보상 차이는 줄어듭니다.${Math.abs(effDiffMid)<1200?' 이 정도 차이라면 복지 만족도가 더 중요할 수 있습니다.':''}</span></div>`;
+  // Overtime detail breakdown
+  if(otPayA>0||otPayB>0){
+    function otDetail(s,name){
+      const w=wsState[s],sal=s==='a'?salA:salB,otp=s==='a'?otPayA:otPayB;
+      if(w.wage==='inclusive'){return`<div class="ot-detail-side"><div class="ot-detail-name">${name} <span class="ot-wage-tag inc">포괄임금</span></div><div class="ot-detail-warn">⚠️ 야근수당이 연봉에 포함<br>추가 수당 없음</div><div class="ot-detail-sum">연간 추가: <strong>0원</strong></div></div>`}
+      if(w.wage==='separate'&&w.ot!=='low'&&sal.mid){
+        const monthSal=sal.mid*10000/12,hb=Math.round(monthSal/209),ex=OT_HRS[w.ot]-40,wk=Math.round(ex*hb*1.5),mo=Math.round(wk*4.33);
+        return`<div class="ot-detail-side"><div class="ot-detail-name">${name} <span class="ot-wage-tag sep">비포괄</span></div><div class="ot-detail-row"><span>통상시급 (연봉÷12÷209h)</span><span class="v">${hb.toLocaleString()}원</span></div><div class="ot-detail-row"><span>주당 연장근로 (${ex}h × 1.5배)</span><span class="v">+${wk.toLocaleString()}원</span></div><div class="ot-detail-row"><span>월 추가 수당 (×4.33주)</span><span class="v">+${mo.toLocaleString()}원</span></div><div class="ot-detail-sum">연간 추가: <strong class="green">+약 ${otp.toLocaleString()}만원</strong></div></div>`}
+      return''}
+    const dA=otDetail('a',nA),dB=otDetail('b',nB);
+    if(dA||dB){
+      let otMsg='';
+      if(otPayA>0&&otPayB>0){const d=otPayB-otPayA;otMsg=d===0?'양쪽 모두 비포괄임금제로 야근수당이 보전됩니다.':`양쪽 모두 야근수당이 보전되며, <strong>${d>0?nB:nA}</strong>이 연 약 <strong>${fW(Math.abs(d))}</strong> 더 받습니다.`}
+      else if(otPayB>0)otMsg=`<strong>${nB}</strong>는 비포괄임금제로 야근수당 연 약 <strong>${fW(otPayB)}</strong>이 추가 보전됩니다.`;
+      else if(otPayA>0)otMsg=`<strong>${nA}</strong>는 비포괄임금제로 야근수당 연 약 <strong>${fW(otPayA)}</strong>이 추가 보전됩니다.`;
+      html+=`<div class="ot-detail-box"><div class="ot-detail-head">💵 야근수당 상세</div><div class="ot-detail-grid">${dA}${dB}</div>${otMsg?`<div class="ot-detail-verdict"><span class="icon">⚡</span><span>${otMsg}</span></div>`:''}</div>`;
+    }
+  }
+  html+=`</div></div>`;
+
+  // [FIX] 시간당 실질 가치 — 양쪽 모두 입력된 경우만 비교 표시
+  if(hrsA>0&&hrsB>0){
+    const annHrsA=hrsA*52, annHrsB=hrsB*52;
+    const effAmidOT=effA.mid+otPayA, effBmidOT=effB.mid+otPayB;
+    const hvA=Math.round(effAmidOT*10000/annHrsA);
+    const hvB=Math.round(effBmidOT*10000/annHrsB);
+    const hvDiff=hvB-hvA;
+    const hvWin=hvDiff>0?nB:hvDiff<0?nA:'동일';
+    const otTagA=otPayA>0?` <span style="font-size:.58rem;color:var(--green)">+야근수당 ${otPayA}만</span>`:'';
+    const otTagB=otPayB>0?` <span style="font-size:.58rem;color:var(--green)">+야근수당 ${otPayB}만</span>`:'';
+    html+=`<div class="cmp"><div class="cmp-head">⏱ 시간당 실질 가치</div><div class="cmp-body">`;
+    const incA=wA.wage==='inclusive'&&wA.ot!=='low',incB=wB.wage==='inclusive'&&wB.ot!=='low';
+    if(incA&&incB)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nA}, ${nB} 모두 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+    else{
+      if(incA)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nA}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+      if(incB)html+=`<div class="callout warn" style="margin-bottom:.65rem"><span class="callout-icon">🚨</span><span><strong>${nB}은 포괄임금제</strong>입니다. 연장근로 수당이 연봉에 포함된 방식으로, 야근이 늘수록 시간당 실질 가치가 낮아집니다.</span></div>`;
+    }
+    html+=`<div class="hourly-result"><div class="hourly-grid">`;
+    html+=`<div class="hval"><div class="hval-label">${nA} / 시간${otTagA}</div><div class="hval-num a">${hvA.toLocaleString()}원</div></div>`;
+    html+=`<div class="hval"><div class="hval-label">${nB} / 시간${otTagB}</div><div class="hval-num b">${hvB.toLocaleString()}원</div></div>`;
+    const pct=Math.round(Math.abs(hvDiff)/Math.min(hvA,hvB)*100);
+    html+=`<div class="hval"><div class="hval-label">차이</div><div class="hval-num diff">${hvDiff>0?'+':''}${hvDiff.toLocaleString()}원</div><div class="hval-sub">${hvWin} +${pct}%</div></div>`;
+    html+=`</div>`;
+    const annDiffHrs=Math.abs(annHrsA-annHrsB);const annDiffDays=Math.round(annDiffHrs/8);
+    const salMore=effBmidOT>effAmidOT?nB:nA;const salDiffAbs=Math.abs(effBmidOT-effAmidOT);
+    const pctHV=pct;const moreHrsName=annHrsA>annHrsB?nA:nB;const lessHrsName=moreHrsName===nA?nB:nA;
+    const benDiff=bA.ben-bB.ben;const otDiff=otPayB-otPayA;
+    const bothInclusive=wA.wage==='inclusive'&&wB.wage==='inclusive';const bothSeparate=wA.wage==='separate'&&wB.wage==='separate';const sameHrs=annDiffHrs<53;
+    let msg='';
+    if(sameHrs&&pctHV<5){msg=`근무시간이 비슷하고 시간당 가치도 거의 동일합니다 (차이 ${pctHV}%). <strong>근무 환경과 복지 항목</strong>으로 비교하세요.`}
+    else if(sameHrs&&pctHV>=5){msg=`근무시간은 비슷하지만, <strong>${hvWin}</strong>이 시간당 <strong>${pctHV}% (${Math.abs(hvDiff).toLocaleString()}원)</strong> 높습니다. ${Math.abs(benDiff)>100?`${benDiff>0?nA:nB}의 복지가 연 ${fW(Math.abs(benDiff))} 더 많아 차이를 만듭니다.`:'연봉 차이가 그대로 시간당 가치에 반영됩니다.'}`}
+    else if(annDiffHrs>100&&pctHV<10){
+      if(otDiff>0&&benDiff>0){msg=`${moreHrsName}이 야근수당으로 연 <strong>${fW(Math.abs(otDiff))}</strong> 더 벌지만, ${lessHrsName}의 복지가 연 <strong>${fW(Math.abs(benDiff))}</strong> 더 많아 실질 격차는 <strong>${fW(salDiffAbs)}</strong>으로 줄어듭니다. <strong>${annDiffHrs.toLocaleString()}시간(≈${annDiffDays}근무일)</strong> 더 일한 결과, 시간당 차이는 겨우 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong>.`}
+      else if(otDiff<0&&benDiff<0){msg=`${lessHrsName}이 야근수당으로 연 <strong>${fW(Math.abs(otDiff))}</strong> 더 벌지만, ${moreHrsName}의 복지가 연 <strong>${fW(Math.abs(benDiff))}</strong> 더 많아 격차가 줄어듭니다. 시간당으로는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong> 차이.`}
+      else if(bothInclusive){msg=`두 회사 모두 <strong>포괄임금제</strong>라 야근을 많이 해도 추가 수당이 없습니다. ${moreHrsName}이 연 <strong>${annDiffHrs.toLocaleString()}시간</strong> 더 일하지만 시간당 가치는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong> 차이. 포괄임금 아래서 야근이 늘수록 시간당 가치가 희석됩니다.`}
+      else if(bothSeparate){msg=`두 회사 모두 <strong>비포괄임금제</strong>라 야근수당이 보전됩니다. 그래도 ${moreHrsName}이 <strong>${annDiffHrs.toLocaleString()}시간</strong> 더 일해서 시간당 차이는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong>에 불과합니다.`}
+      else{msg=`${salMore}이 연 <strong>${fW(salDiffAbs)}</strong> 더 벌지만, <strong>${annDiffHrs.toLocaleString()}시간(≈${annDiffDays}근무일)</strong> 더 일합니다. 시간당 차이는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong>.`}
+    }else if(pctHV>=10){
+      const hvWinName=hvDiff>0?nB:nA;
+      if(hvWinName===moreHrsName){msg=`<strong>${hvWinName}</strong>이 더 일하면서도 시간당 가치가 <strong>${pctHV}%</strong> 높습니다. 보상이 근무시간 이상으로 크다는 의미입니다.`}
+      else if(hvWinName===lessHrsName){msg=`<strong>${hvWinName}</strong>이 덜 일하면서 시간당 가치도 <strong>${pctHV}%</strong> 높습니다.${annDiffHrs>100?` ${moreHrsName}은 연 ${annDiffHrs.toLocaleString()}시간 더 일하고도 시간당으로는 뒤처집니다.`:''}`}
+      else{msg=`<strong>${hvWinName}</strong>이 시간당 <strong>${pctHV}% (${Math.abs(hvDiff).toLocaleString()}원)</strong> 높습니다.`}
+    }else{msg=`시간당 실질 가치 차이는 <strong>${Math.abs(hvDiff).toLocaleString()}원(${pctHV}%)</strong>입니다.${annDiffHrs>0?` ${moreHrsName}이 연 ${annDiffHrs.toLocaleString()}시간 더 일합니다.`:''} ${Math.abs(benDiff)>100?`복지 차이(연 ${fW(Math.abs(benDiff))})도 함께 고려하세요.`:'근무 환경과 성장 기회를 비교하세요.'}`}
+    html+=`<div class="hourly-verdict"><span class="icon">⚡</span><span>${msg.replace(/\. /g,'.<br>')}</span></div>`;
+    let noteItems=[];if(effA.mid||effB.mid)noteItems.push('연봉');if(bA.ben||bB.ben)noteItems.push('복지');if(otPayA||otPayB)noteItems.push('야근수당');
+    const noteFormula=noteItems.length?noteItems.join('+'):'연봉+복지';
+    let noteExtra='';
+    if(wA.wage==='inclusive'||wB.wage==='inclusive'){const who=[wA.wage==='inclusive'?nA:'',wB.wage==='inclusive'?nB:''].filter(Boolean).join(', ');noteExtra=` · ${who}은 포괄임금(야근수당 미포함)`}
+    html+=`</div><div class="hourly-note">계산식: (${noteFormula}) ÷ (주당근무시간×52주)${noteExtra}</div></div></div>`;
+  }
+
+  // [FIX] WLB 비교 — 야근 선택 시에도 통근/리프레시 정보 포함
+  if(curPri==='wlb'){
+    html+=`<div class="cmp"><div class="cmp-head">⚖️ 근무방식 비교</div><div class="cmp-body">`;
+    const tA_=Math.round(comA*2*240/60),tB_=Math.round(comB*2*240/60),tw=tA_<tB_?'a':tB_<tA_?'b':'eq';
+    if(comA||comB){
+      html+=`<div class="vs-row"><div class="vs-card a-s${tw==='a'?' win':''}"><div class="vs-side">${nA} 통근</div><div class="vs-big">편도 ${comA}분</div><div class="vs-detail">연간 <strong>${tA_}시간</strong></div></div><div class="vs-card b-s${tw==='b'?' win':''}"><div class="vs-side">${nB} 통근</div><div class="vs-big">편도 ${comB}분</div><div class="vs-detail">연간 <strong>${tB_}시간</strong></div></div></div>`;
+      const timeDiff=Math.abs(tA_-tB_);if(timeDiff>0)html+=`<div class="callout info"><span class="callout-icon">💡</span><span>연간 <strong>${timeDiff}시간</strong> 차이 = 약 <strong>${Math.round(timeDiff/8)}일</strong> 근무일에 해당합니다.</span></div>`;
+    }
+    if(wsB.remote||wsB.flex)html+=`<div class="callout good"><span class="callout-icon">✅</span><span><strong>${nB}</strong>은 ${wsB.remote?'원격근무':''}${wsB.flex?' 유연출퇴근':''} 가능.${wsB.unlimitedPTO?' <strong>자율 휴가제</strong> 운영.':''}</span></div>`;
+    if(wsA.remote||wsA.flex)html+=`<div class="callout good"><span class="callout-icon">✅</span><span><strong>${nA}</strong>은 ${wsA.remote?'원격근무':''}${wsA.flex?' 유연출퇴근':''} 가능.</span></div>`;
+    const rlA=wsA.refreshLeave,rlB=wsB.refreshLeave;if(rlA||rlB)html+=`<div class="callout info"><span class="callout-icon">🏖️</span><span><strong>리프레시 휴가:</strong> ${nA} — ${rlA||'없음'} | ${nB} — ${rlB||'없음'}</span></div>`;
+    if(wA.ot||wB.ot){
+      const remSaveA=REMOTE_SAVE[wA.remote]||0,remSaveB=REMOTE_SAVE[wB.remote]||0;
+      const rc=(vA,vB,lowerBetter)=>{if(vA===vB)return['v-neu','v-neu'];return lowerBetter?(vA<vB?['v-good','v-bad']:['v-bad','v-good']):(vA>vB?['v-good','v-bad']:['v-bad','v-good'])};
+      const otC=rc(OT_HRS[wA.ot]||40,OT_HRS[wB.ot]||40,true);
+      const wgA_=wA.wage==='separate'?1:0,wgB_=wB.wage==='separate'?1:0;const wgC=rc(wgA_,wgB_,false);
+      const rmA_=REMOTE_SAVE[wA.remote]||0,rmB_=REMOTE_SAVE[wB.remote]||0;const rmC=rc(rmA_,rmB_,false);
+      const fxA_=wA.flex==='flexible'?2:wA.flex!=='none'?1:0,fxB_=wB.flex==='flexible'?2:wB.flex!=='none'?1:0;const fxC=rc(fxA_,fxB_,false);
+      const cmC=rc(comA,comB,true);
+      html+=`<div class="wlb-card"><div class="wlb-title">⚖️ 근무방식 상세 비교</div>`;
+      html+=`<div class="wlb-legend"><div class="wlb-legend-item"><div class="wlb-legend-dot" style="background:var(--green)"></div>상대적 유리</div><div class="wlb-legend-item"><div class="wlb-legend-dot" style="background:var(--amber)"></div>중립 / 동일</div><div class="wlb-legend-item"><div class="wlb-legend-dot" style="background:var(--red)"></div>상대적 불리</div></div>`;
+      html+=`<div class="wlb-compare"><div class="wlb-col"><div class="wlb-col-label"><div class="dot" style="background:var(--blue)"></div>${nA}</div>`;
+      html+=`<div class="wlb-item"><span class="k">야근</span><span class="v ${otC[0]}">${OT_LABELS[wA.ot]||'—'} (주 ${OT_HRS[wA.ot]||'?'}h)</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">임금유형</span><span class="v ${wgC[0]}">${WAGE_LABELS[wA.wage]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">재택</span><span class="v ${rmC[0]}">${REMOTE_LABELS[wA.remote]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">유연근무</span><span class="v ${fxC[0]}">${FLEX_LABELS[wA.flex]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">통근</span><span class="v ${cmC[0]}">${comA}분</span></div>`;
+      html+=`</div><div class="wlb-divider"></div><div class="wlb-col" style="padding-left:.75rem"><div class="wlb-col-label"><div class="dot" style="background:var(--amber)"></div>${nB}</div>`;
+      html+=`<div class="wlb-item"><span class="k">야근</span><span class="v ${otC[1]}">${OT_LABELS[wB.ot]||'—'} (주 ${OT_HRS[wB.ot]||'?'}h)</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">임금유형</span><span class="v ${wgC[1]}">${WAGE_LABELS[wB.wage]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">재택</span><span class="v ${rmC[1]}">${REMOTE_LABELS[wB.remote]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">유연근무</span><span class="v ${fxC[1]}">${FLEX_LABELS[wB.flex]||'—'}</span></div>`;
+      html+=`<div class="wlb-item"><span class="k">통근</span><span class="v ${cmC[1]}">${comB}분</span></div>`;
+      html+=`</div></div></div>`;
+      const hvA2=hrsA>0?Math.round((effA.mid+otPayA)*10000/(hrsA*52)):0;
+      const hvB2=hrsB>0?Math.round((effB.mid+otPayB)*10000/(hrsB*52)):0;
+      html+=`<table class="wlb-summary"><thead><tr><th>항목</th><th>${nA}</th><th>${nB}</th><th>우위</th></tr></thead><tbody>`;
+      if(hvA2&&hvB2){const w_=hvA2>hvB2?nA:hvB2>hvA2?nB:'동일';html+=`<tr><td>시간당 가치</td><td class="td-a">${hvA2.toLocaleString()}원</td><td class="td-b">${hvB2.toLocaleString()}원</td><td class="td-win">${w_} ▲</td></tr>`}
+      {const oA=OT_HRS[wA.ot]||40,oB=OT_HRS[wB.ot]||40,w_=oA<oB?nA:oB<oA?nB:'동일';html+=`<tr><td>야근 부담</td><td class="td-a">${OT_LABELS[wA.ot]||'—'}</td><td class="td-b">${OT_LABELS[wB.ot]||'—'}</td><td class="${w_===nA?'td-win':w_===nB?'td-win':''}" style="color:${w_===nA?'var(--blue)':w_===nB?'var(--amber)':'var(--t3)'};font-weight:700">${w_} ▲</td></tr>`}
+      {html+=`<tr><td>재택 절감비용</td><td class="td-a">연 ${remSaveA}만</td><td class="td-b">연 ${remSaveB}만</td><td class="td-win">${remSaveA>remSaveB?nA:remSaveB>remSaveA?nB:'동일'} ▲</td></tr>`}
+      {const wA_=wA.wage==='separate',wB_=wB.wage==='separate';html+=`<tr><td>임금 유형</td><td class="td-a" ${!wA_?'style="color:var(--red)"':''}>${wA_?'비포괄 ✓':'포괄 ⚠'}</td><td class="td-b" ${!wB_?'style="color:var(--red)"':''}>${wB_?'비포괄 ✓':'포괄 ⚠'}</td><td class="td-win">${wA_&&!wB_?nA:wB_&&!wA_?nB:'동일'} ▲</td></tr>`}
+      {const fA=wA.flex!=='none',fB=wB.flex!=='none';html+=`<tr><td>유연근무</td><td class="td-a">${FLEX_LABELS[wA.flex]||'—'}</td><td class="td-b">${FLEX_LABELS[wB.flex]||'—'}</td><td class="td-win">${fA&&!fB?nA:fB&&!fA?nB:wA.flex==='flexible'&&wB.flex!=='flexible'?nA:wB.flex==='flexible'&&wA.flex!=='flexible'?nB:'동일'} ▲</td></tr>`}
+      html+=`</tbody></table>`;
+    }
+    html+=`</div></div>`;
+  }
+
+  if(curPri==='benefits'){const catHtml=renderBenCatCompare(nA,nB);if(catHtml)html+=`<div class="cmp"><div class="cmp-head">🎁 금전 환산 가능 복지</div><div class="cmp-body">${catHtml}</div></div>`}
+  // Qualitative benefits
+  const qualA=(benS.a||[]).filter(b=>b.checked&&b.qual_yn),qualB=(benS.b||[]).filter(b=>b.checked&&b.qual_yn);
+  if(qualA.length||qualB.length){const qualHtml=renderQualCompare(nA,nB);if(qualHtml)html+=`<div class="cmp"><div class="cmp-head">📋 금전 환산 어려운 혜택</div><div class="cmp-body">${qualHtml}</div></div>`}
+
+  // [FIX] 3년 투영 — 변수 섀도잉 수정 (barWA/barWB)
+  const grA=GROWTH_RATES[typeAVal]||0.04,grB=GROWTH_RATES[typeBVal]||0.04;
+  const projA=[salA.mid],projB=[salB.mid];
+  let cumDiff=0;
+  for(let y=1;y<=3;y++){projA.push(Math.round(projA[y-1]*(1+grA)));projB.push(Math.round(projB[y-1]*(1+grB)));cumDiff+=(projB[y]-projA[y])}
+  const maxVal=Math.max(...projA,...projB);
+  html+=`<div class="cmp"><div class="cmp-head">📈 3년 후 기대 연봉</div><div class="cmp-body">`;
+  html+=`<div class="proj-legend"><div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--blue)"></div>${nA} (${TYPE_LABELS[typeAVal]||typeAVal})</div><div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--amber)"></div>${nB} (${TYPE_LABELS[typeBVal]||typeBVal})</div></div>`;
+  html+=`<div class="proj-bars">`;
+  const labels=['현재','1년차','2년차','3년차'];
+  for(let y=0;y<=3;y++){
+    const barWA=Math.max(20,projA[y]/maxVal*100),barWB=Math.max(20,projB[y]/maxVal*100);
+    const fV=v=>v>=10000?(v/10000).toFixed(1)+'억':v.toLocaleString()+'만';
+    html+=`<div class="proj-row"><div class="proj-row-label">${labels[y]}</div><div class="proj-bar-wrap"><div class="proj-bar a" style="width:${barWA}%"><span class="proj-bar-val">${fV(projA[y])}</span></div><div class="proj-bar b" style="width:${barWB}%"><span class="proj-bar-val">${fV(projB[y])}</span></div></div></div>`;
+  }
+  html+=`</div>`;
+  const totalDiff3yr=cumDiff;
+  const grAp=Math.round(grA*100),grBp=Math.round(grB*100);
+  html+=`<div class="proj-summary"><strong>3년 누적 차이 ${totalDiff3yr>0?'+':''}${fW(totalDiff3yr)}</strong> — ${nB}이 연평균 ${grBp}%↑ (${GROWTH_LABELS[typeBVal]||''}) vs ${nA} ${grAp}%↑ (${GROWTH_LABELS[typeAVal]||''}).${typeBVal==='startup'?' 스타트업 성장률이 실현되지 않으면 격차는 줄어듭니다.':''}</div>`;
+  html+=`<div class="proj-note"><span>⚠️</span> 고용노동부 업종별 임금 데이터 기반 추정 · 개인 성과에 따라 실제와 다를 수 있음</div>`;
+  html+=`</div></div>`;
+
+  // Bottom line
+  let blText='';
+  if(curPri==='salary'){
+    const totA=effA.mid+otPayA,totB=effB.mid+otPayB,td=totB-totA;
+    const hvA_=hrsA>0?Math.round(totA*10000/(hrsA*52)):0,hvB_=hrsB>0?Math.round(totB*10000/(hrsB*52)):0;
+    const hvWin_=hvA_&&hvB_?(hvA_>hvB_?nA:hvB_>hvA_?nB:'동일'):'';
+    const totalWin=td>0?nB:td<0?nA:'동일';
+    if(totalWin!=='동일'&&hvWin_&&hvWin_!==totalWin){blText=`총액은 <span class="${totalWin===nA?'hl-a':'hl-b'}">${totalWin}</span>이 ${Math.abs(td)>0?fW(Math.abs(td)):''} 유리하지만, 시간당 가치는 <span class="${hvWin_===nA?'hl-a':'hl-b'}">${hvWin_}</span>이 높습니다. 당신에게 중요한 건 "총액"인가요, "시간 효율"인가요?`}
+    else{blText=td>0?`총 보상 기준 <span class="hl-b">${nB}</span>이 ${fW(Math.abs(td))} 유리합니다.`:td<0?`<span class="hl-a">${nA}</span>이 총 보상 기준 유리합니다.`:'총 보상이 동일합니다.'}
+  }
+  else if(curPri==='wlb'){
+    const hA_=OT_HRS[wA.ot]||0,hB_=OT_HRS[wB.ot]||0;
+    const fewer=hA_&&hB_?(hA_<hB_?nA:hB_<hA_?nB:'동일'):'미입력';
+    const autoA=(REMOTE_SAVE[wA.remote]||0)+(wA.flex!=='none'?50:0)+(wsA.unlimitedPTO?80:0);
+    const autoB=(REMOTE_SAVE[wB.remote]||0)+(wB.flex!=='none'?50:0)+(wsB.unlimitedPTO?80:0);
+    const autoWin=autoA>autoB?nA:autoB>autoA?nB:'동일';
+    if(fewer!=='동일'&&fewer!=='미입력'&&autoWin!=='동일'&&fewer!==autoWin){blText=`"적게 일하기"는 <span class="${fewer===nA?'hl-a':'hl-b'}">${fewer}</span>, "시간 자율성"은 <span class="${autoWin===nA?'hl-a':'hl-b'}">${autoWin}</span>이 유리합니다. 당신에게 워라밸이란 "근무시간 자체"인가요, "시간의 자유"인가요?`}
+    else if(fewer!=='동일'&&fewer!=='미입력'){const diff_=Math.abs(hA_-hB_),annD=diff_*52;blText=`<span class="${fewer===nA?'hl-a':'hl-b'}">${fewer}</span>이 주당 <strong>${diff_}시간</strong> 덜 일합니다 (연 ${annD}시간 ≈ ${Math.round(annD/8)}근무일).`}
+    else{blText='야근 빈도를 선택하면 더 정확한 비교가 가능합니다. 재택/유연근무 조건으로 비교하세요.'}
+  }
+  else if(curPri==='benefits'){if(bA.ben===bB.ben)blText='복리후생 합산이 동일합니다. 개별 항목의 질적 차이를 비교해보세요.';else{const bw=bA.ben>bB.ben?nA:nB;const td=Math.abs((effA.mid+otPayA)-(effB.mid+otPayB));blText=td<1200?`총 보상 차이가 크지 않아(${fW(td)}), 복지가 풍부한 <span class="${bA.ben>bB.ben?'hl-a':'hl-b'}">${bw}</span>이 일상 만족도에서 유리합니다.`:`복지는 <span class="${bA.ben>bB.ben?'hl-a':'hl-b'}">${bw}</span>이 연 ${fW(Math.abs(bA.ben-bB.ben))} 더 풍부합니다.`}}
+  html+=`<div class="bottom-line"><div class="bl-label">결론</div><div class="bl-text">${blText.replace(/\. /g,'.<br>')}</div></div>`;
+
+  // [FIX] Sacrifice cost — WLB 미입력 시 안내 메시지 표시
+  if(curSacrifice){
+    const sacPri=PRIORITIES.find(p=>p.key===curSacrifice);
+    html+=`<div class="sac-card"><div class="sac-head">✕ ${sacPri.icon} ${sacPri.label} — 포기해도 괜찮을까?</div><div class="sac-body">`;
+    const totalA=effA.mid+otPayA, totalB=effB.mid+otPayB;
+    if(curSacrifice==='salary'){const td=Math.abs(totalB-totalA);const monthly=Math.round(td/12);const better=totalB>totalA?nB:nA;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${better}을 선택하면 받는 추가 보상</div><div class="sac-cost-val">연 ${fW(td)}</div><div class="sac-cost-detail">월 ${monthly.toLocaleString()}만원 · 일 ${Math.round(td*10000/365).toLocaleString()}원</div></div><div class="sac-question">이 금액을 포기할 수 있나요?</div>`}
+    else if(curSacrifice==='wlb'){
+      const hA_=OT_HRS[wA.ot]||0, hB_=OT_HRS[wB.ot]||0;
+      if(!hA_||!hB_){html+=`<div class="sac-cost-box"><div class="sac-cost-label">근무방식 미입력</div><div class="sac-cost-val">—</div><div class="sac-cost-detail">야근 빈도를 선택하면 포기 비용을 계산합니다</div></div>`}
+      else{const diff_=Math.abs(hA_-hB_),annD=diff_*52,annDays=Math.round(annD/8);const more_=hA_>hB_?nA:nB;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${more_}은 매주 더 일합니다</div><div class="sac-cost-val">주 +${diff_}시간</div><div class="sac-cost-detail">연간 ${annD.toLocaleString()}시간 = 약 ${annDays}근무일</div></div><div class="sac-question">이만큼의 추가 근무를 감수할 수 있나요?</div>`}
+    }
+    else if(curSacrifice==='benefits'){const diff_=Math.abs(bA.ben-bB.ben),better_=bA.ben>bB.ben?nA:nB;html+=`<div class="sac-cost-box"><div class="sac-cost-label">${better_}의 복지가 더 풍부합니다</div><div class="sac-cost-val">연 ${fW(diff_)}</div><div class="sac-cost-detail">복리후생 항목 합산 차이</div></div><div class="sac-question">이 복지 차이를 포기할 수 있나요?</div>`}
+    html+=`</div></div>`;
+  }
+
+  // Remaining criteria summary
+  const restKeys=PRIORITIES.filter(p=>p.key!==curPri&&p.key!==curSacrifice).map(p=>p.key);
+  if(restKeys.length>0){
+    html+=`<div class="rest-summary"><div class="rest-head">📊 나머지 기준 요약</div>`;
+    const totalA=effA.mid+otPayA, totalB=effB.mid+otPayB;
+    restKeys.forEach(k=>{
+      const pri=PRIORITIES.find(p=>p.key===k);
+      let val='',winCls='rest-tie';
+      if(k==='salary'){const d=totalB-totalA;val=d===0?'동일':d>0?`${nB} +${fW(d)}`:`${nA} +${fW(Math.abs(d))}`;winCls=d!==0?'rest-win':'rest-tie'}
+      else if(k==='wlb'){const hA_=OT_HRS[wA.ot]||0,hB_=OT_HRS[wB.ot]||0;if(hA_&&hB_){val=hA_===hB_?`동일 (주 ${hA_}h)`:hA_<hB_?`${nA} 유리 (주 ${hA_}h vs ${hB_}h)`:`${nB} 유리 (주 ${hB_}h vs ${hA_}h)`;winCls=hA_!==hB_?'rest-win':'rest-tie'}else{val=`통근 ${comA}분 vs ${comB}분`}}
+      else if(k==='benefits'){val=bA.ben===bB.ben?'동일':bA.ben>bB.ben?`${nA} +${fW(bA.ben-bB.ben)}`:`${nB} +${fW(bB.ben-bA.ben)}`;winCls=bA.ben!==bB.ben?'rest-win':'rest-tie'}
+      html+=`<div class="rest-item"><span class="rest-icon">${pri.icon}</span><span class="rest-label">${pri.label}</span><span class="rest-val ${winCls}">${val}</span></div>`;
+    });
+    html+=`</div>`;
+  }
+
+  if(!pfResult){html+=`<div class="rp-profiler-cta"><p>내가 선택한 기준이 정말 맞을까?<br><strong>커리어 가치관 테스트</strong>로 검증해보세요.</p><button class="rp-profiler-btn" onclick="go('s-profiler')">🎯 가치관 테스트 하기</button></div>`}
+  const _trust=computeDataTrust();
+  if(_trust){
+    const pctCls=_trust.off_pct>=60?'':_trust.off_pct>=30?'warn':'bad';
+    html+=`<div class="data-trust"><div class="data-trust-head">🔎 데이터 신뢰도</div>`;
+    html+=`<div class="data-trust-row"><span class="data-trust-label">공식 확인 비율</span><span class="data-trust-val data-trust-pct ${pctCls}">${_trust.off_pct}% (${_trust.off}/${_trust.total})</span></div>`;
+    if(_trust.est>0)html+=`<div class="data-trust-row"><span class="data-trust-label">추정치 항목</span><span class="data-trust-val">${_trust.est}개</span></div>`;
+    if(_trust.stl>0)html+=`<div class="data-trust-row"><span class="data-trust-label">재검증 필요(만료)</span><span class="data-trust-val">${_trust.stl}개</span></div>`;
+    if(_trust.latest)html+=`<div class="data-trust-row"><span class="data-trust-label">최근 검증일</span><span class="data-trust-val">${esc(_trust.latest)}</span></div>`;
+    html+=`<div class="data-trust-foot">공식 확인 비율이 낮을수록 실제 값과 편차가 큽니다. 추정치는 채용 공고·공개 정보 기반 계산이며, 각 항목에 달린 <span class="bi-badge b-off">공식</span>/<span class="bi-badge b-est">추정</span>/<span class="bi-badge b-stl">만료</span> 뱃지에 마우스를 올리면 출처/검증일을 볼 수 있습니다.</div></div>`;
+  }
+  html+=`<div class="disclaimer">복리후생 금액은 공개 채용 정보 기반 추정치이며 실제와 다를 수 있습니다.</div>`;
+  // Feed data for social landing
+  const _totalA=effA.mid+otPayA,_totalB=effB.mid+otPayB,_td=_totalB-_totalA;
+  const _mType=_td>0?'up':_td<0?'down':'neu';
+  const _mVal=_td!==0?(_td>0?'+':'')+fW(_td):'동일';
+  // Auto-generate points for popular_cases
+  const _pts=[];
+  const _hvA=hrsA>0?Math.round((_totalA)*10000/(hrsA*52)):0,_hvB=hrsB>0?Math.round((_totalB)*10000/(hrsB*52)):0;
+  if(_td!==0)_pts.push('<strong>총 보상</strong> '+_mVal+' — '+(_td>0?nB:nA)+'이 유리');
+  if(_hvA&&_hvB&&_hvA!==_hvB)_pts.push('<strong>시간당 가치</strong> '+(_hvA>_hvB?nA:nB)+'이 우세 · 실질 효율 기준');
+  if(curPri)_pts.push('<strong>'+pri.label+'</strong> 기준 비교 · '+(pfJob?pfJob.job_nm+' 직무':'직무 미지정'));
+  if(!_pts.length)_pts.push(nA+' vs '+nB+' 비교 결과');
+  window._lastFeedData={feed_headline_ctnt:nA+' vs '+nB+' — '+blText.replace(/<[^>]*>/g,'').slice(0,100),feed_detail_ctnt:pri.label+' 기준 비교',feed_metric_val_ctnt:_mVal,feed_metric_label_nm:'총 보상 차이',feed_metric_type_cd:_mType,feed_job_ctgr_nm:pfJob?pfJob.job_nm:null,feed_points_val:_pts};
+  html+=`<div id="saveStatus" style="text-align:center;padding:.5rem;margin-top:.5rem;font-size:.75rem;color:var(--t4)">비교 결과 저장 중...</div>`;
+  document.getElementById('report').innerHTML=html;
+  document.getElementById('report').classList.add('visible');
+  go('s-report');
+  window.scrollTo({top:0,behavior:'instant'});
+  updateCompareCount();
+  saveComparison().then(()=>{clearDraft();const el=document.getElementById('saveStatus');if(el)el.textContent='✓ 비교 결과가 저장되었습니다.'}).catch(e=>{const el=document.getElementById('saveStatus');if(el){el.style.color='var(--red)';el.textContent='⚠ 저장 실패: '+e.message}});
+}
+
+// ━━ ADMIN ━━
+let admTab='dashboard',admPage={companies:1,users:1,cases:1,feed:1,pending:1},admData={},admCompQ='',admCompType='',admUserQ='',admContentSub='cases',admStatsDays=30;
+const ADM_TABS=[['dashboard','대시보드'],['companies','회사 관리'],['pending','검수'],['users','사용자'],['content','콘텐츠'],['stats','통계']];
+const ADM_TYPE_LABELS={large:'대기업',mid:'중견기업',public:'공기업',startup:'스타트업',foreign:'외국계',freelance:'프리랜서'};
+const ADM_CAT_OPTS=[['compensation','보상·금전'],['flexibility','근무유연성'],['work_env','근무환경'],['time_off','시간·휴가'],['health','건강·의료'],['family','가족·돌봄'],['growth','성장·커리어'],['leisure','여가·라이프'],['perks','경제적 부가혜택']];
+const ADM_BADGE_OPTS=[['confirmed','확인됨'],['est','추정'],['premium','프리미엄'],['unique','고유']];
+
+function admInit(){
+  document.getElementById('admTabs').innerHTML=ADM_TABS.map(([k,l])=>`<button class="adm-tab${admTab===k?' active':''}" onclick="admGoTab('${k}')">${esc(l)}</button>`).join('');
+  admGoTab(admTab);
+}
+function admGoTab(t){
+  admTab=t;
+  document.querySelectorAll('.adm-tab').forEach(el=>el.classList.toggle('active',el.textContent===ADM_TABS.find(x=>x[0]===t)?.[1]));
+  if(t==='dashboard')admLoadDash();
+  else if(t==='companies')admLoadCompanies();
+  else if(t==='pending')admLoadPending();
+  else if(t==='users')admLoadUsers();
+  else if(t==='content')admLoadContent();
+  else if(t==='stats')admLoadStats();
+}
+
+async function admLoadDash(){
+  const c=document.getElementById('admContent');c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">로딩 중...</div>';
+  const d=await apiFetch('/admin/dashboard');
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">데이터를 불러올 수 없습니다.</div>';return}
+  admData.dash=d;
+  const cards=[
+    ['총 사용자',d.total_mbr_no,d.today_mbr_no?'+'+d.today_mbr_no+' 오늘':'','up'],
+    ['오늘 가입',d.today_mbr_no??0,'',''],
+    ['총 비교',d.total_comparison_no,d.today_comparison_no?'+'+d.today_comparison_no+' 오늘':'','up'],
+    ['오늘 비교',d.today_comparison_no??0,'',''],
+    ['등록 회사',d.total_comp_no,'',''],
+    ['복지 보유',d.comp_with_benefit_no,'',''],
+    ['활성 방문',d.active_visitor_no??0,'','']
+  ];
+  let h='<div class="adm-section"><h4>대시보드</h4><div class="adm-cards">';
+  h+=cards.map(([lb,v,delta,dir])=>`<div class="adm-card"><div class="adm-val">${v!=null?Number(v).toLocaleString():'-'}</div><div class="adm-label">${esc(lb)}</div>${delta?`<div class="adm-delta ${dir}">${esc(delta)}</div>`:''}</div>`).join('');
+  h+='</div><div class="adm-quick"><button class="adm-btn primary" onclick="admClearCache()">캐시 초기화</button><button class="adm-btn" onclick="admGoTab(\'companies\')">회사 관리 →</button><button class="adm-btn" onclick="admGoTab(\'stats\')">통계 보기 →</button></div></div>';
+  c.innerHTML=h;
+}
+
+async function admClearCache(){
+  const r=await apiFetch('/admin/cache/clear',{method:'POST'});
+  alert(r?'캐시가 초기화되었습니다.':'오류가 발생했습니다.');
+}
+
+// ━━ ADMIN: 검수 (est → official 승격 + 사용자 제보) ━━
+const RPT_TYPE_LABELS={wrong_amount:'금액 오류',outdated:'제도 변경/폐지',missing_field:'정보 누락'};
+async function admLoadPending(page){
+  if(page!=null)admPage.pending=page;
+  const c=document.getElementById('admContent');
+  c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">로딩 중...</div>';
+  const [d,reports]=await Promise.all([
+    apiFetch('/admin/benefits/pending?page='+admPage.pending),
+    apiFetch('/admin/benefit-reports'),
+  ]);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>검수 대기 — 출처 URL 이 있는 추정치</h4>';
+  h+=`<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">스크래퍼가 공식 페이지에서 수집했으나 아직 <span class="bi-badge b-est">추정</span> 상태인 항목입니다. 원문을 확인하고 값이 맞으면 <strong>승격</strong>하세요.</p>`;
+  h+='<table class="adm-tbl"><thead><tr><th>회사</th><th>복지</th><th>금액</th><th>카테고리</th><th>출처</th><th>수집일</th><th>작업</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(it=>{
+      const bid=Number(it.benefit_id)||0;
+      const amt=it.benefit_amt?Number(it.benefit_amt).toLocaleString()+'만':'—';
+      const ins=it.ins_dtm?String(it.ins_dtm).slice(0,10):'-';
+      const url=it.badge_src_url_ctnt||'';
+      const srcBtn=url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="adm-btn" style="padding:2px 8px">원문 ↗</a>`:'<span style="color:var(--t4)">—</span>';
+      const cat=ADM_CAT_OPTS.find(([k])=>k===it.benefit_ctgr_cd)?.[1]||it.benefit_ctgr_cd||'-';
+      return `<tr id="admPR${bid}"><td><strong>${esc(it.comp_nm||'')}</strong></td><td>${esc(it.benefit_nm||'')}<div style="font-size:.7rem;color:var(--t4)">${esc(it.benefit_cd||'')}</div></td><td>${amt}</td><td>${esc(cat)}</td><td>${srcBtn}</td><td>${ins}</td><td style="white-space:nowrap"><button class="adm-btn primary" onclick="admPromoteBenefit(${bid})" style="padding:4px 10px">승격 → 공식</button></td></tr>`;
+    }).join('');
+  }else{
+    h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:2rem">검수 대기 항목이 없습니다.</td></tr>';
+  }
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadPending');
+  // 사용자 제보 섹션
+  h+='<h4 style="margin-top:2rem">🚩 사용자 제보 — 미해결</h4>';
+  h+=`<p style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">사용자가 리포트에서 "값 틀림" 으로 신고한 항목입니다. <strong>반영</strong>은 별도로 복지 편집 화면에서 수정하세요.</p>`;
+  h+='<table class="adm-tbl"><thead><tr><th>회사</th><th>복지</th><th>유형</th><th>현재값</th><th>제보값</th><th>제보자</th><th>제보일</th><th>사유</th><th>작업</th></tr></thead><tbody>';
+  if(reports&&reports.length){
+    h+=reports.map(r=>{
+      const rid=Number(r.report_id)||0;
+      const cur=r.current_amt!=null?Number(r.current_amt).toLocaleString()+'만':'—';
+      const sug=r.reported_amt!=null?Number(r.reported_amt).toLocaleString()+'만':'—';
+      const who=r.reporter_email?esc(r.reporter_email):'익명';
+      const ins=r.ins_dtm?String(r.ins_dtm).slice(0,10):'-';
+      const cmt=r.comment_ctnt?esc(r.comment_ctnt):'<span style="color:var(--t4)">—</span>';
+      return `<tr id="admRR${rid}"><td><strong>${esc(r.comp_nm||'')}</strong></td><td>${esc(r.benefit_nm||'')}<div style="font-size:.7rem;color:var(--t4)">${esc(r.benefit_cd||'')}</div></td><td>${esc(RPT_TYPE_LABELS[r.report_type_cd]||r.report_type_cd||'-')}</td><td>${cur}</td><td style="color:var(--amber)">${sug}</td><td>${who}</td><td>${ins}</td><td style="max-width:220px;white-space:normal;font-size:.75rem">${cmt}</td><td style="white-space:nowrap"><button class="adm-btn primary" onclick="admResolveReport(${rid},'resolved')" style="padding:4px 8px">반영</button> <button class="adm-btn danger" onclick="admResolveReport(${rid},'rejected')" style="padding:4px 8px">기각</button></td></tr>`;
+    }).join('');
+  }else{
+    h+='<tr><td colspan="9" style="text-align:center;color:var(--t3);padding:2rem">미해결 제보가 없습니다.</td></tr>';
+  }
+  h+='</tbody></table>';
+  h+='</div>';
+  c.innerHTML=h;
+}
+async function admResolveReport(rid,statusCd){
+  const note=prompt((statusCd==='resolved'?'반영':'기각')+' 메모 (선택, 엔터로 스킵)','')||'';
+  const r=await apiFetch('/admin/benefit-reports/'+rid+'/resolve',{method:'PUT',body:JSON.stringify({status_cd:statusCd,note_ctnt:note||null})});
+  if(!r){showToast('처리 실패','error');return}
+  const tr=document.getElementById('admRR'+rid);if(tr)tr.style.opacity='.4';
+  showToast(statusCd==='resolved'?'제보 반영 처리':'제보 기각 처리','success');
+  setTimeout(()=>admLoadPending(),400);
+}
+async function admPromoteBenefit(id){
+  const note=prompt('승격 사유 메모 (선택, 엔터로 스킵)','')||'';
+  const r=await apiFetch('/admin/benefits/'+id+'/promote',{method:'PUT',body:JSON.stringify({note_ctnt:note||null})});
+  if(!r){showToast('승격 실패 — 서버 로그를 확인하세요','error');return}
+  const tr=document.getElementById('admPR'+id);if(tr)tr.style.opacity='.4';
+  showToast('공식 배지로 승격되었습니다','success');
+  setTimeout(()=>admLoadPending(),400);
+}
+
+// ━━ ADMIN: COMPANIES ━━
+async function admLoadCompanies(page,q,type){
+  if(page!=null)admPage.companies=page;if(q!=null)admCompQ=q;if(type!=null)admCompType=type;
+  const c=document.getElementById('admContent');
+  const params=new URLSearchParams({page:admPage.companies});
+  if(admCompQ)params.set('q',admCompQ);if(admCompType)params.set('type',admCompType);
+  const d=await apiFetch('/admin/companies?'+params);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>회사 관리</h4>';
+  h+='<div class="adm-toolbar"><input class="adm-search" placeholder="회사명 검색..." value="'+esc(admCompQ)+'" onkeydown="if(event.key===\'Enter\')admLoadCompanies(1,this.value)">';
+  h+='<div class="adm-filter-btns"><button class="adm-filter'+(!admCompType?' active':'')+'" onclick="admLoadCompanies(1,null,\'\')">전체</button>';
+  h+=Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<button class="adm-filter${admCompType===k?' active':''}" onclick="admLoadCompanies(1,null,'${k}')">${esc(l)}</button>`).join('');
+  h+='</div><button class="adm-btn primary" onclick="admEditCompany(null)">+ 회사 추가</button></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>회사명</th><th>유형</th><th>산업</th><th>복지</th><th>별명</th><th>작업</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(co=>{const cid=Number(co.comp_id)||0;return `<tr><td><strong>${esc(co.comp_nm)}</strong></td><td>${esc(ADM_TYPE_LABELS[co.comp_tp_cd]||co.comp_tp_cd||'-')}</td><td>${esc(co.industry_nm||'-')}</td><td>${Number(co.benefit_no)||0}건</td><td>${Number(co.alias_no)||0}개</td><td style="white-space:nowrap"><button class="adm-btn" onclick="admEditCompany(${cid})">편집</button> <button class="adm-btn" onclick="admEditBenefits(${cid},${JSON.stringify(co.comp_nm||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')})">복지</button> <button class="adm-btn danger" onclick="admDelCompany(${cid},${JSON.stringify(co.comp_nm||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')})">삭제</button></td></tr>`}).join('');
+  }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:2rem">회사가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadCompanies');
+  h+='</div>';
+  c.innerHTML=h;
+}
+
+async function admDelCompany(id,name){
+  if(!confirm(name+' 회사를 삭제하시겠습니까?'))return;
+  await apiFetch('/admin/companies/'+id,{method:'DELETE'});
+  admLoadCompanies();
+}
+
+async function admEditCompany(id){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  let co={comp_nm:'',comp_tp_cd:'',industry_nm:'',logo_nm:'',work_style_val:'',careers_benefit_url:'',aliases:[]};
+  if(id){
+    const d=await apiFetch('/admin/companies/'+id+'/benefits');
+    const detail=await apiFetch('/companies/'+id);
+    if(detail){co={...co,...detail};co.aliases=detail.aliases||[]}
+  }
+  let h=`<h3>${id?'회사 편집':'회사 추가'}</h3>`;
+  h+=`<div class="adm-fd"><label>회사명</label><input id="admCoName" value="${esc(co.comp_nm)}"></div>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCoType"><option value="">선택</option>${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${co.comp_tp_cd===k||co.type_id===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+  h+=`<div class="adm-fd"><label>산업</label><input id="admCoInd" value="${esc(co.industry_nm||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>로고 URL</label><input id="admCoLogo" value="${esc(co.logo_nm||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>근무 형태</label><input id="admCoWS" value="${esc(co.work_style||'')}" placeholder="hybrid, remote, onsite"></div>`;
+  h+=`<div class="adm-fd"><label>채용/복지 URL</label><input id="admCoURL" value="${esc(co.careers_benefit_url||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>별명 (쉼표 구분)</label><input id="admCoAlias" value="${esc((co.aliases||[]).join(', '))}"></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCompany(${id?("'"+id+"'"):'null'})">저장</button></div>`;
+  b.innerHTML=h;m.classList.add('open');
+}
+
+async function admSaveCompany(id){
+  const name=document.getElementById('admCoName').value.trim();
+  const type_id=document.getElementById('admCoType').value;
+  const industry=document.getElementById('admCoInd').value.trim();
+  const logo=document.getElementById('admCoLogo').value.trim();
+  const work_style=document.getElementById('admCoWS').value.trim();
+  const careers_benefit_url=document.getElementById('admCoURL').value.trim();
+  const aliasStr=document.getElementById('admCoAlias').value.trim();
+  const aliases=aliasStr?aliasStr.split(',').map(a=>a.trim()).filter(Boolean):[];
+  if(!name){alert('회사명을 입력하세요.');return}
+  const body={comp_nm:name,comp_tp_cd:type_id,industry_nm:industry,logo_nm:logo,work_style_val:work_style,careers_benefit_url};
+  if(id){
+    await apiFetch('/admin/companies/'+id,{method:'PUT',body:JSON.stringify(body)});
+    if(aliases.length||aliasStr==='')await apiFetch('/admin/companies/'+id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+  }else{
+    const r=await apiFetch('/admin/companies',{method:'POST',body:JSON.stringify(body)});
+    if(r&&r.id&&aliases.length)await apiFetch('/admin/companies/'+r.id+'/aliases',{method:'PUT',body:JSON.stringify({aliases})});
+  }
+  admCloseModal();admLoadCompanies();
+}
+
+// ━━ ADMIN: BENEFITS ━━
+async function admEditBenefits(id,name){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  b.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">복지 로딩 중...</div>';m.classList.add('open');
+  const bens=await apiFetch('/admin/companies/'+id+'/benefits')||[];
+  admData.editBens=bens;admData.editBenId=id;
+  admRenderBenModal(id,name,bens);
+}
+
+function admRenderBenModal(id,name,bens){
+  const b=document.getElementById('admModalBox');
+  let h=`<h3>${esc(name)} — 복지 편집</h3>`;
+  h+='<div style="overflow-x:auto"><table class="adm-tbl"><thead><tr><th>key</th><th>이름</th><th>금액(만원)</th><th>카테고리</th><th>뱃지</th><th>자격조건</th><th>삭제</th></tr></thead><tbody id="admBenRows">';
+  if(bens.length){
+    h+=bens.map((bn,i)=>`<tr id="admBR${i}"><td><input style="width:80px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.key||'')}" data-f="key" data-i="${i}"></td><td><input style="width:100px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${esc(bn.name||'')}" data-f="name" data-i="${i}"></td><td><input type="number" style="width:70px;font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" value="${bn.benefit_amt||0}" data-f="val" data-i="${i}"></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="cat" data-i="${i}">${ADM_CAT_OPTS.map(([k,l])=>`<option value="${k}"${bn.benefit_ctgr_cd===k?' selected':''}>${l}</option>`).join('')}</select></td><td><select style="font-size:.72rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" data-f="badge" data-i="${i}"><option value="">-</option>${ADM_BADGE_OPTS.map(([k,l])=>`<option value="${k}"${bn.badge===k?' selected':''}>${l}</option>`).join('')}</select></td><td style="text-align:center"><input type="checkbox" data-f="qual" data-i="${i}"${bn.qual_yn?' checked':''}></td><td><button class="adm-btn danger" onclick="admRemoveBenRow(${i})" style="padding:2px 8px">×</button></td></tr>`).join('');
+  }else h+='<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:1rem">복지 항목이 없습니다.</td></tr>';
+  h+='</tbody></table></div>';
+  h+=`<div style="display:flex;gap:8px;justify-content:space-between;margin-top:1rem"><button class="adm-btn" onclick="admAddBenRow()">+ 항목 추가</button><div style="display:flex;gap:8px"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveBenefits('${id}')">일괄 저장</button></div></div>`;
+  b.innerHTML=h;
+}
+
+function admAddBenRow(){
+  admData.editBens.push({key:'',name:'',val:0,cat:'perks',badge:'',qual:false,qualText:'',note:'',sort_order:0});
+  admRenderBenModal(admData.editBenId,'',admData.editBens);
+}
+
+function admRemoveBenRow(i){
+  admData.editBens.splice(i,1);
+  admRenderBenModal(admData.editBenId,'',admData.editBens);
+}
+
+function admCollectBens(){
+  const rows=document.querySelectorAll('#admBenRows tr[id^="admBR"]');
+  const result=[];
+  rows.forEach((tr,i)=>{
+    const g=f=>tr.querySelector(`[data-f="${f}"][data-i="${i}"]`);
+    result.push({key:g('key')?.value||'',name:g('name')?.value||'',val:parseFloat(g('val')?.value)||0,cat:g('cat')?.value||'perks',badge:g('badge')?.value||'',qual:g('qual')?.checked||false,qualText:'',note:'',sort_order:i});
+  });
+  return result;
+}
+
+async function admSaveBenefits(id){
+  const bens=admCollectBens();
+  await apiFetch('/admin/companies/'+id+'/benefits',{method:'PUT',body:JSON.stringify(bens)});
+  admCloseModal();admLoadCompanies();
+}
+
+function admCloseModal(){document.getElementById('admModal').classList.remove('open')}
+
+// ━━ ADMIN: USERS ━━
+async function admLoadUsers(page,q){
+  if(page!=null)admPage.users=page;if(q!=null)admUserQ=q;
+  const c=document.getElementById('admContent');
+  const params=new URLSearchParams({page:admPage.users});
+  if(admUserQ)params.set('q',admUserQ);
+  const d=await apiFetch('/admin/users?'+params);
+  if(!d){c.innerHTML='<div style="color:var(--red);padding:1rem">로드 실패</div>';return}
+  let h='<div class="adm-section"><h4>사용자 관리</h4>';
+  h+='<div class="adm-toolbar"><input class="adm-search" placeholder="이메일 또는 이름 검색..." value="'+esc(admUserQ)+'" onkeydown="if(event.key===\'Enter\')admLoadUsers(1,this.value)"></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>이메일</th><th>이름</th><th>직군</th><th>역할</th><th>가입일</th></tr></thead><tbody>';
+  if(d.items&&d.items.length){
+    h+=d.items.map(u=>{
+      const dt=u.ins_dtm?new Date(u.ins_dtm).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${esc(u.email_addr)}</td><td>${esc(u.mbr_nm||'-')}</td><td>${esc(u.job_nm||'-')}</td><td><select style="font-size:.75rem;padding:4px;background:var(--bg-1);border:1px solid var(--border);border-radius:4px;color:var(--t1)" onchange="admChangeRole(${u.mbr_id},this.value)"><option value="user"${u.role_cd==='user'?' selected':''}>user</option><option value="admin"${u.role_cd==='admin'?' selected':''}>admin</option></select></td><td>${esc(dt)}</td></tr>`;
+    }).join('');
+  }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:2rem">사용자가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  h+=admPagination(d.total,d.page,d.page_size,'admLoadUsers');
+  h+='</div>';
+  c.innerHTML=h;
+}
+
+async function admChangeRole(id,role){
+  const r=await apiFetch('/admin/users/'+id+'/role',{method:'PUT',body:JSON.stringify({role})});
+  if(!r)alert('역할 변경 실패');
+}
+
+// ━━ ADMIN: CONTENT ━━
+async function admLoadContent(sub){
+  if(sub)admContentSub=sub;
+  const c=document.getElementById('admContent');
+  let h='<div class="adm-section"><h4>콘텐츠 관리</h4>';
+  h+='<div class="adm-subtabs"><button class="adm-subtab'+( admContentSub==='cases'?' active':'')+'" onclick="admLoadContent(\'cases\')">인기사례</button><button class="adm-subtab'+(admContentSub==='feed'?' active':'')+'" onclick="admLoadContent(\'feed\')">비교피드</button></div>';
+  h+='<div id="admContentInner"></div></div>';
+  c.innerHTML=h;
+  if(admContentSub==='cases')admLoadCases();else admLoadFeed();
+}
+
+async function admLoadCases(){
+  const el=document.getElementById('admContentInner');
+  const d=await apiFetch('/admin/popular-cases');
+  if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
+  let h='<div style="margin-bottom:.75rem"><button class="adm-btn primary" onclick="admEditCase(null)">+ 인기사례 추가</button></div>';
+  h+='<table class="adm-tbl"><thead><tr><th>A</th><th>B</th><th>유형</th><th>활성</th><th>작업</th></tr></thead><tbody>';
+  const items=Array.isArray(d)?d:(d.items||[]);
+  if(items.length){
+    h+=items.map(cs=>`<tr><td>${esc(cs.current_comp_nm)}</td><td>${esc(cs.offer_comp_nm)}</td><td>${esc(cs.case_type_cd||'-')}</td><td>${cs.active_yn?'✓':'✗'}</td><td><button class="adm-btn" onclick="admEditCase(${cs.id})">편집</button> <button class="adm-btn danger" onclick="admDelCase(${cs.id})">삭제</button></td></tr>`).join('');
+  }else h+='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:1rem">인기사례가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+
+async function admEditCase(id){
+  const m=document.getElementById('admModal'),b=document.getElementById('admModalBox');
+  let cs={case_type_cd:'company',current_comp_nm:'',current_comp_tp_cd:'large',current_sub_nm:'',offer_comp_nm:'',offer_comp_tp_cd:'large',offer_sub_nm:'',points_val:[],active_yn:true};
+  if(id){
+    const all=await apiFetch('/admin/popular-cases');
+    const items=Array.isArray(all)?all:(all?.items||[]);
+    const found=items.find(x=>x.id===id);if(found)cs={...cs,...found};
+  }
+  const pts=(cs.points||[]).join('\n');
+  let h=`<h3>${id?'인기사례 편집':'인기사례 추가'}</h3>`;
+  h+=`<div class="adm-fd"><label>유형</label><select id="admCsType"><option value="company"${cs.case_type_cd==='company'?' selected':''}>company</option><option value="situation"${cs.case_type_cd==='situation'?' selected':''}>situation</option></select></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>현직 제목</label><input id="admCsTA" value="${esc(cs.current_comp_nm)}"></div><div class="adm-fd" style="flex:1"><label>현직 유형</label><select id="admCsTyA">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.current_comp_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>현직 서브</label><input id="admCsSA" value="${esc(cs.current_sub_nm||'')}"></div>`;
+  h+=`<div style="display:flex;gap:8px"><div class="adm-fd" style="flex:1"><label>이직처 제목</label><input id="admCsTB" value="${esc(cs.offer_comp_nm)}"></div><div class="adm-fd" style="flex:1"><label>이직처 유형</label><select id="admCsTyB">${Object.entries(ADM_TYPE_LABELS).map(([k,l])=>`<option value="${k}"${cs.offer_comp_tp_cd===k?' selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  h+=`<div class="adm-fd"><label>이직처 서브</label><input id="admCsSB" value="${esc(cs.offer_sub_nm||'')}"></div>`;
+  h+=`<div class="adm-fd"><label>포인트 (줄바꿈 구분)</label><textarea id="admCsPts" rows="4" style="resize:vertical">${esc(pts)}</textarea></div>`;
+  h+=`<div class="adm-fd"><label><input type="checkbox" id="admCsAct"${cs.active_yn?' checked':''}> 활성</label></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem"><button class="adm-btn" onclick="admCloseModal()">취소</button><button class="adm-btn primary" onclick="admSaveCase(${id||'null'})">저장</button></div>`;
+  b.innerHTML=h;m.classList.add('open');
+}
+
+async function admSaveCase(id){
+  const body={
+    case_type_cd:document.getElementById('admCsType').value,
+    current_comp_nm:document.getElementById('admCsTA').value.trim(),
+    current_comp_tp_cd:document.getElementById('admCsTyA').value,
+    current_sub_nm:document.getElementById('admCsSA').value.trim(),
+    offer_comp_nm:document.getElementById('admCsTB').value.trim(),
+    offer_comp_tp_cd:document.getElementById('admCsTyB').value,
+    offer_sub_nm:document.getElementById('admCsSB').value.trim(),
+    points_val:document.getElementById('admCsPts').value.split('\n').map(l=>l.trim()).filter(Boolean),
+    active_yn:document.getElementById('admCsAct').checked
+  };
+  if(id)await apiFetch('/admin/popular-cases/'+id,{method:'PUT',body:JSON.stringify(body)});
+  else await apiFetch('/admin/popular-cases',{method:'POST',body:JSON.stringify(body)});
+  admCloseModal();admLoadCases();
+}
+
+async function admDelCase(id){
+  if(!confirm('이 인기사례를 삭제하시겠습니까?'))return;
+  await apiFetch('/admin/popular-cases/'+id,{method:'DELETE'});
+  admLoadCases();
+}
+
+async function admLoadFeed(){
+  const el=document.getElementById('admContentInner');
+  const d=await apiFetch('/admin/feed?page='+admPage.feed);
+  if(!d){el.innerHTML='<div style="color:var(--red)">로드 실패</div>';return}
+  let h='<table class="adm-tbl"><thead><tr><th>ID</th><th>A</th><th>B</th><th>요약</th><th>날짜</th><th>삭제</th></tr></thead><tbody>';
+  const items=d.items||[];
+  if(items.length){
+    h+=items.map(f=>{
+      const dt=f.ins_dtm?new Date(f.ins_dtm).toLocaleDateString('ko-KR'):'';
+      return `<tr><td>${f.feed_id}</td><td>${esc(f.comp_a_disp_nm||f.comp_a_nm||'-')}</td><td>${esc(f.comp_b_disp_nm||f.comp_b_nm||'-')}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((f.headline_ctnt||f.detail_ctnt||'').slice(0,50))}</td><td>${esc(dt)}</td><td><button class="adm-btn danger" onclick="admDelFeed(${f.feed_id})">삭제</button></td></tr>`;
+    }).join('');
+  }else h+='<tr><td colspan="6" style="text-align:center;color:var(--t3);padding:1rem">피드가 없습니다.</td></tr>';
+  h+='</tbody></table>';
+  if(d.total)h+=admPagination(d.total,d.page,d.page_size,'admFeedPage');
+  el.innerHTML=h;
+}
+
+function admFeedPage(page){admPage.feed=page;admLoadFeed()}
+
+async function admDelFeed(id){
+  if(!confirm('이 비교 피드를 삭제하시겠습니까?'))return;
+  await apiFetch('/admin/feed/'+id,{method:'DELETE'});
+  admLoadFeed();
+}
+
+// ━━ ADMIN: STATS ━━
+async function admLoadStats(days){
+  if(days)admStatsDays=days;
+  const c=document.getElementById('admContent');
+  c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--t3)">통계 로딩 중...</div>';
+  const [cmpStats,coStats,userStats]=await Promise.all([
+    apiFetch('/admin/stats/comparisons?days='+admStatsDays),
+    apiFetch('/admin/stats/companies'),
+    apiFetch('/admin/stats/users?days='+admStatsDays)
+  ]);
+  let h='<div class="adm-section"><h4>통계</h4>';
+  h+='<div class="adm-subtabs" style="margin-bottom:1.25rem"><button class="adm-subtab'+(admStatsDays===7?' active':'')+'" onclick="admLoadStats(7)">7일</button><button class="adm-subtab'+(admStatsDays===30?' active':'')+'" onclick="admLoadStats(30)">30일</button><button class="adm-subtab'+(admStatsDays===90?' active':'')+'" onclick="admLoadStats(90)">90일</button></div>';
+
+  // 일별 비교 건수
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">일별 비교 건수</h4>';
+  if(cmpStats&&cmpStats.length){
+    const maxC=Math.max(...cmpStats.map(x=>x.comparison_no||0),1);
+    h+=cmpStats.map(x=>{
+      const dt=(x.stat_date||x.date||'').slice(5);
+      const pct=Math.round(((x.comparison_no||0)/maxC)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--blue)"></div><span class="adm-bar-val">${x.comparison_no||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div>';
+
+  // 인기 회사 TOP 10
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">인기 회사 TOP 10</h4>';
+  if(coStats&&coStats.length){
+    const maxCo=Math.max(...coStats.map(x=>x.count||0),1);
+    h+=coStats.slice(0,10).map(x=>{
+      const pct=Math.round(((x.count||0)/maxCo)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(x.company_name||'-')}</span><div class="adm-bar" style="width:${pct}%;background:var(--amber)"></div><span class="adm-bar-val">${x.count||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div>';
+
+  // 일별 가입 추이
+  h+='<div style="margin-bottom:2rem"><h4 style="font-size:.85rem;margin-bottom:.75rem">일별 신규 가입</h4>';
+  if(userStats&&userStats.length){
+    const maxU=Math.max(...userStats.map(x=>x.count||0),1);
+    h+=userStats.map(x=>{
+      const dt=(x.date||'').slice(5);
+      const pct=Math.round(((x.count||0)/maxU)*100);
+      return `<div class="adm-bar-row"><span class="adm-bar-label">${esc(dt)}</span><div class="adm-bar" style="width:${pct}%;background:var(--green)"></div><span class="adm-bar-val">${x.count||0}</span></div>`;
+    }).join('');
+  }else h+='<div style="color:var(--t3);font-size:.82rem">데이터 없음</div>';
+  h+='</div></div>';
+  c.innerHTML=h;
+}
+
+// ━━ ADMIN: PAGINATION ━━
+function admPagination(total,page,pageSize,callback){
+  if(!total||!pageSize)return'';
+  const pages=Math.ceil(total/pageSize);if(pages<=1)return'';
+  let h='<div class="adm-pagination">';
+  if(page>1)h+=`<button class="adm-pg" onclick="${callback}(${page-1})">‹</button>`;
+  for(let i=1;i<=pages;i++){
+    if(pages>7&&Math.abs(i-page)>2&&i!==1&&i!==pages){if(i===2||i===pages-1)h+='<span style="color:var(--t3);padding:0 4px">...</span>';continue}
+    h+=`<button class="adm-pg${i===page?' active':''}" onclick="${callback}(${i})">${i}</button>`;
+  }
+  if(page<pages)h+=`<button class="adm-pg" onclick="${callback}(${page+1})">›</button>`;
+  h+='</div>';return h;
+}
+
+// ━━ APP (navigation + init) ━━
+
+function go(id,skipHistory){if(id==='s-admin'&&AUTH_USER?.role_cd!=='admin'){go('s-landing');return}document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='s-profiler')pfInit();if(id==='s-input'){initPri();calc()};if(id==='s-landing')loadLanding();if(id==='s-admin')admInit();if(!skipHistory)history.pushState({screen:id},'')}
+window.addEventListener('popstate',e=>{const id=e.state&&e.state.screen||'s-landing';go(id,true)})
+
+document.addEventListener('click',e=>{['a','b'].forEach(s=>{const w=document.getElementById(s==='a'?'sA':'sB').parentElement;if(!w.contains(e.target))document.getElementById(s==='a'?'rA':'rB').classList.remove('open')})});
+
+// ━━ LANDING SOCIAL FEED ━━
+const FALLBACK_POP=[
+  {id:1,case_type_cd:'company',current_comp_nm:'쿠팡',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'네이버',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>연봉</strong>은 쿠팡이 높지만 포괄임금 + 야근 많음으로 시간당 가치는 역전될 수 있음','<strong>워라밸</strong>은 네이버가 우세 · 재택·유연근무 실사용률 높음','<strong>3년 성장</strong>은 비슷한 수준 — 직무에 따라 갈림'],view_no:12341,comparison_no:847},
+  {id:2,case_type_cd:'company',current_comp_nm:'카카오',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'삼성전자',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>IT 플랫폼</strong> vs 제조 대기업 — 문화 차이 큼','<strong>자율 문화</strong> vs 체계적 구조 · 성향에 따라 선택','<strong>복지</strong> 패키지는 삼성이 종합적으로 우세'],view_no:9823,comparison_no:623},
+  {id:3,case_type_cd:'company',current_comp_nm:'토스',current_comp_tp_cd:'startup',current_sub_nm:'핀테크',offer_comp_nm:'카카오뱅크',offer_comp_tp_cd:'large',offer_sub_nm:'인터넷은행',points_val:['<strong>성장성</strong>은 토스가 빠르지만 리스크도 큼','<strong>안정성</strong>은 카카오뱅크(은행 라이선스)가 우세','<strong>보상 구조</strong> 스톡옵션 vs 안정 연봉 차이'],view_no:5432,comparison_no:298},
+  {id:4,case_type_cd:'company',current_comp_nm:'라인',current_comp_tp_cd:'large',current_sub_nm:'글로벌 IT',offer_comp_nm:'카카오',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>글로벌</strong> 경험은 라인이 압도적 · 일본 시장 기반','<strong>국내 영향력</strong>은 카카오가 우세 · 플랫폼 생태계','<strong>처우</strong>는 비슷한 수준 — 직급별로 차이'],view_no:4821,comparison_no:245},
+  {id:5,case_type_cd:'company',current_comp_nm:'삼성전자',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'SK하이닉스',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>반도체</strong> 양대 산맥 — 직무 전문성은 비슷','<strong>연봉</strong>은 SK하이닉스가 근소 우위 · 성과급 변동 큼','<strong>워라밸</strong>은 사업부에 따라 크게 달라짐'],view_no:4512,comparison_no:231},
+  {id:6,case_type_cd:'company',current_comp_nm:'배달의민족',current_comp_tp_cd:'large',current_sub_nm:'플랫폼',offer_comp_nm:'당근',offer_comp_tp_cd:'startup',offer_sub_nm:'플랫폼',points_val:['<strong>조직 문화</strong> 모두 수평적 · 배민이 더 체계적','<strong>성장 가능성</strong>은 당근이 높지만 수익화 과제','<strong>복지</strong>는 배민(우아한형제들)이 종합 우세'],view_no:3987,comparison_no:198},
+  {id:7,case_type_cd:'company',current_comp_nm:'현대자동차',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'LG에너지솔루션',offer_comp_tp_cd:'large',offer_sub_nm:'대기업',points_val:['<strong>미래 모빌리티</strong> vs 배터리 — 둘 다 성장 산업','<strong>연봉</strong>은 LG엔솔이 근소 우위 · 신설법인 프리미엄','<strong>안정성</strong>은 현대차가 우세 · 매출 규모 차이'],view_no:3654,comparison_no:187},
+  {id:8,case_type_cd:'company',current_comp_nm:'네이버',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'구글코리아',offer_comp_tp_cd:'foreign',offer_sub_nm:'외국계',points_val:['<strong>연봉</strong>은 구글이 압도적 · RSU 포함 시 2배 이상 차이','<strong>커리어 성장</strong>은 네이버가 국내 리더십 기회 많음','<strong>워라밸</strong>은 구글이 우세 · 유연근무 정착'],view_no:3421,comparison_no:176},
+  {id:9,case_type_cd:'company',current_comp_nm:'카카오',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'토스',offer_comp_tp_cd:'startup',offer_sub_nm:'핀테크',points_val:['<strong>안정성</strong>은 카카오가 우세 · 플랫폼 수익 안정적','<strong>성장 속도</strong>는 토스가 빠름 · 금융 슈퍼앱 도전','<strong>스톡옵션</strong> 토스가 매력적이나 리스크도 큼'],view_no:3198,comparison_no:165},
+  {id:10,case_type_cd:'company',current_comp_nm:'쿠팡',current_comp_tp_cd:'large',current_sub_nm:'대기업',offer_comp_nm:'마켓컬리',offer_comp_tp_cd:'startup',offer_sub_nm:'이커머스',points_val:['<strong>규모</strong>는 쿠팡이 압도적 · 나스닥 상장사','<strong>성장성</strong>은 컬리가 프리미엄 시장 차별화','<strong>업무 강도</strong>는 쿠팡이 높음 · 포괄임금 주의'],view_no:2876,comparison_no:142}
+];
+const FALLBACK_FEED=[
+  {id:1,job_name:'개발자',emoji:'👨‍💻',comp_a_disp_nm:'카카오',current_comp_tp_cd:'large',comp_b_disp_nm:'토스',offer_comp_tp_cd:'startup',headline:'카카오 잔류 vs 토스 이직 비교 결과 — 시간당 실질 가치 +18.4% 이직이 유리',summary:'연봉 +500만 + 비포괄임금 전환 + 재택 자유 → 포괄임금 야근 상쇄하고도 남음',pct_val:'+18.4%',pct_label:'시간당 가치',pct_type:'up',created_at:new Date(Date.now()-180000).toISOString()},
+  {id:2,job_name:'기획자',emoji:'📋',comp_a_disp_nm:'네이버',current_comp_tp_cd:'large',comp_b_disp_nm:'쿠팡',offer_comp_tp_cd:'large',headline:'네이버 잔류 vs 쿠팡 이직 비교 결과 — 총 보상 +12.1% 이직이 유리',summary:'연봉 +800만 + RSU 차이 → 포괄임금 야근 감안해도 총 보상 우위',pct_val:'+12.1%',pct_label:'총 보상 차이',pct_type:'up',created_at:new Date(Date.now()-3600000).toISOString()},
+  {id:3,job_name:'디자이너',emoji:'🎨',comp_a_disp_nm:'삼성전자',current_comp_tp_cd:'large',comp_b_disp_nm:'당근',offer_comp_tp_cd:'startup',headline:'삼성전자 잔류 vs 당근 이직 비교 결과 — 시간당 가치 -5.2% 잔류가 유리',summary:'복지 포함 시 삼성이 연 450만원 유리 · 안정성 + 퇴직금 차이 큼',pct_val:'-5.2%',pct_label:'시간당 가치',pct_type:'down',created_at:new Date(Date.now()-7200000).toISOString()}
+];
+let _popData=null,_popFilter='all';
+let pingTimer=null;
+
+function timeAgo(d){const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return '방금 전';if(s<3600)return Math.floor(s/60)+'분 전';if(s<86400)return Math.floor(s/3600)+'시간 전';return Math.floor(s/86400)+'일 전'}
+
+async function loadLanding(){
+  const [pop,feed,stats]=await Promise.all([apiFetch('/landing/popular'),apiFetch('/landing/feed'),apiFetch('/landing/stats')]);
+  _popData=pop&&pop.length?pop:FALLBACK_POP;
+  renderPopular(_popData);
+  renderFeed(feed&&feed.length?feed:FALLBACK_FEED);
+  renderStats(stats||{});
+  const lc=parseInt(localStorage.getItem('jc_compare_count'))||0;
+  if(lc){const c=document.getElementById('lsCompares');if(c)c.textContent=Math.max(parseInt(c.textContent)||0,lc)}
+  startPing();
+}
+
+function renderPopular(data){
+  const grid=document.getElementById('popGrid');if(!grid)return;
+  const filtered=(_popFilter==='all'?data:data.filter(c=>c.case_type_cd===_popFilter)).slice(0,10);
+  const tagMap={company:'🏢 회사 직접 비교',scenario:'🔀 시나리오'};
+  grid.innerHTML=filtered.map((c,i)=>{
+    const tag=tagMap[c.case_type_cd]||'비교';
+    const pts=(c.points||[]).map(p=>{const s=esc(String(p));return`<div class="pc-point">• ${s.replace(/&lt;strong&gt;/g,'<strong>').replace(/&lt;\/strong&gt;/g,'</strong>')}</div>`}).join('');
+    const views=c.view_no?'📊 '+(c.view_no).toLocaleString()+'회':'';
+    const ctype=esc(c.case_type_cd);
+    return `<div class="pop-card type-${ctype}" data-pop-idx="${i}">
+      <div class="pc-head"><span class="pc-tag">${tag}</span>${views?`<span class="pc-views">${views}</span>`:''}</div>
+      <div class="pc-vs"><div class="pc-side"><span class="pc-name">${esc(c.current_comp_nm)}</span><span class="pc-sub">${esc(c.current_sub_nm||'')}</span></div><span class="pc-x">VS</span><div class="pc-side"><span class="pc-name">${esc(c.offer_comp_nm)}</span><span class="pc-sub">${esc(c.offer_sub_nm||'')}</span></div></div>
+      <div class="pc-points">${pts}</div>
+    </div>`}).join('');
+  grid.onclick=e=>{const card=e.target.closest('[data-pop-idx]');if(!card)return;startFromCase(filtered[Number(card.dataset.popIdx)])};
+}
+
+function filterPop(type,btn){
+  _popFilter=type;
+  document.querySelectorAll('#popFilter .l-filter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(_popData)renderPopular(_popData);
+}
+
+function renderFeed(data){
+  const el=document.getElementById('feedList');if(!el)return;
+  el.innerHTML=data.slice(0,10).map(f=>{
+    const emoji=esc(f.emoji||'💼'),job=esc(f.job_ctgr_nm||f.job_ctgr_nm||''),a=esc(f.comp_a_disp_nm||''),b=esc(f.comp_b_disp_nm||'');
+    const raw=esc(f.headline_ctnt||`${f.comp_a_disp_nm||''} vs ${f.comp_b_disp_nm||''}`);
+    const dashIdx=raw.indexOf(' — ');
+    let vsTitle=(dashIdx>=0?raw.slice(0,dashIdx):raw).replace(a,`<span class="c-a">${a}</span>`).replace(b,`<span class="c-b">${b}</span>`);
+    let desc=dashIdx>=0?raw.slice(dashIdx+3):'';
+    desc=desc.replace(/([+-][\d.]+%)/,`<span class="c-pct">$1</span>`);
+    const summary=esc(f.detail_ctnt||f.detail||''),pv=esc(f.metric_val_ctnt||f.metric_val_ctnt||''),pl=esc(f.metric_label_nm||f.metric_label_nm||''),pt=/^(up|down|neu)$/.test(f.metric_type_cd||f.metric_type_cd||'')?f.metric_type_cd||f.metric_type_cd:'neu';
+    return `<div class="result-item">
+      <div class="ri-avatar">${emoji}</div>
+      <div class="ri-body">
+        <div class="ri-job">${job}</div>
+        <div class="ri-title">${vsTitle}</div>
+        ${desc?`<div class="ri-summary">${desc}</div>`:''}
+        ${summary?`<div class="ri-summary">${summary}</div>`:''}
+        <div class="ri-time">${timeAgo(f.ins_dtm)}</div>
+      </div>
+      ${pv?`<div class="ri-right"><div class="ri-pct ${pt}">${pv}</div><div class="ri-pct-label">${pl}</div></div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderStats(s){
+  if(!s)return;
+  const v=document.getElementById('lsVisitors'),c=document.getElementById('lsCompares');
+  if(v&&s.active_visitor_no!=null)v.textContent=s.active_visitor_no;
+  if(c&&s.total_comparison_no!=null){
+    const local=parseInt(localStorage.getItem('jc_compare_count'))||0;
+    c.textContent=Math.max(s.total_comparison_no,local);
+  }
+}
+function updateCompareCount(){
+  const n=(parseInt(localStorage.getItem('jc_compare_count'))||0)+1;
+  localStorage.setItem('jc_compare_count',n);
+  const c=document.getElementById('lsCompares');
+  if(c)c.textContent=Math.max(n,parseInt(c.textContent)||0);
+}
+
+async function startFromCase(c){
+  if(c.id)apiFetch('/landing/popular/'+c.id+'/view',{method:'POST'}).then(r=>{if(r&&r.view_no){const item=(_popData||[]).find(x=>x.id===c.id);if(item)item.view_no=r.view_no}});
+  go('s-input');
+  if(c.case_type_cd==='company'){
+    async function findAndSel(s,name){
+      if(!name)return;
+      if(API_BASE){const r=await apiFetch('/companies/search?q='+encodeURIComponent(name));if(r&&r.length){await selComp(s,r[0].id);return}}
+      const loc=DB.find(x=>x.name===name);if(loc)await selComp(s,loc.id);else document.getElementById(s==='a'?'sA':'sB').value=name;
+    }
+    await Promise.all([findAndSel('a',c.current_comp_nm),findAndSel('b',c.offer_comp_nm)]);
+  }
+}
+
+function startPing(){
+  if(pingTimer)return;
+  let cid=sessionStorage.getItem('jc_cid');
+  if(!cid){cid=Math.random().toString(36).slice(2);sessionStorage.setItem('jc_cid',cid)}
+  const doPing=async()=>{const r=await apiFetch('/landing/ping',{method:'POST',body:JSON.stringify({client_id:cid})});if(r)renderStats(r)};
+  doPing();
+  pingTimer=setInterval(doPing,30000);
+}
+
+// ━━ INIT ━━
+async function loadRefData(){
+  if(!API_BASE)return;
+  const ref=await apiFetch('/reference/all');
+  if(!ref)return;
+  if(ref.job_groups?.length)JOB_GROUPS=ref.job_groups;
+  if(ref.questions?.length)Q_BASE=ref.questions;
+  if(ref.question_descs&&Object.keys(ref.question_descs).length)Q_DESC=ref.question_descs;
+  if(ref.profiles?.length)PROFILES=ref.profiles;
+}
+// ref 데이터 로딩을 우선하고, 이후 draft 복원 등 의존 로직을 순차 실행
+(async()=>{
+  await loadRefData();
+  initPri();calc();
+  restoreDraft();
+  updateAuthUI();
+  loadLanding();
+  history.replaceState({screen:'s-landing'},'');
+})();
+
