@@ -14,19 +14,20 @@ user-invocable: true
 
 다음을 **병렬**로 수집합니다:
 
-1. `Glob "server/seed/benefit/*.sql"` → 이미 SQL 생성된 회사 목록
-2. `Glob "server/seed/benefit/*.txt"` → 스크래핑 완료, 파싱 대기 회사 목록
-3. `Read server/tools/scrape_benefits.py` 26-42행 → `KNOWN_IDS` 딕셔너리에서 전체 회사 목록
+1. `Glob "server/seed/benefit/sql/*.sql"` → 이미 SQL 생성된 회사 목록
+2. `Glob "server/seed/benefit/txt_v3/*.txt"` → 공식 페이지 스크래핑 완료분 (신뢰도↑)
+3. `Glob "server/seed/benefit/txt_v2/*.txt"` → bokziri 레거시 스크래핑분 (폴백)
+4. `Read server/tools/scrape_benefits.py` 26-42행 → `KNOWN_IDS` 딕셔너리에서 전체 회사 목록
 
 ### 2단계: 분류
 
-각 회사를 3가지 상태로 분류합니다:
+각 회사를 3가지 상태로 분류합니다. `.txt` 존재 여부는 **v3 또는 v2 둘 중 하나라도 있으면 "있음"**으로 처리 (safe_name 규칙 적용):
 
 | 상태 | 조건 | 다음 액션 |
 |------|------|----------|
-| ✅ 완료 | `.sql` 파일 존재 | 없음 |
-| 📝 파싱 대기 | `.txt` 존재, `.sql` 없음 | `/parse-benefits {회사명}` |
-| 🔍 조사 필요 | `.txt`도 `.sql`도 없음 | `/research-benefits {회사명}` |
+| ✅ 완료 | `sql/*.sql` 파일 존재 | 없음 |
+| 📝 파싱 대기 | `txt_v3/` 또는 `txt_v2/` 에 `.txt` 존재, `.sql` 없음 | `/parse-benefits {회사명}` |
+| 🔍 조사 필요 | 어느 위치에도 `.txt`/`.sql` 없음 | `/research-benefits {회사명}` |
 
 ### 3단계: 현황 리포트 출력
 
@@ -87,6 +88,7 @@ AskUserQuestion으로 다음 질문:
 | 파일 | 역할 |
 |------|------|
 | `server/tools/scrape_benefits.py:26-42` | KNOWN_IDS — 회사명→ID 매핑 |
-| `server/seed/benefit/*.sql` | 완료된 SQL 파일 |
-| `server/seed/benefit/*.txt` | 스크래핑된 원본 텍스트 |
-| `server/seed/benefit/삼성전자.sql` | SQL 출력 포맷 참조 (gold standard) |
+| `server/seed/benefit/sql/*.sql` | 완료된 SQL 파일 |
+| `server/seed/benefit/txt_v3/*.txt` | 공식 페이지 기반 스크래핑 (신뢰도↑, discover_and_scrape.py 출력) |
+| `server/seed/benefit/txt_v2/*.txt` | bokziri 집계 기반 폴백 |
+| `server/seed/benefit/sql/삼성전자.sql` | 복지 항목 선정/분량 참고용 (단, SQL 출력 포맷은 `/parse-benefits` 5단계 템플릿이 최신 기준) |
